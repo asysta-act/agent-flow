@@ -17,6 +17,7 @@
       },
       "description": "agent-flow — Claude Code plugin for automated bug-fix, feature, and scaffold workflows. Issue tracker to merged PR via a pipeline of specialized AI agents.",
       "version": "1.0.0",
+      "license": "MIT",
       "strict": true
     }
   ]

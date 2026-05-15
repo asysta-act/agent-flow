@@ -3,16 +3,20 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 SCAFFOLDER="$REPO_ROOT/agents/scaffolder.md"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
 
+# Pre-extract Batch 7 section once -- avoids `sed | grep -q` SIGPIPE race on Linux
+BATCH7_SECTION=$(sed -n '/Batch 7/,/Batch 8/p' "$SCAFFOLDER")
+
 # Batch 7 heading present
 grep -q "Batch 7.*E2E" "$SCAFFOLDER" || fail "scaffolder.md missing Batch 7 (E2E Tests)"
 
 # Batch 7 conditional pattern (section-scoped: must appear within Batch 7 section, not Batch 6)
-sed -n '/Batch 7/,/Batch 8/p' "$SCAFFOLDER" | grep -q "Skip this batch entirely" || fail "scaffolder.md Batch 7 missing conditional skip pattern"
+contains "$BATCH7_SECTION" "Skip this batch entirely" || fail "scaffolder.md Batch 7 missing conditional skip pattern"
 
 # Batch 7 Playwright detection (cross-stack)
 grep -q "@playwright/test" "$SCAFFOLDER" || fail "scaffolder.md Batch 7 missing JS Playwright dependency check"
@@ -26,7 +30,7 @@ grep -q "playwright-go" "$SCAFFOLDER" || fail "scaffolder.md Batch 7 missing Go 
 grep -q "playwright.config" "$SCAFFOLDER" || fail "scaffolder.md Batch 7 missing playwright.config generation"
 
 # Batch 7 smoke test (section-scoped)
-sed -n '/Batch 7/,/Batch 8/p' "$SCAFFOLDER" | grep -q "smoke" || fail "scaffolder.md Batch 7 missing smoke test reference"
+contains "$BATCH7_SECTION" "smoke" || fail "scaffolder.md Batch 7 missing smoke test reference"
 
 # Batch 8 heading
 grep -q "Batch 8.*Documentation" "$SCAFFOLDER" || fail "scaffolder.md missing Batch 8 (Application Documentation)"

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -44,18 +45,18 @@ done
 
 # 7. Process mentions spec mode (from spec / from description)
 process_section=$(awk '/^## Process/{found=1} found && /^## Constraints/{found=0} found{print}' "$AGENT_FILE")
-if ! echo "$process_section" | grep -qi "spec\|specification"; then
+if ! contains_i "$process_section" "spec"; then
   fail "agents/backlog-creator.md Process section must mention spec mode (spec / specification)"
 fi
 
 # 8. Process mentions task mode (task / issue / backlog item)
-if ! echo "$process_section" | grep -qi "task\|issue\|backlog item\|backlog"; then
+if ! contains_i "$process_section" "task" && ! contains_i "$process_section" "issue" && ! contains_i "$process_section" "backlog"; then
   fail "agents/backlog-creator.md Process section must mention task/issue/backlog mode"
 fi
 
 # 9. Constraints section contains at least one NEVER rule
 constraints_section=$(awk '/^## Constraints/{found=1} found && /^## /{if(!/^## Constraints/)found=0} found{print}' "$AGENT_FILE")
-if ! echo "$constraints_section" | grep -qi "NEVER"; then
+if ! contains_i "$constraints_section" "NEVER"; then
   fail "agents/backlog-creator.md Constraints section must contain at least one NEVER rule"
 fi
 
