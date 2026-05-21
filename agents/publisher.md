@@ -71,6 +71,24 @@ Follow these steps exactly, in order:
 - **Base branch:** From Automation Config (Source Control section)
 - Use the source control MCP server corresponding to the Remote format (e.g., Gitea API for gitea instances, GitHub API for github.com) for PR creation.
 
+   **6a. Capture PR identity from the create response — never guess.**
+
+   The "create PR" call returns an object that contains the new PR's `number` (or platform equivalent) and full URL. You MUST:
+
+   - Read `pr_number` and `pr_url` directly from the create-response payload, in the same call/turn that performed the create.
+   - If the create-response payload is missing, truncated, returns an error status, parses as `null`, or your code path produced `pr_number = None / empty / unset`, treat the create as **FAILED** — Block with the standard template; do NOT continue and do NOT guess.
+   - NEVER compute the new PR number by "last known PR + 1" or by counting open PRs. Issue/PR numbering in Gitea/GitHub/Jira is shared across multiple object kinds (PRs, issues, sometimes both) and is not contiguous from your local viewpoint — any guess can land on an unrelated PR or issue owned by another author.
+
+   **6b. Verify PR ownership before any follow-up mutation on it.**
+
+   ANY subsequent operation that targets the PR by id — patching the title (e.g. adding a `WIP:` prefix), patching labels, removing labels, posting comments, marking ready-for-review, closing, etc. — MUST be preceded by an ownership check:
+
+   - Fetch the PR by `pr_number` from the source control server.
+   - Assert `pr.head.ref == {current_branch}` AND `pr.base.ref == {base_branch}`.
+   - If either assertion fails → **Block immediately** with a Pipeline Block. Reason: `PR identity mismatch: {pr_number} points to head '{actual_head}' / base '{actual_base}', expected head '{current_branch}' / base '{base_branch}'.` Do not patch, do not delete labels, do not comment — you are about to touch a PR you did not create.
+
+   This ownership check exists because a previous incident saw a publish attempt parse a `None` PR number out of a malformed create-response, then guess `pr_number = previous_max + 1`, and proceed to PATCH the title and DELETE labels on a stranger's open PR. The verification step is the cheap defensive guardrail that makes that class of mistake impossible.
+
 7. **Update Issue Tracker**
 
    - When `mode` field in dispatch context indicates `pr-only-*`, skip tracker state transitions and tracker comments; PR creation proceeds normally.
@@ -143,6 +161,8 @@ This invariant check is the agent-side half of the 3-layer defense; pairs with `
 - NEVER include "Generated with Claude Code" footer in PR description — if the tool auto-appends it, that is acceptable, but do NOT add it manually
 - NEVER use `\n` as a line separator in MCP tool parameters -- use actual newlines. See `../core/mcp-body-formatting.md` for the full formatting rule.
 - PR description always in English
+- NEVER guess, compute, or assume a PR number (e.g. "previous PR number + 1", "next id after the last open PR"). The new PR's `number` MUST come from the create-response payload of the SAME call that created it. If you cannot read it from the response, the create FAILED — Block, do not continue. See Step 6a.
+- NEVER perform a mutating call (PATCH / DELETE / POST comment) against a PR or issue id without first verifying that PR's `head.ref` equals the current branch and `base.ref` equals the configured base. See Step 6b. Skipping this check has historically resulted in renaming and stripping labels from an unrelated, in-flight PR owned by a different author.
 - On failure: Block using the Block Comment Template:
   ```
   [agent-flow] 🔴 Pipeline Block
