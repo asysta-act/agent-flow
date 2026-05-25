@@ -93,6 +93,7 @@ that is a CONTRACT VIOLATION that step 12 will surface in the terminal report.
 | Draft jumps to publisher (step 11) after fixer-reviewer (step 04) without reading steps 05-10 | The dispatch table is the contract. Read each step file before dispatching. |
 | Draft inserts an inline Task() call without first writing `dispatched_at` + `dispatch_witness` | Pre-dispatch write is MANDATORY. If you cannot write the witness, you cannot dispatch. |
 | Draft pretends "PostToolUse validator will catch it" as fallback | The hook is ADVISORY by default (exit 0). It writes audit lines but does NOT block. Subagent contracts and your own state.json writes are the enforcement. |
+| Draft drifts off the dispatch table mid-run (user gives narrow scope, /fix-bugs deviates to direct implementation) and then wraps up by staging + committing + pushing + opening a PR on its own | The publisher gate in SKILL.md (`Publisher (step 11) is NOT called automatically in single mode — the user decides; --yolo auto-publishes`) and the host system-prompt rule (`Only create commits when requested by the user`) BOTH still apply when you deviate. Deviating from the pipeline does NOT inherit `--yolo` semantics. Before any `git add` / `git commit` / `git push` / `gh pr create` / `mcp__gitea__create_pull_request`, STOP and ask the user. The default is "ask first," not "wrap up by publishing." |
 
 The ONLY pre-dispatch user interaction permitted is the existing pause/resume
 prompt in Step 0b (resume detection). Any other question, summary, or options
