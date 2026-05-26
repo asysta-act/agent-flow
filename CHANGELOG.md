@@ -2,6 +2,28 @@
 
 All notable changes to agent-flow will be documented in this file.
 
+## [1.0.3] — 2026-05-26
+
+### Fixed
+
+- **guard-block: missing `mcp__github__create_pull_request` in drift-guard rows** — all three rows
+  (`fix-bugs`, `implement-feature`, `scaffold`) listed only `mcp__gitea__create_pull_request` in the
+  `Before any…` enumeration; GitHub is the primary SC remote yet its PR-creation tool was absent,
+  creating an exhaustiveness illusion that let a drifted model proceed unchecked.
+- **guard-block: pre-publish hook (step 10) omitted from fix-bugs drift-guard row** — the Reality
+  column mentioned only the post-publish hook; step 10 (pre-publish hook + custom agent) is also
+  bypassed by direct VCS calls and is the higher-stakes gate.
+- **guard-block: user-consent gates sentence missing from fix-bugs row** — `implement-feature` and
+  `scaffold` rows both named the consent gates that were bypassed; `fix-bugs` was silent, making it
+  the weakest guard of the three. Added "the triage pause and pre-publish checkpoints you skipped by
+  drifting were the user-consent gates."
+- **guard-block: ambiguous `or` path in all three drift-guard rows** — "STOP and ask the user — or
+  get back on the dispatch table" let a drifted LLM interpret the `or` branch as a silent
+  course-correction that requires no user interaction. Replaced with a single unambiguous imperative:
+  "STOP and ask the user for explicit authorization — do not proceed with any VCS action without it."
+- **guard-block: inconsistent trigger phrasing in scaffold row** — "user narrows scope" unified to
+  "user gives narrow scope" for consistency with the other two files.
+
 ## [1.0.2] — 2026-05-26
 
 ### Fixed
