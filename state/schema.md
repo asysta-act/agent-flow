@@ -590,6 +590,26 @@ Used when `mode` is `backlog-creation` (pipeline: `create-backlog`). The `backlo
 }
 ```
 
+### Scaffold MCP pending keys (additive, scaffold pipeline only)
+
+When the scaffold skill's 0-MCP step is interrupted because the user chose "Configure now" to set
+up a missing MCP server, the orchestrator writes the following top-level keys atomically (written
+BEFORE displaying the STOP message). These keys are cleared (set to `false` / removed) once Step
+01c reaches its natural end — i.e., all declared-ready services have either passed the MCP check
+or been downgraded/skipped:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `mcp_setup_pending` | boolean | `true` while the pipeline is paused awaiting MCP configuration. Set to `false` once 0-MCP completes (pass, skip, or downgrade). Never present in bug-fix or implement-feature state files. |
+| `mcp_pause_step` | string | Name of the step where the pause occurred — always `"0-MCP"` for this sentinel. Distinct from `paused_at` (ISO 8601 timestamp) to avoid schema collision. |
+| `status` | string | Set to `"paused"` at the same atomic write. Resume-detection Step 6 routes `"paused"` to the interactive resume prompt; autopilot Pause timeout applies. |
+
+**Clearing protocol:** The clear write (`mcp_setup_pending: false`) is the exclusive responsibility
+of Step 01c in `skills/scaffold/steps/01-mode-resolve.md`. The SKILL.md Resume Detection section
+does NOT clear the marker — it only reads it.
+
+---
+
 ### Step-mode abort keys (additive)
 
 When the user aborts with `a` in `--step-mode`, skill orchestrators write the following top-level keys atomically (written ONLY AFTER the in-progress step has completed — never mid-step; a SIGTERM before the write leaves these keys absent, causing resume-detection to re-execute the interrupted step from scratch):

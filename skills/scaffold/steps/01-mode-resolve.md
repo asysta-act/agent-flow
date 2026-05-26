@@ -66,14 +66,20 @@ For each "ready" service:
 - Detect and verify MCP tool availability + connectivity
 - Tracker: also check write access (`check_write=true`); display write-access warning before test
 - If MCP unavailable: offer `(a) Configure now  (b) Skip  (c) Abort`
-  - **On "Configure now":** BEFORE displaying the STOP message, write to state.json (atomic,
-    `../../../core/state-manager.md`): `{ "mcp_setup_pending": true, "paused_at": "0-MCP" }`.
-    Then display: `"STOP scaffold — restart Claude Code session and resume with /agent-flow:scaffold resume"`
+  - **On "Configure now" (interactive mode only — unreachable in `--yolo`):** BEFORE displaying
+    the STOP message, write to state.json (atomic, `../../../core/state-manager.md`):
+    `{ "mcp_setup_pending": true, "mcp_pause_step": "0-MCP", "status": "paused" }`.
+    Fire `pipeline-paused` webhook if configured. Then display:
+    `"STOP scaffold — restart Claude Code session and resume with /agent-flow:scaffold resume"`
+  - **On "Skip":** continue in local-only mode. Write `{ "mcp_setup_pending": false }` to
+    state.json to ensure the marker is cleared (guard against re-entering 0-MCP on future resume).
   - In --yolo mode: auto-downgrade (or BLOCK if `--issue` provided with no tracker MCP)
 - Set `{service}_effective_status` to `"ready"` / `"later"` / `"downgraded"`
 
 After all checks, update state.json with final `tracker_effective_status` and `sc_effective_status`.
-Clear `mcp_setup_pending` from state.json (set to `false`) once all services pass.
+Clear `mcp_setup_pending` (set to `false`) once the 0-MCP step reaches its natural end — meaning all
+declared-ready services have either passed the MCP check or been explicitly downgraded/skipped.
+This clear is the single authoritative location; SKILL.md Resume Detection does NOT duplicate it.
 
 Fire `pipeline-started` webhook if configured (per `../../../core/post-publish-hook.md` Section 4).
 

@@ -9,10 +9,14 @@ All notable changes to agent-flow will be documented in this file.
 - **scaffold: MCP restart loses pipeline state** — when scaffold's 0-MCP step detected a missing
   MCP server and the user chose "Configure now", no checkpoint was written before the STOP message,
   and the shared resume-detection phase-scan had no scaffold stage names in its regex, causing
-  `RESUME_POINT = FRESH` on re-invocation. Fix: write `mcp_setup_pending: true, paused_at: "0-MCP"`
-  to state.json atomically before emitting STOP; add a scaffold-specific post-resume check in
-  `SKILL.md` that detects this marker and overrides `RESUME_POINT = "0-mcp"`, skipping 0-INFRA
-  (already completed) and re-entering 0-MCP only.
+  `RESUME_POINT = FRESH` on re-invocation. Fix: write
+  `{ "mcp_setup_pending": true, "mcp_pause_step": "0-MCP", "status": "paused" }` to state.json
+  atomically before emitting STOP (including `"status": "paused"` so resume-detection, webhooks, and
+  autopilot Pause timeout all recognise the paused state correctly); fire `pipeline-paused` webhook;
+  add a scaffold-specific post-resume check in `SKILL.md` that detects `mcp_setup_pending: true` and
+  overrides `RESUME_POINT = "0-mcp"`, skipping 0-INFRA (already completed) and re-entering only
+  0-MCP. "Skip" path now also explicitly clears the marker. New fields documented in
+  `state/schema.md`. New harness scenario: `tests/scenarios/scaffold-mcp-pending-resume.sh`.
 
 ## [1.0.1] — 2026-05-15
 
