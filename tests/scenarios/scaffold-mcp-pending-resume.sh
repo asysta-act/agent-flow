@@ -73,7 +73,7 @@ else
     fail "SKILL.md post-resume block missing STATE_FILE definition"
   fi
   # 7. File-existence guard before grep
-  if ! echo "$context" | grep -q '\[ -f.*STATE_FILE\]\|test -f.*STATE_FILE'; then
+  if ! echo "$context" | grep -qE '\[ -f.*STATE_FILE|test -f.*STATE_FILE'; then
     fail "SKILL.md post-resume block missing file-existence guard before grep"
   fi
   # 8. Overrides RESUME_POINT when flag is true
@@ -97,12 +97,11 @@ fi
 
 # === NO DUPLICATE CLEAR DIRECTIVE ===
 
-# 10. SKILL.md Resume Detection does NOT contain a duplicate clear instruction
-post_resume_end=$((post_resume_line + 20))
+# 10. SKILL.md post-resume block documents that clearing is delegated to 01-mode-resolve.md
+post_resume_end=$((post_resume_line + 25))
 resume_context=$(sed -n "${post_resume_line},${post_resume_end}p" "$SCAFFOLD_SKILL")
-clear_count=$(echo "$resume_context" | grep -c 'clear.*mcp_setup_pending\|mcp_setup_pending.*false' || true)
-if [ "$clear_count" -gt 0 ]; then
-  fail "SKILL.md post-resume block must NOT contain a clear directive (single source of truth is 01-mode-resolve.md)"
+if ! echo "$resume_context" | grep -qiE 'do NOT clear|handled exclusively|single source of truth|01-mode-resolve'; then
+  fail "SKILL.md post-resume block must document that clearing is delegated to 01-mode-resolve.md (single source of truth)"
 fi
 
 # === SCHEMA DOCUMENTATION ===

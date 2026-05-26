@@ -157,7 +157,7 @@ Outputs: RESUME_POINT, RESTORED_CONTEXT, PIPELINE_TYPE.
 
 **Post-resume MCP checkpoint check (scaffold-specific):**
 After resume-detection returns, check for a pending MCP setup checkpoint. Derive `STATE_FILE`
-the same way as `core/resume-detection.md` Step 2: `STATE_FILE=".agent-flow/${ISSUE_ID}/state.json"`.
+the same way as `../../core/resume-detection.md` Step 2: `STATE_FILE=".agent-flow/${ISSUE_ID}/state.json"`.
 Guard against missing file before reading:
 ```bash
 STATE_FILE=".agent-flow/${ISSUE_ID}/state.json"
