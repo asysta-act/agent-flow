@@ -2,7 +2,7 @@
 
 All notable changes to agent-flow will be documented in this file.
 
-## [Unreleased]
+## [1.0.2] — 2026-05-26
 
 ### Fixed
 
