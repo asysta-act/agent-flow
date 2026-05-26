@@ -66,10 +66,14 @@ For each "ready" service:
 - Detect and verify MCP tool availability + connectivity
 - Tracker: also check write access (`check_write=true`); display write-access warning before test
 - If MCP unavailable: offer `(a) Configure now  (b) Skip  (c) Abort`
+  - **On "Configure now":** BEFORE displaying the STOP message, write to state.json (atomic,
+    `../../../core/state-manager.md`): `{ "mcp_setup_pending": true, "paused_at": "0-MCP" }`.
+    Then display: `"STOP scaffold — restart Claude Code session and resume with /agent-flow:scaffold resume"`
   - In --yolo mode: auto-downgrade (or BLOCK if `--issue` provided with no tracker MCP)
 - Set `{service}_effective_status` to `"ready"` / `"later"` / `"downgraded"`
 
 After all checks, update state.json with final `tracker_effective_status` and `sc_effective_status`.
+Clear `mcp_setup_pending` from state.json (set to `false`) once all services pass.
 
 Fire `pipeline-started` webhook if configured (per `../../../core/post-publish-hook.md` Section 4).
 

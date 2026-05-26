@@ -155,6 +155,16 @@ Follow `../../core/resume-detection.md` for resume detection logic. Inputs:
 
 Outputs: RESUME_POINT, RESTORED_CONTEXT, PIPELINE_TYPE.
 
+**Post-resume MCP checkpoint check (scaffold-specific):**
+After resume-detection returns, read `mcp_setup_pending` from `state.json`:
+```bash
+MCP_PENDING=$(grep -oE '"mcp_setup_pending"[[:space:]]*:[[:space:]]*(true|false)' "$STATE_FILE" \
+              | grep -oE '(true|false)$' | head -1)
+```
+If `MCP_PENDING = "true"`: override `RESUME_POINT = "0-mcp"`. Skip Step 01a and 01b (already
+completed; values restored from state.json). Re-enter Step 01c (MCP Verification) only.
+On successful MCP setup, clear `mcp_setup_pending` (set to `false`) before continuing.
+
 If `RESUME_POINT == "FRESH"`, proceed with the full new-project pipeline below. If `RESUME_POINT` is any other value, skip ahead to the corresponding scaffold step per the SCAFFOLD pipeline mapping (see `../../core/resume-detection.md` Step 6 status branch and the legacy `resume-ticket` SCAFFOLD pipeline mapping).
 
 The `add <component>` subcommand (Step 0 dispatch above) is single-shot and does NOT invoke resume detection.
@@ -253,7 +263,8 @@ MCP server unavailable. Options:
   2. Skip — continue without MCP (tracker and SC steps will be skipped).
 ```
 
-After "Configure now" is chosen: checkpoint — `"STOP scaffold — restart Claude Code session and resume with /agent-flow:scaffold resume"`.
+After "Configure now" is chosen: write to state.json (atomic): `{ "mcp_setup_pending": true, "paused_at": "0-MCP" }`.
+Then display checkpoint: `"STOP scaffold — restart Claude Code session and resume with /agent-flow:scaffold resume"`.
 
 If user selects Skip: continue in local-only mode. **Standard error message:**
 
