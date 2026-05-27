@@ -37,6 +37,7 @@ Follow these steps exactly, in order:
 3. **Create or Switch to Feature Branch**
 
    - Generate branch name using naming pattern from Automation Config (e.g., `fix/{issue-id}-short-description`)
+- The `short-description` part MUST be in **English** using plain ASCII only — **NO diacritics**. If the issue summary is in another language (e.g. Czech), translate it to English first and transliterate any diacritics to ASCII (`é`→`e`, `č`→`c`, …).
 - If branch already exists (e.g., created by fixer), switch to it: `git checkout {branch}`
 - If branch does not exist, create it: `git checkout -b {branch}`
 
@@ -57,10 +58,14 @@ Follow these steps exactly, in order:
 
 6. **Create Pull Request**
 
-   - **Title:** Use issue summary (from issue tracker), NOT the branch name. Format is mode-dependent:
-     - Bug-fix mode: `[PROJ-123] Fix: {concise description}`
-     - Feature mode: `[PROJ-123] Feat: {concise description}`
-     - Scaffold mode: `[PROJ-123] Scaffold: {concise description}`
+   - **Title:** Build from the issue ID, the mode keyword, and the issue summary (from issue tracker), NOT the branch name. Join everything into a single hyphen-delimited token.
+     - **NO spaces** — replace every space with a hyphen (`-`).
+     - **NO square brackets** — do not wrap the issue ID in `[ ]`.
+     - **NO colons.**
+     - **ALWAYS English, NO diacritics** — the title MUST be in English using plain ASCII letters only. If the issue summary is in another language (e.g. Czech), translate it to English first. Transliterate any remaining diacritics to ASCII (`é`→`e`, `č`→`c`, `ř`→`r`, `ů`→`u`, …) — diacritics must NEVER appear in the title.
+     - Keep the mode keyword: `Fix` (bug-fix mode), `Feat` (feature mode), `Scaffold` (scaffold mode).
+     - Format (all modes): `{ISSUE-ID}-{Mode}-{english-summary-with-spaces-replaced-by-hyphens}`
+     - Example: issue `BIFITO-1211` with Czech summary "enhance Log Import celé akce view" → `BIFITO-1211-Feat-enhance-Log-Import-whole-action-view`
 - **Description:** Use PR Description Template from Automation Config (always English). Fill in ALL template sections:
   - Build the PR body as a multi-line string with real line breaks between sections — follow `../core/mcp-body-formatting.md`.
   - Summary, Changes, Testing, Issue link
