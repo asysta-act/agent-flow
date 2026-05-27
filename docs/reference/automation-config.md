@@ -107,15 +107,34 @@ Configures git branch management and remote repository.
 | Base branch | `main` |
 | Branch naming | `fix/{issue-id}-{description}` |
 
-The `{issue-id}` and `{description}` placeholders are replaced at runtime. Description is derived from the issue title (lowercased, spaces replaced with hyphens).
+The `{issue-id}` and `{description}` placeholders are replaced at runtime. Description is derived from the issue title (lowercased, spaces replaced with hyphens). The description MUST be **English, ASCII-only, no diacritics** — if the issue title is in another language, translate it to English first and transliterate any diacritics to ASCII (`é`→`e`, `č`→`c`, …).
 
 ### PR Rules
 
-Configures labels applied to pull requests.
+Configures labels applied to pull requests and the format of the PR title.
 
 | Key | Value (example) |
 |-----|-------|
 | Labels | `bug, automated` |
+| Title format | `{issue-id}-{mode}-{summary}` |
+
+**Title format** controls how the publisher builds the PR title. Placeholders:
+
+| Placeholder | Replaced with |
+|-------------|---------------|
+| `{issue-id}` | The issue tracker ID (e.g. `BIFITO-1211`) |
+| `{mode}` | The pipeline mode keyword: `Fix` (bug-fix), `Feat` (feature), `Scaffold` (scaffold) |
+| `{summary}` | The issue summary |
+
+Normalization rules applied to the rendered title:
+
+- **No spaces** — every space is replaced with a hyphen (`-`).
+- **No square brackets** around the issue ID, **no colons**.
+- **English only, no diacritics** — the title MUST be in English using plain ASCII letters. If the issue summary is in another language (e.g. Czech), translate it to English first, then transliterate any remaining diacritics to ASCII (`é`→`e`, `č`→`c`, `ř`→`r`, `ů`→`u`, …). Diacritics must NEVER appear in the title.
+
+Example: issue `BIFITO-1211` (feature) with Czech summary "enhance Log Import celé akce view" → `BIFITO-1211-Feat-enhance-Log-Import-whole-action-view`.
+
+If `Title format` is omitted, the publisher falls back to the issue summary prefixed with the issue ID.
 
 ### PR Description Template
 
@@ -687,6 +706,7 @@ A full Automation Config for a GitHub + Node.js project:
 | Key | Value |
 |-----|-------|
 | Labels | `bug, automated` |
+| Title format | `{issue-id}-{mode}-{summary}` |
 
 ### PR Description Template
 

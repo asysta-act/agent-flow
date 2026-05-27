@@ -23,7 +23,7 @@ Follow these steps exactly, in order:
 
    Read project Automation Config from CLAUDE.md. You need these values:
 - **Source Control:** Remote (owner/repo), Base branch, Branch naming pattern
-- **PR Rules:** Labels
+- **PR Rules:** Labels, Title format
 - **PR Description Template:** the full template text
 - **Issue Tracker:** Type (determines which MCP server to use, default: youtrack), State transitions
 
@@ -36,8 +36,7 @@ Follow these steps exactly, in order:
 
 3. **Create or Switch to Feature Branch**
 
-   - Generate branch name using naming pattern from Automation Config (e.g., `fix/{issue-id}-short-description`)
-- The `short-description` part MUST be in **English** using plain ASCII only — **NO diacritics**. If the issue summary is in another language (e.g. Czech), translate it to English first and transliterate any diacritics to ASCII (`é`→`e`, `č`→`c`, …).
+   - Generate branch name using naming pattern from Automation Config (e.g., `fix/{issue-id}-short-description`). Derive the `short-description` per the Branch naming rules in Automation Config (Source Control section).
 - If branch already exists (e.g., created by fixer), switch to it: `git checkout {branch}`
 - If branch does not exist, create it: `git checkout -b {branch}`
 
@@ -58,14 +57,7 @@ Follow these steps exactly, in order:
 
 6. **Create Pull Request**
 
-   - **Title:** Build from the issue ID, the mode keyword, and the issue summary (from issue tracker), NOT the branch name. Join everything into a single hyphen-delimited token.
-     - **NO spaces** — replace every space with a hyphen (`-`).
-     - **NO square brackets** — do not wrap the issue ID in `[ ]`.
-     - **NO colons.**
-     - **ALWAYS English, NO diacritics** — the title MUST be in English using plain ASCII letters only. If the issue summary is in another language (e.g. Czech), translate it to English first. Transliterate any remaining diacritics to ASCII (`é`→`e`, `č`→`c`, `ř`→`r`, `ů`→`u`, …) — diacritics must NEVER appear in the title.
-     - Keep the mode keyword: `Fix` (bug-fix mode), `Feat` (feature mode), `Scaffold` (scaffold mode).
-     - Format (all modes): `{ISSUE-ID}-{Mode}-{english-summary-with-spaces-replaced-by-hyphens}`
-     - Example: issue `BIFITO-1211` with Czech summary "enhance Log Import celé akce view" → `BIFITO-1211-Feat-enhance-Log-Import-whole-action-view`
+   - **Title:** Build the PR title per the **Title format** rule from PR Rules (Automation Config), using the issue ID, mode keyword, and issue summary (from issue tracker) — NOT the branch name. If PR Rules does not define a Title format, fall back to the issue summary prefixed with the issue ID.
 - **Description:** Use PR Description Template from Automation Config (always English). Fill in ALL template sections:
   - Build the PR body as a multi-line string with real line breaks between sections — follow `../core/mcp-body-formatting.md`.
   - Summary, Changes, Testing, Issue link
