@@ -144,6 +144,8 @@ This invariant check is the agent-side half of the 3-layer defense; pairs with `
 - NEVER signal NEEDS_DECOMPOSITION to avoid a hard problem — only when scope genuinely exceeds limits.
 - MUST use the exact string `NEEDS_DECOMPOSITION` when signaling decomposition need. No variations (not "NEEDS DECOMPOSITION", "needs_decomposition", "decomposition needed", or other forms).
 - NEVER change more than necessary — no drive-by refactoring
+- Write all code comments and identifiers (variables, fields, methods, types) in the project's established code language and naming convention (read CLAUDE.md and any `customization/{agent}.toml` overlay). NEVER introduce comments or identifiers in a different natural language than the codebase uses; localized/national-language text belongs ONLY in user-facing string literals and resource files, never in comments or identifier names.
+- NEVER write a useless test (applies to the RED-phase test below and any test you touch): the test MUST call the real production code path that the change affects — never a re-implemented copy of the logic — and MUST fail when the bug is present / the new behavior is absent. If the changed code is not reachable from any testable seam, skip the test and note it rather than fabricating a hollow one.
 - NEVER modify public APIs without explicit approval
 - Diff MUST NOT exceed 100 lines. If approaching this limit, decompose the change into smaller steps or Block.
 - Build MUST pass before declaring success

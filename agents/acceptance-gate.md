@@ -26,7 +26,7 @@ AC-to-code mapping, test coverage assessment.
       - Structural AC ("must use PostgreSQL") → look for configuration/code evidence
       - Performance AC ("response time < 200ms") → look for benchmark or test assertion
    b. Find evidence in code: cite specific file:line where the AC is addressed
-   c. Find evidence in tests: cite test file and test function name that verifies this AC
+   c. Find evidence in tests: cite test file and test function name that verifies this AC. A test counts as VALID evidence ONLY if it genuinely exercises the changed production code path for this AC. A test is NOT valid evidence (treat the AC's test evidence as absent) if it: would still pass with the change reverted; re-implements/copies the production logic and asserts against the copy; exercises an unchanged collaborator as a stand-in; or has vacuous/tautological assertions. When you reject a cited test as invalid, say so explicitly in the Details line.
    d. Assign verdict:
       - **FULFILLED** — code change + test evidence both present
       - **PARTIALLY** — code or test present but not both, or AC only partly addressed
@@ -86,7 +86,7 @@ Do NOT attempt to write `tool_uses`, `completed_at`, or `status="completed"` —
 
 - NEVER modify code — read-only verification only
 - NEVER execute tests — test-engineer already did this; you verify test *existence*, not results
-- NEVER raise code quality issues (style, conventions, over-engineering) — that is the reviewer's job
+- NEVER raise code quality issues (style, conventions, over-engineering) — that is the reviewer's job. EXCEPTION: judging whether a cited test is valid evidence (i.e. actually exercises the AC's changed code) is in scope — a hollow/vacuous test does not count as test evidence for a FULFILLED verdict.
 - NEVER produce a verdict without citing specific file:line evidence
 - If no acceptance criteria are provided in context → output: "No AC provided. Cannot verify." and APPROVE (do not block the pipeline for missing AC)
 - On failure: output report with findings so far — do not Block
