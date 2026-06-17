@@ -307,6 +307,31 @@ Key rule: Adding a **required** key to Automation Config = MAJOR. Adding an **op
 
 Adding new static declaration sections to agent definition files (`## Output Contract`, `## Inputs`, `## Outputs`, or similar metadata blocks) that are not enforced at runtime classifies as MINOR when the section is OPTIONAL (consuming-project agent files without it remain valid against the harness) and MAJOR when the section is MANDATORY (agent files without it fail at least one harness scenario). The override injector at `core/agent-override-injector.md` is structure-blind and is not "external tooling that parses" agent body sections — its append-only behavior does not fire the MAJOR clause on its own.
 
+### Release Process
+
+Releases are **PR-only**. NEVER commit a version bump, tag, or CHANGELOG edit directly to `main` — branch protection on `main` requires a PR with green CI.
+
+**Version bump location.** A release bumps the `version` field in `.claude-plugin/plugin.json` AND both `version` fields in `.claude-plugin/marketplace.json` (`metadata.version` and `plugins[0].version`), plus a dated `CHANGELOG.md` entry. These three move together in the same release.
+
+**Single PR → release.** The feature/fix PR carries the bump + its CHANGELOG entry. After it merges to `main` with green CI, cut the release **on `main`**:
+
+```bash
+gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file <notes>
+```
+
+`gh release create` creates the git tag AND the GitHub Release in one step — pushing a bare tag does NOT create a Release.
+
+**Multiple PRs → one release.** When several open PRs should ship together, do NOT merge them to `main` one-by-one and do NOT integrate on `main`. Use a short-lived integration branch:
+
+1. Branch `release/vX.Y.Z` off `main`.
+2. Squash-merge each source PR into `release/vX.Y.Z` in turn, resolving conflicts on the integration branch. PRs opened from forks are integrated by the maintainer this way (push to the integration branch in the base repo).
+3. On the integration branch, set the single version bump and a `CHANGELOG.md` `[X.Y.Z]` entry that covers **all** bundled PRs.
+4. Open ONE PR: `release/vX.Y.Z` → `main`. Green CI + review, then merge.
+5. Close each source PR as "rolled into #&lt;release-PR&gt;".
+6. Cut the release on `main` as above.
+
+**Bundled version = the highest individual classification.** Classify each bundled PR against the Versioning Policy table, then the release takes the max: any MAJOR → MAJOR; else any MINOR → MINOR; else PATCH. Prefer keeping individual source PRs version-neutral (no `plugin.json` / `marketplace.json` / `CHANGELOG` edits) so bumps never compete or conflict; finalize the single bump + the combined CHANGELOG entry on the integration branch. If one source PR already carries the bump, ensure the others do not and reconcile the CHANGELOG on the integration branch.
+
 ## Cross-File Invariants
 
 The following invariants MUST hold across release commits. Phase 8 verification scenarios assert each:
