@@ -321,14 +321,15 @@ gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file <notes>
 
 `gh release create` creates the git tag AND the GitHub Release in one step — pushing a bare tag does NOT create a Release.
 
-**Multiple PRs → one release.** When several open PRs should ship together, do NOT merge them to `main` one-by-one and do NOT integrate on `main`. Use a short-lived integration branch:
+**Multiple PRs → one release.** When several open PRs should ship together, do NOT merge them to `main` one-by-one and do NOT integrate on `main`. Use a short-lived integration branch and **re-target the source PRs onto it** so each still records as merged:
 
-1. Branch `release/vX.Y.Z` off `main`.
-2. Squash-merge each source PR into `release/vX.Y.Z` in turn, resolving conflicts on the integration branch. PRs opened from forks are integrated by the maintainer this way (push to the integration branch in the base repo).
+1. Branch `release/vX.Y.Z` off `main` and push it to the base repo.
+2. Re-point each source PR's base from `main` to `release/vX.Y.Z` (`gh pr edit <N> --base release/vX.Y.Z`), then squash-merge each into the integration branch through GitHub (`gh pr merge <N> --squash`). Each source PR then shows **merged** (not closed) and keeps its review/commit record. Fork PRs work the same way — the base branch lives in the base repo, so the maintainer merges them in. Resolve conflicts via the normal per-PR update against the integration branch.
 3. On the integration branch, set the single version bump and a `CHANGELOG.md` `[X.Y.Z]` entry that covers **all** bundled PRs.
-4. Open ONE PR: `release/vX.Y.Z` → `main`. Green CI + review, then merge.
-5. Close each source PR as "rolled into #&lt;release-PR&gt;".
-6. Cut the release on `main` as above.
+4. Open ONE PR: `release/vX.Y.Z` → `main` — the only PR that targets `main`. Green CI + review, then merge.
+5. Cut the release on `main` as above.
+
+`release/vX.Y.Z` is unprotected, so source PRs merge into it without the `main` status-check gate; that gate applies once, at step 4. (A bare local `git merge --squash` of a PR's content also works but leaves the source PR showing "closed" rather than "merged" — prefer the re-target flow so the merge history stays explicit.)
 
 **Bundled version = the highest individual classification.** Classify each bundled PR against the Versioning Policy table, then the release takes the max: any MAJOR → MAJOR; else any MINOR → MINOR; else PATCH. Prefer keeping individual source PRs version-neutral (no `plugin.json` / `marketplace.json` / `CHANGELOG` edits) so bumps never compete or conflict; finalize the single bump + the combined CHANGELOG entry on the integration branch. If one source PR already carries the bump, ensure the others do not and reconcile the CHANGELOG on the integration branch.
 
