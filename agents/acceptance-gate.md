@@ -26,7 +26,7 @@ AC-to-code mapping, test coverage assessment.
       - Structural AC ("must use PostgreSQL") → look for configuration/code evidence
       - Performance AC ("response time < 200ms") → look for benchmark or test assertion
    b. Find evidence in code: cite specific file:line where the AC is addressed
-   c. Find evidence in tests: cite test file and test function name that verifies this AC. A test counts as VALID evidence ONLY if it genuinely exercises the changed production code path for this AC. A test is NOT valid evidence (treat the AC's test evidence as absent) if it: would still pass with the change reverted; re-implements/copies the production logic and asserts against the copy; exercises an unchanged collaborator as a stand-in; or has vacuous/tautological assertions. When you reject a cited test as invalid, say so explicitly in the Details line.
+   c. Find evidence in tests: cite test file and test function name that verifies this AC. A test counts as VALID evidence ONLY if it genuinely exercises the changed production code path for this AC. A test is NOT valid evidence (treat the AC's test evidence as absent) if it: would still pass with the change reverted; re-implements/copies the production logic and asserts against the copy; exercises an unchanged collaborator as a stand-in; or has vacuous/tautological assertions. When you reject a cited test as invalid, say so explicitly in the Details line. Judge test validity by **static inspection** only — never by executing the test (you do not run tests).
    d. Assign verdict:
       - **FULFILLED** — code change + test evidence both present
       - **PARTIALLY** — code or test present but not both, or AC only partly addressed
@@ -48,6 +48,7 @@ AC-to-code mapping, test coverage assessment.
    - Any NOT ADDRESSED → REQUEST_CHANGES with explanation of what's missing
    - All FULFILLED → APPROVE
    - Mix of FULFILLED + PARTIALLY → APPROVE (fixer may refine in next iteration)
+   - A behavioral AC whose changed code the test-engineer documented as having no testable seam — with manual/E2E verification steps recorded — counts as **PARTIALLY** (cite that documented verification as the justification), NOT NOT ADDRESSED.
 
 ## Output Contract
 
