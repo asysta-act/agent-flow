@@ -23,7 +23,7 @@ If $ARGUMENTS contains `--skip-build`, skip running build/test commands.
 |---------|--------------|
 | Issue Tracker | Type (or default youtrack), Instance, Project, Bug query, State transitions, On start set |
 | Source Control | Remote, Base branch, Branch naming |
-| PR Rules | Labels |
+| PR Rules | Labels (Title format optional) |
 | PR Description Template | (subsection present) |
 | Build & Test | Build command, Test command |
 

@@ -122,8 +122,8 @@ Configures labels applied to pull requests and the format of the PR title.
 
 | Placeholder | Replaced with |
 |-------------|---------------|
-| `{issue-id}` | The issue tracker ID (e.g. `BIFITO-1211`) |
-| `{mode}` | The pipeline mode keyword: `Fix` (bug-fix), `Feat` (feature), `Scaffold` (scaffold) |
+| `{issue-id}` | The issue tracker ID (e.g. `PROJ-123`) |
+| `{mode}` | The pipeline mode keyword — a fixed value the publisher substitutes, not operator-defined: `Fix` (bug-fix), `Feat` (feature), `Scaffold` (scaffold) |
 | `{summary}` | The issue summary |
 
 Normalization rules applied to the rendered title:
@@ -132,9 +132,9 @@ Normalization rules applied to the rendered title:
 - **No square brackets** around the issue ID, **no colons**.
 - **English only, no diacritics** — the title MUST be in English using plain ASCII letters. If the issue summary is in another language (e.g. Czech), translate it to English first, then transliterate any remaining diacritics to ASCII (`é`→`e`, `č`→`c`, `ř`→`r`, `ů`→`u`, …). Diacritics must NEVER appear in the title.
 
-Example: issue `BIFITO-1211` (feature) with Czech summary "enhance Log Import celé akce view" → `BIFITO-1211-Feat-enhance-Log-Import-whole-action-view`.
+Example: issue `PROJ-123` (feature) with the Czech summary "vylepšit zobrazení celé akce v Log Importu" → translate to English first ("improve the whole-action view in Log Import"), then render → `PROJ-123-Feat-improve-the-whole-action-view-in-Log-Import`.
 
-If `Title format` is omitted, the publisher falls back to the issue summary prefixed with the issue ID.
+If `Title format` is omitted, the publisher falls back to `{issue-id} {Mode}: {summary}` (issue ID, mode keyword, and summary) — the same English/ASCII-only summary rules apply, but the brackets-and-colon shape of this fallback is the one exception to the "no colons" normalization above.
 
 ### PR Description Template
 

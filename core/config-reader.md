@@ -15,7 +15,7 @@ Parse `## Automation Config` from the project's CLAUDE.md. Extract all required 
 2. Parse **required sections** — each is a `| Key | Value |` table under its `### {Section}` heading:
    - `### Issue Tracker` → `issue_tracker.type` (default: `youtrack`), `issue_tracker.instance`, `issue_tracker.project`, `issue_tracker.bug_query`, `issue_tracker.state_transitions` (key→value map), `issue_tracker.on_start_set`
    - `### Source Control` → `source_control.remote`, `source_control.base_branch`, `source_control.branch_naming`
-   - `### PR Rules` → `pr_rules.labels`
+   - `### PR Rules` → `pr_rules.labels`; `pr_rules.title_format` (optional key within this section; default: none → the publisher uses the `{issue-id} {Mode}: {summary}` fallback)
    - `### PR Description Template` → `pr_rules.description_template` (verbatim multi-line text under the subsection heading)
    - `### Build & Test` → `build.build_command`, `build.test_command`, `build.verify_command` (optional key within this section)
 

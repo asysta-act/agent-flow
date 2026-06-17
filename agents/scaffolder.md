@@ -124,7 +124,7 @@ testing setup, linter/formatter configuration, CLAUDE.md Automation Config gener
    **Required sections (ALL must be present):**
    - [ ] `### Issue Tracker` — Type, Instance, Project, Bug query, State transitions, On start set
    - [ ] `### Source Control` — Remote, Base branch, Branch naming
-   - [ ] `### PR Rules` — Labels
+   - [ ] `### PR Rules` — Labels (Title format optional)
    - [ ] `### PR Description Template` — multi-line template
    - [ ] `### Build & Test` — Build command, Test command
 

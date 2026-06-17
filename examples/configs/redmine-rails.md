@@ -27,6 +27,7 @@
 | Key | Value |
 |------|---------|
 | Labels | `ForReview` |
+| Title format | `{issue-id}-{mode}-{summary}` |
 
 ### PR Description Template
 

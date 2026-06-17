@@ -2,6 +2,18 @@
 
 All notable changes to agent-flow will be documented in this file.
 
+## [1.1.0] — 2026-06-17
+
+### Added
+
+- **PR Rules: `Title format` optional key** — operators can now control the PR title shape via Automation Config using the placeholders `{issue-id}`, `{mode}`, and `{summary}`, with English/ASCII-only normalization (no spaces, no brackets, no colons, diacritics transliterated). When the key is omitted, the publisher falls back to `{issue-id} {Mode}: {summary}`. Parsed by `core/config-reader.md` as `pr_rules.title_format`, prompted by `/onboard`, documented in `docs/reference/automation-config.md`, and surfaced in all `examples/configs/*` templates.
+- **publisher: PR-ownership defenses (Steps 6a/6b)** — the publisher now reads the new PR's `number`/`url` only from the create call's own response (Step 6a; a missing/`null`/error payload is a FAILED create that Blocks — never `previous + 1` guessing), and before any post-create mutation it verifies `pr.head.ref == current_branch` AND `pr.base.ref == base_branch`, treating a missing field as a mismatch and Blocking fail-closed (Step 6b). Two matching `NEVER` constraints were added. Prevents the publisher from PATCHing/DELETEing an unrelated PR after a malformed create-response.
+
+### Changed
+
+- **publisher: PR title is now config-driven** — the hardcoded mode-dependent title (`[PROJ-123] Fix: …`) is replaced by the `Title format` rule plus the `{issue-id} {Mode}: {summary}` fallback. The bracketed `[ISSUE-ID]` form remains only in git commit messages (Step 4), which are explicitly scoped as independent of the PR title. Consumers parsing the old `^\[ISSUE-ID\]` PR-title shape should update.
+- **Source Control / PR Rules: English + ASCII-only identifiers** — branch descriptions and PR titles MUST be English and ASCII-only; non-English source text is translated first and any remaining diacritics transliterated.
+
 ## [1.0.3] — 2026-05-26
 
 ### Fixed

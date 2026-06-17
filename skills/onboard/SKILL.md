@@ -119,7 +119,9 @@ Ask:
 
 ### Step 4: PR Rules + PR Description Template
 
-**4a.** Labels for PR (default: `ForReview`)
+**4a.** PR Rules:
+- Labels for PR (default: `ForReview`)
+- Title format (optional — press Enter to use the `{issue-id} {Mode}: {summary}` fallback). Example: `{issue-id}-{mode}-{summary}`. See `docs/reference/automation-config.md` → PR Rules → Title format for the placeholders and the English/ASCII normalization rules.
 
 **4b.** PR Description Template:
 1. Auto-generate a tracker-appropriate template with this structure:
@@ -278,7 +280,7 @@ Detected existing Automation Config:
 
   Issue Tracker: {type} @ {instance} — {project}
   Source Control: {remote} — {base branch}
-  PR Rules: Labels = {labels}
+  PR Rules: Labels = {labels}; Title format = {title_format or '(fallback)'}
   Build & Test: {build command} / {test command}
   Optional: {list of present optional sections}
   Missing optional: {list of absent optional sections}

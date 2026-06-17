@@ -139,7 +139,7 @@ Projects using this plugin must have `## Automation Config` in their CLAUDE.md w
 |---------|------|
 | Issue Tracker | Type (youtrack/github/jira/linear/gitea/redmine, default: youtrack), Instance, Project, Bug query, State transitions, On start set |
 | Source Control | Remote (owner/repo), Base branch, Branch naming |
-| PR Rules | Labels, Title format |
+| PR Rules | Labels, Title format (optional) |
 | PR Description Template | Multi-line template (separate subsection) |
 | Build & Test | Build command, Test command, Verify command (optional — runs after PR merge). Verify command runs after PR merge. If it fails, the issue is re-opened. |
 

@@ -201,7 +201,7 @@ Projects using this plugin need `## Automation Config` in their CLAUDE.md. Use `
 |---------|---------|
 | Issue Tracker | Tracker type, instance, project, query, state transitions |
 | Source Control | Remote, base branch, branch naming pattern |
-| PR Rules | Labels for pull requests |
+| PR Rules | Labels and optional PR title format |
 | PR Description Template | Template for PR body |
 | Build & Test | Build and test commands |
 
