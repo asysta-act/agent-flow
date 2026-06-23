@@ -7,6 +7,7 @@ set -euo pipefail
 #              (has defaults), and that no existing REQUIRED section gained a new mandatory key
 
 cd "$(dirname "$0")/../.."
+. "./tests/lib/assert.sh"
 
 FAIL=0
 
@@ -40,7 +41,7 @@ done
 # Required table: Issue Tracker, Source Control, PR Rules, PR Description Template, Build & Test
 # These sections must not reference 'autopilot' (it's optional, not required)
 REQUIRED_SECTION=$(grep -A20 'Required sections' "$CLAUDE" 2>/dev/null || true)
-if echo "$REQUIRED_SECTION" | grep -qiE '^[|].*[Aa]utopilot'; then
+if matches_re "${REQUIRED_SECTION,,}" '^[|].*autopilot'; then
   echo "FAIL: Autopilot appears in Required sections table — must be optional only" >&2
   FAIL=1
 fi

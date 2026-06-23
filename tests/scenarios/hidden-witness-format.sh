@@ -25,6 +25,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
 
 FAIL=0
@@ -61,7 +62,7 @@ fi
 # Strip CR/whitespace.
 witness_trimmed=$(printf '%s' "$witness_out" | tr -d '\r\n ' | tr -d ' ')
 if [ -n "$witness_trimmed" ]; then
-  if ! printf '%s' "$witness_trimmed" | grep -qE '^[0-9a-f]{64}$'; then
+  if ! matches_re "$witness_trimmed" '^[0-9a-f]{64}$'; then
     fail "hidden-witness-format.shape: compute_dispatch_witness emitted '${witness_trimmed}' (expected ^[0-9a-f]{64}$ sha256 hex)"
   fi
 fi

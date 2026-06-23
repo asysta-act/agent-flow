@@ -10,7 +10,8 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+. "$REPO_ROOT/tests/lib/assert.sh"
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -35,20 +36,20 @@ for agent in "${READ_ONLY_AGENTS[@]}"; do
   process_section=$(awk '/^## Process/{found=1} found && /^## (Constraints|Output Contract)/{found=0} found{print}' "$file")
 
   # Assert no write-tool phrases in Process section
-  if echo "$process_section" | grep -qi "Write tool"; then
+  if contains_i "$process_section" "Write tool"; then
     fail "$agent.md Process section contains 'Write tool' — read-only agent must not write files"
     # Mutation catch: accidentally adding a write step to a read-only agent's Process fails here
   fi
-  if echo "$process_section" | grep -qi "Edit tool"; then
+  if contains_i "$process_section" "Edit tool"; then
     fail "$agent.md Process section contains 'Edit tool' — read-only agent must not edit files"
   fi
-  if echo "$process_section" | grep -qi "write to file"; then
+  if contains_i "$process_section" "write to file"; then
     fail "$agent.md Process section contains 'write to file' — read-only agent must not write files"
   fi
-  if echo "$process_section" | grep -qi "create file"; then
+  if contains_i "$process_section" "create file"; then
     fail "$agent.md Process section contains 'create file' — read-only agent must not create files"
   fi
-  if echo "$process_section" | grep -qi "save file"; then
+  if contains_i "$process_section" "save file"; then
     fail "$agent.md Process section contains 'save file' — read-only agent must not save files"
   fi
 done

@@ -31,7 +31,7 @@ if [ -z "$configure_now_line" ]; then
   fail "SKILL.md missing 'Configure now (interactive mode only)' guard"
 else
   context=$(sed -n "$configure_now_line,$((configure_now_line + 10))p" "$SCAFFOLD_SKILL")
-  if ! echo "$context" | grep -q '"status".*"paused"\|status.*paused'; then
+  if ! matches_re "$context" '"status".*"paused"|status.*paused'; then
     fail "SKILL.md Configure-now block missing status:paused in write payload"
   fi
 fi
@@ -39,7 +39,7 @@ fi
 # 4. SKILL.md specifies webhook before STOP
 if [ -n "$configure_now_line" ]; then
   context=$(sed -n "$configure_now_line,$((configure_now_line + 12))p" "$SCAFFOLD_SKILL")
-  if ! echo "$context" | grep -qi 'pipeline-paused\|webhook.*paused\|paused.*webhook'; then
+  if ! matches_re "${context,,}" 'pipeline-paused|webhook.*paused|paused.*webhook'; then
     fail "SKILL.md Configure-now block missing pipeline-paused webhook instruction"
   fi
 fi
@@ -50,13 +50,13 @@ if [ -z "$step_configure_line" ]; then
   fail "01-mode-resolve.md missing 'Configure now (interactive mode only)' block"
 else
   context=$(sed -n "$step_configure_line,$((step_configure_line + 8))p" "$STEP_01")
-  if ! echo "$context" | grep -q 'mcp_setup_pending.*true\|"mcp_setup_pending": true'; then
+  if ! matches_re "$context" 'mcp_setup_pending.*true|"mcp_setup_pending": true'; then
     fail "01-mode-resolve.md Configure-now block missing mcp_setup_pending:true"
   fi
-  if ! echo "$context" | grep -q 'mcp_pause_step'; then
+  if ! contains "$context" "mcp_pause_step"; then
     fail "01-mode-resolve.md Configure-now block missing mcp_pause_step"
   fi
-  if ! echo "$context" | grep -q '"status".*"paused"\|status.*paused'; then
+  if ! matches_re "$context" '"status".*"paused"|status.*paused'; then
     fail "01-mode-resolve.md Configure-now block missing status:paused"
   fi
 fi
@@ -69,15 +69,15 @@ if [ -z "$post_resume_line" ]; then
   fail "SKILL.md missing 'Post-resume MCP checkpoint check' section"
 else
   context=$(sed -n "$post_resume_line,$((post_resume_line + 15))p" "$SCAFFOLD_SKILL")
-  if ! echo "$context" | grep -q 'STATE_FILE=\|STATE_FILE ='; then
+  if ! matches_re "$context" 'STATE_FILE=|STATE_FILE ='; then
     fail "SKILL.md post-resume block missing STATE_FILE definition"
   fi
   # 7. File-existence guard before grep
-  if ! echo "$context" | grep -qE '\[ -f.*STATE_FILE|test -f.*STATE_FILE'; then
+  if ! matches_re "$context" '\[ -f.*STATE_FILE|test -f.*STATE_FILE'; then
     fail "SKILL.md post-resume block missing file-existence guard before grep"
   fi
   # 8. Overrides RESUME_POINT when flag is true
-  if ! echo "$context" | grep -qi 'RESUME_POINT.*0-mcp\|override.*RESUME_POINT\|RESUME_POINT = "0-mcp"'; then
+  if ! matches_re "${context,,}" 'resume_point.*0-mcp|override.*resume_point|resume_point = "0-mcp"'; then
     fail "SKILL.md post-resume block missing RESUME_POINT override to 0-mcp"
   fi
 fi
@@ -90,7 +90,7 @@ if [ -z "$skip_line" ]; then
   fail "01-mode-resolve.md missing Skip path with mcp_setup_pending clear"
 else
   context=$(sed -n "$skip_line,$((skip_line + 5))p" "$STEP_01")
-  if ! echo "$context" | grep -q 'mcp_setup_pending.*false\|"mcp_setup_pending": false'; then
+  if ! matches_re "$context" 'mcp_setup_pending.*false|"mcp_setup_pending": false'; then
     fail "01-mode-resolve.md Skip path missing mcp_setup_pending:false clear"
   fi
 fi
@@ -100,7 +100,7 @@ fi
 # 10. SKILL.md post-resume block documents that clearing is delegated to 01-mode-resolve.md
 post_resume_end=$((post_resume_line + 25))
 resume_context=$(sed -n "${post_resume_line},${post_resume_end}p" "$SCAFFOLD_SKILL")
-if ! echo "$resume_context" | grep -qiE 'do NOT clear|handled exclusively|single source of truth|01-mode-resolve'; then
+if ! matches_re "${resume_context,,}" 'do not clear|handled exclusively|single source of truth|01-mode-resolve'; then
   fail "SKILL.md post-resume block must document that clearing is delegated to 01-mode-resolve.md (single source of truth)"
 fi
 

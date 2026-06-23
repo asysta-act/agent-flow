@@ -4,6 +4,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -54,10 +55,10 @@ fi
 
 # 6. Both new agents are listed under sonnet model row
 sonnet_row=$(awk '/^### Model Selection/{found=1} found && /sonnet/{print; exit}' "$CLAUDE_MD")
-if ! echo "$sonnet_row" | grep -qi "backlog-creator"; then
+if ! contains_i "$sonnet_row" "backlog-creator"; then
   fail "CLAUDE.md Model Selection table: backlog-creator should be in sonnet row"
 fi
-if ! echo "$sonnet_row" | grep -qi "sprint-planner"; then
+if ! contains_i "$sonnet_row" "sprint-planner"; then
   fail "CLAUDE.md Model Selection table: sprint-planner should be in sonnet row"
 fi
 

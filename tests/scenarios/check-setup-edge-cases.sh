@@ -55,7 +55,7 @@ if [ -z "$step7_line" ]; then
 else
   # Extract the region around Step 7 (up to 30 lines) and check for Step 3a reference
   context=$(sed -n "${step7_line},$((step7_line + 30))p" "$SKILL")
-  if echo "$context" | grep -qi 'Step 3a\|3a\|resolved.*path\|path.*3a'; then
+  if grep -qi 'Step 3a\|3a\|resolved.*path\|path.*3a' <<< "$context"; then
     echo "OK: Step 7 references Step 3a resolved path within 30 lines of its definition"
   else
     fail "Edge case 3: Step 7 does not reference Step 3a path — may re-glob or use bare path"
@@ -75,7 +75,7 @@ block3_start=$(grep -n 'Block 3\|Connectivity' "$SKILL" | head -1 | cut -d: -f1 
 if [ -n "$block2_start" ] && [ -n "$block3_start" ] && [ "$block3_start" -gt "$block2_start" ]; then
   step7_region=$(sed -n "${block2_start},${block3_start}p" "$SKILL")
   # A redundant Glob in Step 7 would look like: Glob `**/trackers.md` or Glob `.claude/plugins/**`
-  if echo "$step7_region" | grep -qE "Glob.*trackers|Glob.*\.claude/plugins"; then
+  if grep -qE "Glob.*trackers|Glob.*\.claude/plugins" <<< "$step7_region"; then
     fail "Edge case 4: Step 7 contains its own Glob for trackers.md — must reuse Step 3a resolved path"
   else
     echo "OK: Step 7 does not redundantly re-Glob for trackers.md"

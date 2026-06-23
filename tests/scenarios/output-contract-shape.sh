@@ -8,7 +8,8 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+. "$REPO_ROOT/tests/lib/assert.sh"
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -55,35 +56,35 @@ for agent_file in "$AGENTS_DIR"/*.md; do
     # Polymorphic: assert H3 sub-blocks exist; per-block shape validated in polymorphic-split scenario
     # Here we just assert both Inputs AND Outputs headers appear somewhere in the oc_section
     # (they will be inside the sub-blocks per design.md §1.2 with #### headings)
-    if ! echo "$oc_section" | grep -qE 'Section \| Source \| Required'; then
+    if ! contains "$oc_section" "Section | Source | Required"; then
       fail "$agent_name (polymorphic): ## Output Contract section missing Inputs table header 'Section | Source | Required'"
       # Mutation catch: removing the Inputs table entirely from a poly agent fails here
     fi
-    if ! echo "$oc_section" | grep -qE 'Section produced \| When \| Required fields'; then
+    if ! contains "$oc_section" "Section produced | When | Required fields"; then
       fail "$agent_name (polymorphic): ## Output Contract section missing Outputs table header 'Section produced | When | Required fields'"
     fi
     # Assert at least one backtick-quoted ## Heading in Outputs column
-    if ! echo "$oc_section" | grep -qE '`## [A-Za-z][A-Za-z _:-]*`'; then
+    if ! matches_re "$oc_section" '`## [A-Za-z][A-Za-z _:-]*`'; then
       fail "$agent_name (polymorphic): ## Output Contract Outputs table has no backtick-quoted ## Heading row"
       # Mutation catch: removing backticks from a heading in the Outputs table fails here
     fi
   else
     # Non-polymorphic: assert top-level Inputs and Outputs table headers present
-    if ! echo "$oc_section" | grep -qE 'Section \| Source \| Required'; then
+    if ! contains "$oc_section" "Section | Source | Required"; then
       fail "$agent_name: ## Output Contract section missing Inputs table header '| Section | Source | Required |'"
       # Mutation catch: wrong column name (e.g., 'Input' instead of 'Section') fails here
     fi
-    if ! echo "$oc_section" | grep -qE 'Section produced \| When \| Required fields'; then
+    if ! contains "$oc_section" "Section produced | When | Required fields"; then
       fail "$agent_name: ## Output Contract section missing Outputs table header '| Section produced | When | Required fields |'"
       # Mutation catch: wrong column name (e.g., 'Output' instead of 'Section produced') fails here
     fi
     # Assert at least one backtick-quoted ## Heading in Outputs table
-    if ! echo "$oc_section" | grep -qE '`## [A-Za-z][A-Za-z _:-]*`'; then
+    if ! matches_re "$oc_section" '`## [A-Za-z][A-Za-z _:-]*`'; then
       fail "$agent_name: ## Output Contract Outputs table has no backtick-quoted ## Heading row"
     fi
     # Negative assertion: no prose-only output description (if section has >10 lines and no table, that's wrong)
-    line_count=$(echo "$oc_section" | wc -l)
-    table_lines=$(echo "$oc_section" | grep -c '|' || true)
+    line_count=$(wc -l <<< "$oc_section")
+    table_lines=$(grep -c '|' <<< "$oc_section" || true)
     if [ "$line_count" -gt 10 ] && [ "$table_lines" -lt 4 ]; then
       fail "$agent_name: ## Output Contract section appears to be prose-only (no table rows) requires tables"
     fi

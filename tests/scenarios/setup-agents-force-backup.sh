@@ -7,8 +7,9 @@ set -uo pipefail
 # NOTE: REPO_ROOT assumes test file location is tests/scenarios/. Run after Phase 7 has moved files.
 # Do NOT execute from staging location .forge/phase-5-tdd/tests/.
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 # Guard: ensure we are not running from staging location
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -68,7 +69,7 @@ BACKUP_FILE="$TMPDIR_TEST/customization/reviewer.toml.bak-$TIMESTAMP"
 printf '# user-edited content\nmodel = "opus"\n' > "$BACKUP_FILE"
 
 BAK_BASENAME=$(basename "$BACKUP_FILE")
-if echo "$BAK_BASENAME" | grep -qE '^reviewer\.toml\.bak-[0-9TZ:-]+$'; then
+if matches_re "$BAK_BASENAME" '^reviewer\.toml\.bak-[0-9TZ:-]+$'; then
   echo "OK: backup filename '$BAK_BASENAME' matches expected .bak-{ISO} pattern"
 else
   fail "backup filename '$BAK_BASENAME' does not match .bak-{ISO} pattern"

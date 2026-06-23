@@ -4,6 +4,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -21,19 +22,19 @@ fi
 process_section=$(awk '/^## Process/{found=1} found && /^## Constraints/{found=0} found{print}' "$AGENT_FILE")
 
 # 3. No write-tool phrases in Process section
-if echo "$process_section" | grep -qi "Write tool"; then
+if contains_i "$process_section" "Write tool"; then
   fail "backlog-creator.md Process section contains 'Write tool' — read-only agent must not write files"
 fi
-if echo "$process_section" | grep -qi "Edit tool"; then
+if contains_i "$process_section" "Edit tool"; then
   fail "backlog-creator.md Process section contains 'Edit tool' — read-only agent must not edit files"
 fi
-if echo "$process_section" | grep -qi "write to file"; then
+if contains_i "$process_section" "write to file"; then
   fail "backlog-creator.md Process section contains 'write to file' — read-only agent must not write files"
 fi
-if echo "$process_section" | grep -qi "create file"; then
+if contains_i "$process_section" "create file"; then
   fail "backlog-creator.md Process section contains 'create file' — read-only agent must not create files"
 fi
-if echo "$process_section" | grep -qi "save file"; then
+if contains_i "$process_section" "save file"; then
   fail "backlog-creator.md Process section contains 'save file' — read-only agent must not save files"
 fi
 
@@ -48,7 +49,7 @@ readonly_line=$(grep -i "read.only agents" "$CLAUDE_MD" | head -1)
 if [ -n "$readonly_line" ]; then
   # There is a read-only agents line; check backlog-creator is on or near it
   readonly_section=$(awk '/[Rr]ead-only agents/{found=1; lines=0} found{print; lines++; if(lines>3)found=0}' "$CLAUDE_MD")
-  if ! echo "$readonly_section" | grep -qi "backlog-creator"; then
+  if ! contains_i "$readonly_section" "backlog-creator"; then
     fail "backlog-creator not listed in CLAUDE.md read-only agents line"
   fi
 fi

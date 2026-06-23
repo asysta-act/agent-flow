@@ -5,6 +5,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../" && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 SKILL="$REPO_ROOT/skills/check-setup/SKILL.md"
 
 FAIL=0
@@ -109,7 +110,7 @@ block3_start=$(grep -n 'Block 3\|### Block 3' "$SKILL" | head -1 | cut -d: -f1 |
 block4_start=$(grep -n 'Block 4\|### Block 4' "$SKILL" | head -1 | cut -d: -f1 || true)
 if [ -n "$block3_start" ] && [ -n "$block4_start" ] && [ "$block4_start" -gt "$block3_start" ]; then
   connectivity_region=$(sed -n "${block3_start},${block4_start}p" "$SKILL")
-  if echo "$connectivity_region" | grep -qE '404|HTTP 404|not found.*Remote|Remote.*not found|repo.*not found'; then
+  if grep -qE '404|HTTP 404|not found.*Remote|Remote.*not found|repo.*not found' <<< "$connectivity_region"; then
     echo "OK (AC-8): 404 / not-found branch present in Step 10 (Connectivity block)"
   else
     fail "AC-8: No 404 or repo-not-found branch found in Step 10 Connectivity block — must be a distinct message from auth failure"
@@ -127,7 +128,7 @@ fi
 # Check the Block 3 / Step 10 region for a [WARN] that relates to tool availability
 # Using the same block3/block4 region captured above
 if [ -n "${block3_start:-}" ] && [ -n "${block4_start:-}" ] && [ "$block4_start" -gt "$block3_start" ]; then
-  if echo "$connectivity_region" | grep -qE '\[WARN\].*tool|\[WARN\].*not supported|\[WARN\].*unavailable|tool.*\[WARN\]'; then
+  if grep -qE '\[WARN\].*tool|\[WARN\].*not supported|\[WARN\].*unavailable|tool.*\[WARN\]' <<< "$connectivity_region"; then
     echo "OK (AC-9): [WARN] for tool-not-found found in Connectivity block"
   else
     fail "AC-9: [WARN] for tool-not-found branch missing from Connectivity block (Step 10) — must degrade gracefully, not [FAIL]"
@@ -153,13 +154,13 @@ step4_line=$(grep -n '^4\.' "$SKILL" | head -1 | cut -d: -f1 || true)
 
 if [ -n "$step3a_start" ] && [ -n "$step4_line" ] && [ "$step4_line" -gt "$step3a_start" ]; then
   step3a_region=$(sed -n "${step3a_start},${step4_line}p" "$SKILL")
-  if echo "$step3a_region" | grep -q '\.claude/plugins'; then
+  if contains "$step3a_region" ".claude/plugins"; then
     echo "OK (AC-10): .claude/plugins/ Glob pattern present in Step 3a path resolution"
   else
     fail "AC-10: .claude/plugins/ Glob pattern not found in Step 3a — narrow Glob layer missing"
   fi
   # AC-10: broad ** pattern also present (second layer) within Step 3a
-  if echo "$step3a_region" | grep -qE '\*\*/docs/reference/trackers|\*\*.*trackers\.md'; then
+  if grep -qE '\*\*/docs/reference/trackers|\*\*.*trackers\.md' <<< "$step3a_region"; then
     echo "OK (AC-10): Broad Glob (**) pattern present in Step 3a for second resolution layer"
   else
     fail "AC-10: Broad Glob (**) pattern for trackers.md not found in Step 3a — second resolution layer missing"

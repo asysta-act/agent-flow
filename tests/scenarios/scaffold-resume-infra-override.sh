@@ -4,6 +4,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 SCAFFOLD_CMD="$REPO_ROOT/skills/scaffold/SKILL.md"
 
 FAIL=0
@@ -20,7 +21,7 @@ resume_line=$(grep -n "On resume" "$SCAFFOLD_CMD" | head -1 | cut -d: -f1)
 if [ -n "$resume_line" ]; then
   # Read 15 lines after "On resume" to check for override logic
   context=$(sed -n "$resume_line,$((resume_line + 15))p" "$SCAFFOLD_CMD")
-  if ! echo "$context" | grep -q '\-\-infra'; then
+  if ! contains "$context" "--infra"; then
     fail "scaffold.md 'On resume' section does not mention --infra override"
   fi
 fi
@@ -29,7 +30,7 @@ fi
 resume_line=$(grep -n "On resume" "$SCAFFOLD_CMD" | head -1 | cut -d: -f1)
 if [ -n "$resume_line" ]; then
   context=$(sed -n "$resume_line,$((resume_line + 20))p" "$SCAFFOLD_CMD")
-  if ! echo "$context" | grep -q 'tracker:\|sc:'; then
+  if ! matches_re "$context" 'tracker:|sc:'; then
     fail "scaffold.md 'On resume' override does not reference named format (tracker: or sc:)"
   fi
 fi

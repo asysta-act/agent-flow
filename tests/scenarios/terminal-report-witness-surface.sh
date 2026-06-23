@@ -20,6 +20,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
 
 FAIL=0
@@ -45,7 +46,7 @@ else
   # Extract block content
   FB_BLOCK=$(awk '/<stage_allowlist>/{f=1;next} /<\/stage_allowlist>/{exit} f' "$FB_SKILL")
   for s in triage code_analysis fixer_reviewer smoke_check test publisher; do
-    if ! printf '%s' "$FB_BLOCK" | grep -q "$s"; then
+    if ! contains "$FB_BLOCK" "$s"; then
       fail "FC-5.A1: $FB_SKILL <stage_allowlist> missing required stage '${s}'"
     fi
   done
@@ -62,13 +63,13 @@ else
   fi
   IF_BLOCK=$(awk '/<stage_allowlist>/{f=1;next} /<\/stage_allowlist>/{exit} f' "$IF_SKILL")
   for s in code_analysis fixer_reviewer test publisher; do
-    if ! printf '%s' "$IF_BLOCK" | grep -q "$s"; then
+    if ! contains "$IF_BLOCK" "$s"; then
       fail "FC-5.Aif1: $IF_SKILL <stage_allowlist> missing required stage '${s}'"
     fi
   done
   # NEGATIVE check (BLOCKER-2): must NOT contain these 4 stages
   for forbidden in triage reproduce_browser e2e_test browser_verification; do
-    if printf '%s' "$IF_BLOCK" | grep -qE "(^|[,[:space:]:])${forbidden}([,[:space:]]|$)"; then
+    if matches_re "$IF_BLOCK" "(^|[,[:space:]:])${forbidden}([,[:space:]]|$)"; then
       fail "FC-5.Aif2: $IF_SKILL <stage_allowlist> MUST NOT include '${forbidden}' (suppressed BLOCKER-2 fix)"
     fi
   done

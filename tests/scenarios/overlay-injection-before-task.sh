@@ -13,8 +13,9 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi

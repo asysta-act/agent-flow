@@ -10,7 +10,8 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+. "$REPO_ROOT/tests/lib/assert.sh"
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -43,7 +44,7 @@ if [ -d "$EXAMPLES_CUSTOM" ]; then
   for override_file in "$EXAMPLES_CUSTOM"/*.md "$EXAMPLES_CUSTOM"/*.toml; do
     [ -f "$override_file" ] || continue
     # Only check .md files for reserved heading collision (TOML files can't have markdown headings)
-    if echo "$override_file" | grep -q '\.md$'; then
+    if matches_re "$override_file" '\.md$'; then
       if grep -qE '^## Project-Specific Instructions$' "$override_file"; then
         fail "examples/customization/$(basename "$override_file") contains reserved heading '## Project-Specific Instructions' — collision risk"
         # Note: ## Output Contract collision is documented but not blocked

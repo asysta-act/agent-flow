@@ -2,6 +2,7 @@
 # Test: Skippable stage names in CLAUDE.md match stage mapping in pipeline commands
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
 
@@ -14,7 +15,7 @@ if [ -z "$SKIP_LINE" ]; then
   fail "CLAUDE.md missing 'Stage names for skip:' line"
 else
   for stage in triage analyst-impact spec-analyst test-engineer test-engineer-e2e browser-agent-reproduce browser-agent-verify; do
-    if echo "$SKIP_LINE" | grep -q "$stage"; then
+    if contains "$SKIP_LINE" "$stage"; then
       echo "OK: skippable stage '$stage' listed in CLAUDE.md"
     else
       fail "skippable stage '$stage' not found in 'Stage names for skip:' line"
@@ -28,7 +29,7 @@ if [ -z "$CANNOT_LINE" ]; then
   fail "CLAUDE.md missing 'CANNOT be skipped' line"
 else
   for mandatory in fixer reviewer publisher; do
-    if echo "$CANNOT_LINE" | grep -q "$mandatory"; then
+    if contains "$CANNOT_LINE" "$mandatory"; then
       echo "OK: mandatory stage '$mandatory' listed as CANNOT be skipped in CLAUDE.md"
     else
       fail "mandatory stage '$mandatory' not found in 'CANNOT be skipped' line"
@@ -46,7 +47,7 @@ for cmd in fix-bugs implement-feature; do
     fail "$cmd.md has no 'NEVER skip' restriction line"
   else
     for mandatory in fixer reviewer publisher; do
-      if echo "$NEVER_LINE" | grep -q "$mandatory"; then
+      if contains "$NEVER_LINE" "$mandatory"; then
         echo "OK: $cmd.md lists '$mandatory' as unskippable in NEVER-skip line"
       else
         fail "$cmd.md NEVER-skip line does not mention '$mandatory'"

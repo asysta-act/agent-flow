@@ -8,7 +8,8 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+. "$REPO_ROOT/tests/lib/assert.sh"
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -40,13 +41,13 @@ check_polymorphic() {
   oc_section=$(awk '/^## Output Contract$/{found=1; next} found && /^## [A-Z][^#]/{exit} found{print}' "$agent_file")
 
   # Assert sub-block A exists
-  if ! echo "$oc_section" | grep -qF "$block_a"; then
+  if ! contains "$oc_section" "$block_a"; then
     fail "$agent_name: missing H3 sub-block '$block_a' inside ## Output Contract"
     # Mutation catch: renaming phase block heading fails here
   fi
 
   # Assert sub-block B exists
-  if ! echo "$oc_section" | grep -qF "$block_b"; then
+  if ! contains "$oc_section" "$block_b"; then
     fail "$agent_name: missing H3 sub-block '$block_b' inside ## Output Contract"
   fi
 
@@ -58,11 +59,11 @@ check_polymorphic() {
     block_a_content="$oc_section"
   fi
 
-  if ! echo "$block_a_content" | grep -qE 'Section \| Source \| Required'; then
+  if ! contains "$block_a_content" "Section | Source | Required"; then
     fail "$agent_name / $block_a: sub-block missing Inputs table header 'Section | Source | Required'"
     # Mutation catch: missing Inputs table in a phase sub-block fails here
   fi
-  if ! echo "$block_a_content" | grep -qE 'Section produced \| When \| Required fields'; then
+  if ! contains "$block_a_content" "Section produced | When | Required fields"; then
     fail "$agent_name / $block_a: sub-block missing Outputs table header 'Section produced | When | Required fields'"
   fi
 

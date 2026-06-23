@@ -23,6 +23,7 @@
 set -uo pipefail
 
 REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+. "$REPO_ROOT/tests/lib/assert.sh"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
 
 FAIL=0
@@ -96,9 +97,16 @@ for agent_file in "${ALL_FILES[@]}"; do
   # Extract the section block (header line excluded)
   section=$(awk '/^## Step Completion Invariants$/{f=1; next} /^## /&&f{exit} f' "$agent_file")
 
+  # SIGPIPE-safe equivalent of grep -qE "(`|^| )${inv}(`|$| )" against the
+  # multiline section: bash [[ =~ ]] anchors match string start/end, not line
+  # boundaries, so we wrap the section in newline sentinels and treat a leading
+  # newline as ^ and a trailing newline as $ (the alternation already allowed
+  # backtick and space delimiters).
+  section_nl=$'\n'"$section"$'\n'
+
   # ---- ASSERT-6: All 5 mandatory invariant names referenced in section ----
   for inv in "${INVARIANTS[@]}"; do
-    if ! printf '%s' "$section" | grep -qE "(\`|^| )${inv}(\`|$| )"; then
+    if ! matches_re "$section_nl" '(`|'$'\n''| )'"${inv}"'(`|'$'\n''| )'; then
       fail "FC-6.B: $base section missing invariant '${inv}'"
     fi
   done
@@ -106,7 +114,7 @@ for agent_file in "${ALL_FILES[@]}"; do
   # ---- B': >= 2 invariant names in body ----
   body_hits=0
   for inv in "${INVARIANTS[@]}"; do
-    if printf '%s' "$section" | grep -qE "(\`|^| )${inv}(\`|$| )"; then
+    if matches_re "$section_nl" '(`|'$'\n''| )'"${inv}"'(`|'$'\n''| )'; then
       body_hits=$((body_hits + 1))
     fi
   done
@@ -115,10 +123,10 @@ for agent_file in "${ALL_FILES[@]}"; do
   fi
 
   # ---- ASSERT-7: EXPECTED_AGENT_NAME and EXPECTED_STAGE_NAME tokens ----
-  if ! printf '%s' "$section" | grep -q 'EXPECTED_STAGE_NAME'; then
+  if ! contains "$section" "EXPECTED_STAGE_NAME"; then
     fail "FC-6.B-doubleprime-1: $base section body missing 'EXPECTED_STAGE_NAME' token"
   fi
-  if ! printf '%s' "$section" | grep -q 'EXPECTED_AGENT_NAME'; then
+  if ! contains "$section" "EXPECTED_AGENT_NAME"; then
     fail "FC-6.B-doubleprime-2: $base section body missing 'EXPECTED_AGENT_NAME' token"
   fi
 

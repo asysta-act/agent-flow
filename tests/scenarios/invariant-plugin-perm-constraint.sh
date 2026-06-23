@@ -7,8 +7,9 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 # Guard: ensure we are not running from staging location
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+if matches_re "$REPO_ROOT" '\.forge'; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -43,7 +44,8 @@ while IFS= read -r agent_file; do
   # Extract frontmatter: content between 1st and 2nd '---' line
   FRONTMATTER=$(awk '/^---$/{c++; next} c==1' "$agent_file")
 
-  if echo "$FRONTMATTER" | grep -qE "^($FORBIDDEN_KEYS):"; then
+  # grep is line-oriented; '^' anchors per-line. Replicate with (start-of-string OR newline).
+  if matches_re "$FRONTMATTER" "(^|"$'\n'")($FORBIDDEN_KEYS):"; then
     fail "$basename_agent frontmatter contains forbidden key (hooks/mcpServers/permissionMode)"
   else
     echo "OK: $basename_agent frontmatter has no forbidden permission keys"

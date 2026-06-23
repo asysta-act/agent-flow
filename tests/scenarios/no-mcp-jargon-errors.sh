@@ -72,7 +72,7 @@ preflight_line=$(grep -n "Standard error message" "$SCAFFOLD" | head -1 | cut -d
 if [ -n "$preflight_line" ]; then
   # Check the 5 lines after "Standard error message:" header
   context=$(sed -n "$preflight_line,$((preflight_line + 5))p" "$SCAFFOLD")
-  if echo "$context" | grep -q "$OLD_PATTERN"; then
+  if grep -q "$OLD_PATTERN" <<< "$context"; then
     fail "scaffold.md MCP Pre-flight 'Standard error message' still uses old jargon"
   fi
 fi

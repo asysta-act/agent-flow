@@ -7,8 +7,9 @@ set -uo pipefail
 # NOTE: REPO_ROOT assumes test file location is tests/scenarios/. Run after Phase 7 has moved files.
 # Do NOT execute from staging location .forge/phase-5-tdd/tests/.
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 # Guard: ensure we are not running from staging location
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -44,7 +45,7 @@ fi
 
 # Simulate /setup-agents behavior: should detect non-generated header, skip file
 FIRST_LINE=$(head -1 "$TMPDIR_TEST/customization/reviewer.toml")
-if ! echo "$FIRST_LINE" | grep -qE '^# generated:'; then
+if ! matches_re "$FIRST_LINE" '^# generated:'; then
   # Correct behavior: do NOT overwrite — file stays unchanged
   :
 else

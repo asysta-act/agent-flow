@@ -24,6 +24,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
 
 FAIL=0
@@ -70,7 +71,7 @@ for pair in "${SAMPLES[@]}"; do
     fail "hidden-injection.opener-empty: $agent_base section opener line is empty"
   else
     # Test for SHALL/MUST/shall/must token OR period-ending sentence ≥40 chars.
-    if ! printf '%s' "$first_line" | grep -qE 'SHALL|MUST|shall|must'; then
+    if ! matches_re "$first_line" 'SHALL|MUST|shall|must'; then
       # Length check fallback
       line_len=${#first_line}
       ends_with_period=0
@@ -86,7 +87,8 @@ for pair in "${SAMPLES[@]}"; do
 
   # 3) Agent stage-name binding present.
   # Accept backticked form `stage_name` OR plain literal in the section body.
-  if ! printf '%s' "$section" | grep -qE "\`${expected_stage}\`|(^| )${expected_stage}( |$|,|\.|:)"; then
+  # grep is line-oriented; '^'/'$' anchor per-line. Replicate by also allowing a newline boundary.
+  if ! matches_re "$section" "\`${expected_stage}\`|(^|"$'\n'"| )${expected_stage}( |$|"$'\n'"|,|\.|:)"; then
     fail "hidden-injection.stage-binding: $agent_base section missing stage-name binding '${expected_stage}'"
   fi
 done

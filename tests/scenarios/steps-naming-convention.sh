@@ -6,8 +6,9 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 # Guard: ensure we are not running from staging location
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -32,7 +33,7 @@ for pipeline in "${PIPELINES[@]}"; do
   find "$STEPS_DIR" -maxdepth 1 -name '*.md' -type f > "$TMPDIR_STEPS/${pipeline}_steps.txt"
   while IFS= read -r step_file; do
     basename_file=$(basename "$step_file")
-    if echo "$basename_file" | grep -qE "$VALID_REGEX"; then
+    if matches_re "$basename_file" "$VALID_REGEX"; then
       echo "OK: $pipeline/steps/$basename_file matches naming convention"
     else
       fail "$pipeline/steps/$basename_file does NOT match naming convention '$VALID_REGEX'"
