@@ -4,6 +4,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 SKILLS_DIR="$REPO_ROOT/skills"
 # v10 thin-controller: SKILL.md is the controller, but step files in steps/*.md
 # carry the dispatch detail. For each skill that has rollback/fixer/reviewer
@@ -46,7 +47,7 @@ EMOJI_BYTES=$'\xf0\x9f\x94\xb4'
 for f in $PIPELINE_FILES; do
   name=$(basename "$f")
   body=$(aggregate_skill "$f")
-  if printf '%s' "$body" | grep -q '\[agent-flow\].*Pipeline Block'; then
+  if grep -q '\[agent-flow\].*Pipeline Block' <<< "$body"; then
     # Every occurrence must have the emoji (compare at byte level)
     bad=$(printf '%s' "$body" | LC_ALL=C grep '\[agent-flow\].*Pipeline Block' | LC_ALL=C grep -v "$EMOJI_BYTES" || true)
     if [ -n "$bad" ]; then
@@ -77,18 +78,18 @@ done
 for f in $PIPELINE_FILES; do
   name=$(basename "$f")
   body=$(aggregate_skill "$f")
-  if echo "$body" | grep -qiE 'fixer.*Task tool|Run.*fixer|fixer.*subagent_type'; then
-    if ! echo "$body" | grep -qi 'build retries\|Build retries\|retry.*build\|build_retries'; then
+  if grep -qiE 'fixer.*Task tool|Run.*fixer|fixer.*subagent_type' <<< "$body"; then
+    if ! grep -qi 'build retries\|Build retries\|retry.*build\|build_retries' <<< "$body"; then
       fail "$name calls fixer but does not mention build retries"
     fi
   fi
-  if echo "$body" | grep -qiE 'reviewer.*Task tool|Run.*reviewer|reviewer.*subagent_type'; then
-    if ! echo "$body" | grep -qi 'fixer iterations\|fixer_iterations\|Fixer iterations'; then
+  if grep -qiE 'reviewer.*Task tool|Run.*reviewer|reviewer.*subagent_type' <<< "$body"; then
+    if ! grep -qi 'fixer iterations\|fixer_iterations\|Fixer iterations' <<< "$body"; then
       fail "$name calls reviewer but does not mention fixer iterations"
     fi
   fi
-  if echo "$body" | grep -qiE 'test-engineer.*Task tool|Run.*test-engineer|test-engineer.*subagent_type'; then
-    if ! echo "$body" | grep -qi 'test attempts\|test_attempts\|Test attempts'; then
+  if grep -qiE 'test-engineer.*Task tool|Run.*test-engineer|test-engineer.*subagent_type' <<< "$body"; then
+    if ! grep -qi 'test attempts\|test_attempts\|Test attempts' <<< "$body"; then
       fail "$name calls test-engineer but does not mention test attempts"
     fi
   fi
@@ -98,8 +99,8 @@ done
 for f in $PIPELINE_FILES; do
   name=$(basename "$f")
   body=$(aggregate_skill "$f")
-  if echo "$body" | grep -q 'rm -rf.*SCAFFOLD_TEMP'; then
-    if ! echo "$body" | grep -q 'DO NOT run rm -rf'; then
+  if grep -q 'rm -rf.*SCAFFOLD_TEMP' <<< "$body"; then
+    if ! contains "$body" "DO NOT run rm -rf"; then
       fail "$name has rm -rf \$SCAFFOLD_TEMP but no explicit 'DO NOT run rm -rf' safety check"
     fi
   fi
@@ -109,8 +110,8 @@ done
 for f in $PIPELINE_FILES; do
   name=$(basename "$f")
   body=$(aggregate_skill "$f")
-  if echo "$body" | grep -q 'rollback-agent'; then
-    if ! echo "$body" | grep -q 'issue tracker'; then
+  if contains "$body" "rollback-agent"; then
+    if ! contains "$body" "issue tracker"; then
       fail "$name references rollback-agent but has no issue tracker context instruction"
     fi
   fi

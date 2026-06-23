@@ -3,6 +3,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FILE="$REPO_ROOT/skills/version-check/SKILL.md"
 
@@ -12,7 +13,7 @@ if [ ! -f "$FILE" ]; then
 fi
 
 BLOCK=$(sed -n '86,96p' "$FILE")
-if echo "$BLOCK" | grep -qE 'remote_version|repo_version|installed_version|pull|comparison'; then
+if matches_re "$BLOCK" 'remote_version|repo_version|installed_version|pull|comparison'; then
   echo "PASS: version comparison logic (lines 86-96) preserved"
   exit 0
 else

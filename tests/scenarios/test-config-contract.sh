@@ -3,6 +3,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../" && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -36,7 +37,7 @@ else
   # Default must be 'enabled'
   # -----------------------------------------------------------------------
   key_line=$(grep 'Create tracker subtasks' "$CLAUDE_MD" | grep 'enabled\|disabled' | head -1 || true)
-  if ! echo "$key_line" | grep -q 'enabled'; then
+  if ! contains "$key_line" "enabled"; then
     fail "'Create tracker subtasks' entry in CLAUDE.md does not show default value 'enabled'"
   fi
 fi
@@ -55,10 +56,10 @@ else
   # Must mention both 'enabled' and 'disabled' values
   # -----------------------------------------------------------------------
   key_context=$(grep -A5 'Create tracker subtasks' "$AUTOCONFIG" 2>/dev/null | head -6 || true)
-  if ! echo "$key_context" | grep -q 'enabled'; then
+  if ! contains "$key_context" "enabled"; then
     fail "'Create tracker subtasks' in automation-config.md does not document 'enabled' value"
   fi
-  if ! echo "$key_context" | grep -q 'disabled'; then
+  if ! contains "$key_context" "disabled"; then
     fail "'Create tracker subtasks' in automation-config.md does not document 'disabled' value"
   fi
 fi

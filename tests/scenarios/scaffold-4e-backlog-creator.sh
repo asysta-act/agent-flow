@@ -3,6 +3,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -33,7 +34,7 @@ fi
 if [ -n "$step_4e_line" ]; then
   # Extract a window of ~15 lines after Step 4e to check for backlog-creator reference
   step_4e_section=$(awk -v start="$step_4e_line" 'NR>=start && NR<=start+15{print}' "$SCAFFOLD_FILE")
-  if ! echo "$step_4e_section" | grep -qi "backlog-creator\|create-backlog\|backlog.*creat\|creat.*backlog"; then
+  if ! matches_re "${step_4e_section,,}" 'backlog-creator|create-backlog|backlog.*creat|creat.*backlog'; then
     fail "skills/scaffold/SKILL.md Step 4e does not reference backlog-creator or create-backlog dispatch"
   fi
 else

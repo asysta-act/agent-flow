@@ -16,6 +16,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
 
 FAIL=0
@@ -57,8 +58,10 @@ if [ "$ACTUAL_COUNT" -lt 10 ]; then
 fi
 
 # D. Sanity sub-asserts for the 5 NEW stages
+# Whole-word match (grep -w equivalent): token bounded by non-word chars or string ends.
+NAMES_LINES=$(printf '%s\n' $NAMES)
 for new_stage in reproduce_browser smoke_check e2e_test browser_verification acceptance_gate; do
-  if ! printf '%s\n' $NAMES | grep -qw "$new_stage"; then
+  if ! matches_re "$NAMES_LINES" "(^|[^[:alnum:]_])${new_stage}([^[:alnum:]_]|\$)"; then
     fail "FC-4.D: STAGES missing stage '${new_stage}'"
   fi
 done

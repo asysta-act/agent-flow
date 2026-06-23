@@ -15,6 +15,7 @@ set -euo pipefail
 # The structured summary line DISCOVERED_FIELD={name} is the mechanical signal for Phase 7.
 
 cd "$(dirname "$0")/../.."
+. "$(pwd)/tests/lib/assert.sh"
 
 # Discovery context: The Claude Task tool returns a result object with a `result.usage` field
 # that contains token counts. The field name within result.usage may vary by Claude API version:
@@ -61,7 +62,7 @@ fi
 # Validate field is in allowlist
 MATCHED=0
 for allowed in "${ALLOWLIST[@]}"; do
-  if [ "$STUB_FIELD" = "$allowed" ] || echo "$STUB_FIELD" | grep -qF "$allowed"; then
+  if [ "$STUB_FIELD" = "$allowed" ] || contains "$STUB_FIELD" "$allowed"; then
     MATCHED=1
     break
   fi

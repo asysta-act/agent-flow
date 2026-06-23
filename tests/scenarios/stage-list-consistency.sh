@@ -18,6 +18,7 @@
 set -uo pipefail
 
 REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+. "$REPO_ROOT/tests/lib/assert.sh"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
 
 FAIL=0
@@ -60,7 +61,7 @@ fi
 # ASSERT-2: Every S2 stage is in S1 (per-skill allow-lists are subsets)
 while IFS= read -r stage; do
   [ -z "$stage" ] && continue
-  if ! printf '%s\n' "$S1" | grep -qxF "$stage"; then
+  if ! contains $'\n'"$S1"$'\n' $'\n'"$stage"$'\n'; then
     fail "s2-not-in-s1: skill stage '$stage' not in hooks/validate-dispatch.sh STAGES"
   fi
 done <<< "$S2"

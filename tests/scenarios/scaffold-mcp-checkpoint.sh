@@ -4,6 +4,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 INIT_SKILL="$REPO_ROOT/skills/setup-mcp/SKILL.md"
 SCAFFOLD_SKILL="$REPO_ROOT/skills/scaffold/SKILL.md"
 
@@ -69,7 +70,7 @@ fi
 mcp_section_start=$(grep -n "mcp_available: false" "$SCAFFOLD_SKILL" | head -1 | cut -d: -f1)
 if [ -n "$mcp_section_start" ]; then
   mcp_context=$(sed -n "$mcp_section_start,$((mcp_section_start + 50))p" "$SCAFFOLD_SKILL")
-  if ! echo "$mcp_context" | grep -qi 'skip\|downgrad'; then
+  if ! matches_re "${mcp_context,,}" 'skip|downgrad'; then
     fail "scaffold SKILL.md Step 0-MCP missing Skip/downgrade option"
   fi
 fi
@@ -80,7 +81,7 @@ fi
 resume_line=$(grep -n "On resume" "$SCAFFOLD_SKILL" | head -1 | cut -d: -f1)
 if [ -n "$resume_line" ]; then
   context=$(sed -n "$resume_line,$((resume_line + 25))p" "$SCAFFOLD_SKILL")
-  if ! echo "$context" | grep -qi 'downgraded.*re-check\|re-check.*downgraded\|auto-recheck\|re-run.*0-MCP\|re-checking.*MCP'; then
+  if ! matches_re "${context,,}" 'downgraded.*re-check|re-check.*downgraded|auto-recheck|re-run.*0-mcp|re-checking.*mcp'; then
     fail "scaffold SKILL.md resume section missing auto-recheck for downgraded services"
   fi
 fi
@@ -88,7 +89,7 @@ fi
 # 12. Resume section distinguishes "downgraded" from "later"
 if [ -n "$resume_line" ]; then
   context=$(sed -n "$resume_line,$((resume_line + 30))p" "$SCAFFOLD_SKILL")
-  if ! echo "$context" | grep -qi 'later.*no action\|later.*skip\|later.*defer\|respect.*choice'; then
+  if ! matches_re "${context,,}" 'later.*no action|later.*skip|later.*defer|respect.*choice'; then
     fail "scaffold SKILL.md resume section missing 'later' = no-recheck semantics"
   fi
 fi
@@ -96,7 +97,7 @@ fi
 # 13. Resume auto-recheck upgrades status on success
 if [ -n "$resume_line" ]; then
   context=$(sed -n "$resume_line,$((resume_line + 30))p" "$SCAFFOLD_SKILL")
-  if ! echo "$context" | grep -qi 'ready\|upgrade.*status\|status.*ready'; then
+  if ! matches_re "${context,,}" 'ready|upgrade.*status|status.*ready'; then
     fail "scaffold SKILL.md resume auto-recheck missing upgrade to ready on success"
   fi
 fi

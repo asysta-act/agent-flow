@@ -4,6 +4,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -29,7 +30,8 @@ if [ -z "$FIXER_CONSTRAINTS" ]; then
 fi
 
 # Must have a MUST rule explicitly enforcing exact string NEEDS_DECOMPOSITION
-if ! echo "$FIXER_CONSTRAINTS" | grep "MUST" | grep -q "NEEDS_DECOMPOSITION"; then
+FIXER_MUST_LINES=$(grep "MUST" <<< "$FIXER_CONSTRAINTS")
+if ! contains "$FIXER_MUST_LINES" "NEEDS_DECOMPOSITION"; then
   fail "agents/fixer.md Constraints section does not have a MUST rule enforcing exact spelling of 'NEEDS_DECOMPOSITION'"
 fi
 
@@ -49,36 +51,37 @@ if [ -z "$REVIEWER_CONSTRAINTS" ]; then
 fi
 
 # Rule 1: Verdict token — must have MUST rule with APPROVE, REQUEST_CHANGES, BLOCK
-if ! echo "$REVIEWER_CONSTRAINTS" | grep "MUST" | grep -q "Verdict\|APPROVE\|REQUEST_CHANGES"; then
+REVIEWER_MUST_LINES=$(grep "MUST" <<< "$REVIEWER_CONSTRAINTS")
+if ! matches_re "$REVIEWER_MUST_LINES" 'Verdict|APPROVE|REQUEST_CHANGES'; then
   fail "agents/reviewer.md Constraints section does not have a MUST rule for Verdict token spelling"
 fi
 
 VERDICT_MUST_LINE=$(echo "$REVIEWER_CONSTRAINTS" | grep "MUST" | grep -i "verdict\|APPROVE" | head -1)
 
-if ! echo "$VERDICT_MUST_LINE" | grep -q "APPROVE"; then
+if ! contains "$VERDICT_MUST_LINE" "APPROVE"; then
   fail "agents/reviewer.md Constraints MUST rule for Verdict does not mention 'APPROVE'"
 fi
-if ! echo "$VERDICT_MUST_LINE" | grep -q "REQUEST_CHANGES"; then
+if ! contains "$VERDICT_MUST_LINE" "REQUEST_CHANGES"; then
   fail "agents/reviewer.md Constraints MUST rule for Verdict does not mention 'REQUEST_CHANGES'"
 fi
-if ! echo "$VERDICT_MUST_LINE" | grep -q "BLOCK"; then
+if ! contains "$VERDICT_MUST_LINE" "BLOCK"; then
   fail "agents/reviewer.md Constraints MUST rule for Verdict does not mention 'BLOCK'"
 fi
 
 # Rule 2: AC fulfillment token — must have MUST rule with FULFILLED, PARTIALLY, NOT ADDRESSED
-if ! echo "$REVIEWER_CONSTRAINTS" | grep "MUST" | grep -qi "fulfilled\|partially\|not addressed"; then
+if ! matches_re "${REVIEWER_MUST_LINES,,}" 'fulfilled|partially|not addressed'; then
   fail "agents/reviewer.md Constraints section does not have a MUST rule for AC fulfillment token spelling"
 fi
 
 AC_MUST_LINE=$(echo "$REVIEWER_CONSTRAINTS" | grep "MUST" | grep -i "fulfilled\|PARTIALLY\|NOT ADDRESSED" | head -1)
 
-if ! echo "$AC_MUST_LINE" | grep -q "FULFILLED"; then
+if ! contains "$AC_MUST_LINE" "FULFILLED"; then
   fail "agents/reviewer.md Constraints MUST rule for AC fulfillment does not mention 'FULFILLED'"
 fi
-if ! echo "$AC_MUST_LINE" | grep -q "PARTIALLY"; then
+if ! contains "$AC_MUST_LINE" "PARTIALLY"; then
   fail "agents/reviewer.md Constraints MUST rule for AC fulfillment does not mention 'PARTIALLY'"
 fi
-if ! echo "$AC_MUST_LINE" | grep -q "NOT ADDRESSED"; then
+if ! contains "$AC_MUST_LINE" "NOT ADDRESSED"; then
   fail "agents/reviewer.md Constraints MUST rule for AC fulfillment does not mention 'NOT ADDRESSED'"
 fi
 

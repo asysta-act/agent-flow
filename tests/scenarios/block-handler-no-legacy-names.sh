@@ -3,6 +3,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FILE="$REPO_ROOT/core/block-handler.md"
 
@@ -17,14 +18,14 @@ fail() { echo "FAIL: $1"; FAIL=1; }
 LINE22=$(sed -n '22p' "$FILE")
 
 # Line 22 must still reference analyst (canonical name)
-if echo "$LINE22" | grep -q 'analyst'; then
+if contains "$LINE22" "analyst"; then
   echo "PASS: line 22 references analyst (canonical)"
 else
   fail "line 22 does not reference analyst at all: $LINE22"
 fi
 
 # v7 names must not appear in line 22
-if echo "$LINE22" | grep -qE 'triage-analyst|code-analyst'; then
+if matches_re "$LINE22" 'triage-analyst|code-analyst'; then
   fail "line 22 still contains v7 name (triage-analyst or code-analyst): $LINE22"
 else
   echo "PASS: line 22 does not contain v7 names"

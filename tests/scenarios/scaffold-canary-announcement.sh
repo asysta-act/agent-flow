@@ -4,6 +4,7 @@
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 SCAFFOLD_CMD="$REPO_ROOT/skills/scaffold/SKILL.md"
 
 FAIL=0
@@ -22,7 +23,7 @@ fi
 canary_line=$(grep -n -i 'canary\|test.*write\|write.*test' "$SCAFFOLD_CMD" | head -1 | cut -d: -f1)
 if [ -n "$canary_line" ]; then
   nearby=$(sed -n "$((canary_line)),$(( canary_line + 3 ))p" "$SCAFFOLD_CMD")
-  if echo "$nearby" | grep -q '\[Y/n\]'; then
+  if contains "$nearby" "[Y/n]"; then
     fail "scaffold.md canary announcement appears to ask for Y/n confirmation (should be informational)"
   fi
 fi

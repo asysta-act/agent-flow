@@ -7,8 +7,9 @@ set -uo pipefail
 # NOTE: REPO_ROOT assumes test file location is tests/scenarios/. Run after Phase 7 has moved files.
 # Do NOT execute from staging location .forge/phase-5-tdd/tests/.
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 # Guard: ensure we are not running from staging location
-if echo "$REPO_ROOT" | grep -q '\.forge'; then
+if contains "$REPO_ROOT" ".forge"; then
   echo "ERROR: REPO_ROOT=$REPO_ROOT — tests must be run from tests/scenarios/ after Phase 7 staging" >&2
   exit 1
 fi
@@ -49,7 +50,7 @@ EOF
 # ---------------------------------------------------------------------------
 echo "--- Assertion 1: valid generated header passes regex ---"
 FIRST_LINE=$(head -1 "$TMPDIR_TEST/customization/reviewer.toml")
-if echo "$FIRST_LINE" | grep -qE "$HEADER_REGEX"; then
+if matches_re "$FIRST_LINE" "$HEADER_REGEX"; then
   echo "OK: reviewer.toml header matches generated: regex"
 else
   fail "reviewer.toml header '$FIRST_LINE' does not match regex '$HEADER_REGEX'"
@@ -57,7 +58,7 @@ fi
 
 # Check second generated file
 FIRST_LINE2=$(head -1 "$TMPDIR_TEST/customization/fixer.toml")
-if echo "$FIRST_LINE2" | grep -qE "$HEADER_REGEX"; then
+if matches_re "$FIRST_LINE2" "$HEADER_REGEX"; then
   echo "OK: fixer.toml header matches generated: regex"
 else
   fail "fixer.toml header '$FIRST_LINE2' does not match regex '$HEADER_REGEX'"
@@ -68,7 +69,7 @@ fi
 # ---------------------------------------------------------------------------
 echo "--- Assertion 2: user-edited file does NOT start with # generated: ---"
 NON_GEN_FIRST=$(head -1 "$TMPDIR_TEST/customization/analyst.toml")
-if echo "$NON_GEN_FIRST" | grep -qE "$HEADER_REGEX"; then
+if matches_re "$NON_GEN_FIRST" "$HEADER_REGEX"; then
   fail "analyst.toml should NOT have # generated: header (it is user-edited)"
 else
   echo "OK: analyst.toml correctly does not have # generated: header"

@@ -4,6 +4,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -61,12 +62,12 @@ fi
 
 # 8. Constraints section must include "NEVER re-rank"
 constraints_section=$(awk '/^## Constraints/{found=1} found && /^## /{if(!/^## Constraints/)found=0} found{print}' "$AGENT_FILE")
-if ! echo "$constraints_section" | grep -qi "NEVER.*re-rank\|NEVER.*rerank\|NEVER.*re.rank"; then
+if ! matches_re "${constraints_section,,}" 'never.*re-rank|never.*rerank|never.*re.rank'; then
   fail "agents/sprint-planner.md Constraints section must include 'NEVER re-rank' rule"
 fi
 
 # 9. Constraints section contains at least one NEVER rule
-if ! echo "$constraints_section" | grep -qi "NEVER"; then
+if ! contains_i "$constraints_section" "NEVER"; then
   fail "agents/sprint-planner.md Constraints section must contain at least one NEVER rule"
 fi
 

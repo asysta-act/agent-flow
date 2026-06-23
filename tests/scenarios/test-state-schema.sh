@@ -3,6 +3,7 @@
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../../" && pwd)"
+. "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -41,7 +42,7 @@ fi
 # -----------------------------------------------------------------------
 if [ -n "$TRACKER_FIELD_LINE" ]; then
   tracker_row=$(grep "tracker_issue_id" "$SCHEMA" | head -1 || true)
-  if ! echo "$tracker_row" | grep -qiE 'string.*null|null.*string'; then
+  if ! matches_re "${tracker_row,,}" 'string.*null|null.*string'; then
     fail "'tracker_issue_id' row must have type 'string or null', got: $tracker_row"
   fi
 fi
