@@ -66,7 +66,35 @@ The table below shows a representative sample of scenarios — it is **not** an 
 
 # Single scenario
 ./tests/harness/run-tests.sh happy-path
+
+# Control parallelism (defaults to nproc, fallback 4)
+HARNESS_JOBS=4 ./tests/harness/run-tests.sh
 ```
+
+**Run the full suite before every push and confirm `Fail: 0`.** CI runs the same
+suite as a backstop, not as the first gate — a green subset run locally can still
+let a cross-cutting scenario fail in CI.
+
+### Windows (MSYS2 / Git Bash)
+
+The harness forks one bash process per scenario via `xargs -P`. Windows does not
+reap those children when the parent dies, so on this platform:
+
+- **Always run sequentially:** `HARNESS_JOBS=1 ./tests/harness/run-tests.sh`
+- **Never start a second run** while one is still active.
+- **Never kill a running harness.** Let it finish — killing it strands every forked
+  bash subprocess as a zombie, and after a few killed runs the process table fills
+  with thousands of `bash.exe` entries that grind the machine to a halt. If you must
+  abort, recover with `Get-Process bash | Stop-Process -Force` (PowerShell), repeated
+  until the count drops.
+
+## Writing scenarios
+
+See [CONTRIBUTING.md](../CONTRIBUTING.md#functional-test-scenarios--security-expectations)
+for the scenario review checklist. In particular, assert substrings against shell
+variables with the `tests/lib/assert.sh` helpers (`contains`, `contains_i`,
+`matches_re`) rather than `echo "$VAR" | grep -q` — the latter flakes under
+`pipefail` via SIGPIPE on Linux CI.
 
 ## Important
 
