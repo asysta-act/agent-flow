@@ -2,6 +2,12 @@
 
 All notable changes to agent-flow will be documented in this file.
 
+## [1.2.0] — 2026-06-23
+
+### Fixed
+
+- **Test harness: SIGPIPE-flaky assertions hardened** — every `producer | grep -q` idiom across `tests/scenarios/` (162 occurrences in 88 scenario files) was converted to the new SIGPIPE-safe helpers in `tests/lib/assert.sh` (`contains` / `contains_i` / `matches_re`), or to a here-string `grep -q[iE] … <<< "$var"` for multi-line and line-anchored patterns (which preserves grep's line-oriented semantics). This eliminates the intermittent CI failures where `grep -q` closed the pipe on first match and the upstream producer died with SIGPIPE (141) under `set -o pipefail`. The convention is documented as CONTRIBUTING.md rule 8 and in `tests/README.md` (Windows `HARNESS_JOBS=1` sequential-run notes). No runtime or Automation Config contract change — test infrastructure only.
+
 ## [1.1.0] — 2026-06-17
 
 ### Added
