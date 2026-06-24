@@ -5,7 +5,7 @@ then posts implementation comments and closes tracker issues for completed epics
 
 ## 07a. Spec Compliance Check
 
-Check Agent Overrides for `spec-reviewer.md`.
+Before dispatch, check Agent Overrides: if `{Agent Overrides path}/spec-reviewer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
 You MUST invoke Task(subagent_type='agent-flow:spec-reviewer', model='opus'). DO NOT inline-execute.
 Context: `--verify mode. Compare spec/ against implemented codebase.`

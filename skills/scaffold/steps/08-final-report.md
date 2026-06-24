@@ -32,6 +32,51 @@ On failure: log `[WARN] Webhook delivery failed`, continue.
 
 Echo `pipeline.summary_table` to stdout (COST-R10).
 
+## 08c2. Dispatch-Audit + Overlay-Drop Surfacing
+
+The guard-block's THIN CONTROLLER list requires surfacing dispatch-audit anomalies in the final
+report. This sub-step surfaces both witness anomalies and silently-dropped Agent Override overlays.
+Both are advisory — NEVER fail the final report on either.
+
+**Witness anomalies.** Read `.agent-flow/dispatch-audit.log` (top-level path, NOT under the run
+dir). If the file does not exist, render nothing (first invocation, or hook disabled). For this
+run's stages (`spec_writer`, `spec_reviewer`, `scaffolder`, `architect`, `fixer_reviewer`, `test`,
+`e2e_test`, `deployment` — only those that ran), surface any `WITNESS_MISSING` / `WITNESS_MISMATCH`
+entry as an anomaly. `WITNESS_OK` entries are never rendered. If any anomaly exists, render:
+```
+[agent-flow] Dispatch audit anomalies detected:
+  Stage: {stage_name}  Status: {WITNESS_MISSING|WITNESS_MISMATCH}
+  ...
+For investigation: cat .agent-flow/dispatch-audit.log
+```
+
+**Overlay drops.** The `dispatch_witness` is computed from the RAW prompt template; the overlay is
+appended AFTER, so a silently-dropped overlay is INVISIBLE to the witness audit. The
+`stages.<stage>.overlay_source` field is the only signal that the injector ran. Resolve the override
+directory from `### Agent Overrides → Path` (default `customization/`). For each stage block in
+`state.json` `stages.<stage>`:
+
+1. Read `stages.<stage>.overlay_source`. If absent (legacy run) or equal to `toml`, skip (no anomaly).
+2. Derive the agent file basename from `stages.<stage>.agent_name` by stripping the `agent-flow:`
+   namespace prefix (e.g. `agent-flow:scaffolder` → `scaffolder`).
+3. Classify by value — each is an **OVERLAY DROP ANOMALY** with a different trigger (do NOT gate
+   both on `.toml` existence):
+   - `md_rejected` → **always** an anomaly. It is emitted only when `<basename>.md` exists while
+     `<basename>.toml` does NOT, so a `.toml` check would always hide it. A legacy `.md` overlay is
+     present but unsupported (the `.toml` form is required). Dropped file: `<basename>.md`.
+   - `none` → an anomaly **only if** `{Agent Overrides path}/<basename>.toml` EXISTS (the injector
+     absorbed a parse/validation failure on a present overlay). Otherwise it is a legitimate `none`
+     (no overlay configured) — skip. Dropped file: `<basename>.toml`.
+
+If any mismatch exists, render:
+```
+[agent-flow] Overlay-drop anomalies detected (configured override silently dropped):
+  Stage: {stage_name}  Agent: {agent_name}  overlay_source: {none|md_rejected}  Dropped: {Agent Overrides path}/{basename}.{toml|md}
+  ...
+Recommended: re-run /agent-flow:scaffold with --step-mode and confirm each customization/<agent>.toml is applied (rename any legacy customization/<agent>.md to .toml).
+```
+If no stage produced a mismatch, render NO block (clean run).
+
 ## 08d. Final Report Display
 
 **Required in-memory values:** `tracker_type`, `tracker_instance`, `tracker_project`, `sc_remote`, `tracker_effective_status`, `sc_effective_status`.

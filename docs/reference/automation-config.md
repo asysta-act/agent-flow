@@ -275,6 +275,7 @@ Optional. Enables browser-based bug reproduction (before fixer) and verification
 |-----|-------------|---------|
 | Base URL | The URL of the running application | (required) |
 | Start command | Command to start the dev server, if not already running | (none) |
+| Stop command | Command to stop the app the agent started. If unset, the agent falls back to `pkill -f` on the `Start command` pattern (POSIX only) | (none) |
 | On events | Comma-separated: `reproduce`, `verify`, or `reproduce, verify` | reproduce, verify |
 | Timeout | Seconds before browser operation is abandoned | 60 |
 | Max pages | Max pages to check in scoped verification (Sub-phase A) | 5 |
@@ -290,6 +291,7 @@ Optional. Enables browser-based bug reproduction (before fixer) and verification
 |-----|-------|
 | Base URL | http://localhost:3000 |
 | Start command | npm run dev |
+| Stop command | npm run stop |
 | On events | reproduce, verify |
 | Timeout | 60 |
 | Max pages | 5 |
@@ -301,6 +303,8 @@ Optional. Enables browser-based bug reproduction (before fixer) and verification
 **Interaction with `E2E Test`:** `E2E Test` generates scripted test code artifacts (test files checked into the repo). `Browser Verification` interacts with the live browser at runtime (no test files generated). Both can be configured independently.
 
 **Graceful degradation:** If Playwright is not installed, the app is not running and no `Start command` is set, or the section is absent — both phases are silently skipped. The pipeline never blocks due to browser infrastructure being unavailable.
+
+**Stopping the app:** When the agent starts the app itself (via `Start command`), it stops it again when it finishes (after reproduction or verification). It runs `Stop command` if configured; otherwise it falls back to `pkill -f` on the `Start command` pattern. Set `Stop command` when running on a non-POSIX host (no `pkill`) or when the `Start command` is a launcher that exits before the app it spawned (so the pattern would no longer match the running process). If the app is already running when the agent checks `Base URL`, the agent neither starts nor stops it.
 
 **Recommended `.gitignore` entries for consuming projects:**
 ```
@@ -645,7 +649,7 @@ Keys: Framework, Command. Default (none).
 
 ### Browser Verification
 
-Keys: Base URL, Start command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks. Default (none).
+Keys: Base URL, Start command, Stop command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks. Default (none).
 
 ### Error Handling
 

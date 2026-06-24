@@ -9,7 +9,7 @@ and once more as a full-suite sweep after all batches complete.
 **Pre-dispatch test (COST-R4, first attempt per subtask only):** Write to state.json:
 `test.started_at`, `test.model = "sonnet"`, `test.status = "in_progress"`, counters `0`.
 
-Check Agent Overrides for `test-engineer.md`.
+Check Agent Overrides: if `{Agent Overrides path}/test-engineer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
 You MUST invoke Task(subagent_type='agent-flow:test-engineer', model='sonnet'). DO NOT inline-execute.
 Context: changed files + acceptance_criteria + `Max test attempts = {Test attempts from CLAUDE.md, default 3}`.
@@ -39,7 +39,7 @@ On failure: log `[WARN] Webhook delivery failed`, continue.
 
 **Pre-dispatch deployment (COST-R4):** Write `deployment.started_at`, `deployment.model = "sonnet"`, `deployment.status = "in_progress"`, counters `0`.
 
-Check Agent Overrides for `deployment-verifier.md`.
+Check Agent Overrides: if `{Agent Overrides path}/deployment-verifier.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
 You MUST invoke Task(subagent_type='agent-flow:deployment-verifier', model='sonnet'). DO NOT inline-execute.
 Context: `Action: start. Local Deployment config: Type={Type}, Start={Start command}, Stop={Stop command},
@@ -57,7 +57,7 @@ If Local Deployment section absent: `[WARN] Local Deployment not configured. Ski
 
 **Pre-dispatch e2e_test (COST-R4):** Write `e2e_test.started_at`, `e2e_test.model = "sonnet"`, `e2e_test.status = "in_progress"`, counters `0`.
 
-Check Agent Overrides for `test-engineer.md` (test-engineer handles `--e2e` flag).
+Check Agent Overrides: if `{Agent Overrides path}/test-engineer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md` (test-engineer handles `--e2e` flag).
 
 You MUST invoke Task(subagent_type='agent-flow:test-engineer', model='sonnet'). DO NOT inline-execute.
 Pass `--e2e` flag. Context: `spec/verification.md` test strategy + list of implemented features + AC.

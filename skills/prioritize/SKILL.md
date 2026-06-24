@@ -35,6 +35,7 @@ If a metrics report exists (`./reports/metrics.md` or Metrics → Output from co
 
 ### 3. Run priority-engine
 
+Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for priority-engine overrides.
 You MUST invoke `Task(subagent_type='agent-flow:priority-engine', model='opus')`. DO NOT inline-execute.
 Context: list of issues + historical data (if available).
 

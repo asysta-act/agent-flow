@@ -26,7 +26,7 @@ For each epic, format user stories into the structured specification format that
 
 **Pre-dispatch (COST-R4):** Read `model:` from `agents/architect.md` frontmatter (value: `opus`). Write to state.json atomically: `architect.started_at`, `architect.model = "opus"`, `architect.status = "in_progress"`, counters `0`.
 
-Check Agent Overrides for `architect.md`.
+Check Agent Overrides: if `{Agent Overrides path}/architect.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
 You MUST invoke Task(subagent_type='agent-flow:architect', model='opus'). DO NOT inline-execute.
 Context: all formatted epic specifications + access to scaffolded codebase.

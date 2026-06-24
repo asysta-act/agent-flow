@@ -47,9 +47,16 @@ DO NOT inline-execute step logic — every step is a Task() dispatch.
 You are a THIN CONTROLLER. Your ONLY job is to:
 1. Initialize `.agent-flow/{ISSUE_ID}/` and `state.json`
 2. Read `steps/NN-*.md` files via the Read tool — they contain the dispatch logic
-3. Dispatch each step's Task() call exactly as the step file specifies
-4. Write atomic `state.json` updates (`dispatched_at` + `dispatch_witness` BEFORE each Task)
-5. Surface dispatch-audit log anomalies in the final terminal report (step 12)
+3. Resolve + inject Agent Overrides BEFORE each Task — run the injector from
+   `../../../core/agent-override-injector.md` for the step's `subagent_type`, append the
+   rendered `## Project-Specific Instructions` block to the agent prompt, and record
+   `stages.<stage>.overlay_source` in `state.json`. This is NOT optional and NOT skippable:
+   it is part of the same pre-dispatch ritual as the witness write (step 4). The witness is
+   computed from the RAW template, so a skipped injection is INVISIBLE to the witness audit —
+   the `overlay_source` field is the only signal that the override was applied.
+4. Dispatch each step's Task() call exactly as the step file specifies
+5. Write atomic `state.json` updates (`dispatched_at` + `dispatch_witness` + `overlay_source` BEFORE each Task)
+6. Surface dispatch-audit log anomalies in the final terminal report (step 12)
 
 <orchestration_contract>
 YOU — the top-level Claude executing /agent-flow:fix-bugs — ARE the orchestrator.
@@ -64,11 +71,22 @@ atomically to `.agent-flow/{ISSUE_ID}/state.json`:
   - `stages.<stage>.dispatch_witness` = sha256("<subagent_type>|<model>|<prompt_head_128>")
   - `stages.<stage>.agent_name`      = <subagent_type>
   - `stages.<stage>.stage_name`      = <canonical stage name>
+  - `stages.<stage>.overlay_source`  = <toml | none | md_rejected> (result of the override injector)
   - `stages.<stage>.status`          = "in_progress"
 
 `prompt_head_128` is the first 128 UTF-8-safe bytes of the prompt template
 BEFORE Tier-1 variable substitution. Compute via
 `core/lib/stage-invariant.sh::compute_dispatch_witness`.
+
+BEFORE computing the witness and writing the above, you SHALL resolve the agent overlay for
+`<subagent_type>` per `../../../core/agent-override-injector.md` (default override dir
+`customization/`) and append the rendered `## Project-Specific Instructions` block to the
+agent prompt. The `overlay_source` value above is the injector's result — you cannot write it
+without having run the injector, which is the point: it makes "I forgot the overlay" an
+impossible state to reach without lying in `state.json`. The injector NEVER blocks the pipeline
+(a missing/failed overlay yields `overlay_source=none` and the bare prompt), but it MUST be run
+on every dispatch. A `customization/<subagent_type>.toml` that exists but never reaches the
+agent prompt is a CONTRACT VIOLATION, even though the dispatch_witness will still read OK.
 
 You SHALL also inject `EXPECTED_AGENT_NAME=<value>` and
 `EXPECTED_STAGE_NAME=<value>` as Tier-1 variables in the agent prompt so the
@@ -92,6 +110,7 @@ that is a CONTRACT VIOLATION that step 12 will surface in the terminal report.
 | Draft cites "pipeline is nearly done — skip to publisher" | Distance-to-completion is not a dispatch gate. The gate is the step file's config-evaluation logic. Dispatch or explicitly skip. |
 | Draft jumps to publisher (step 11) after fixer-reviewer (step 04) without reading steps 05-10 | The dispatch table is the contract. Read each step file before dispatching. |
 | Draft inserts an inline Task() call without first writing `dispatched_at` + `dispatch_witness` | Pre-dispatch write is MANDATORY. If you cannot write the witness, you cannot dispatch. |
+| Draft dispatches an agent without first resolving `customization/<agent>.toml` (the step file's "Agent Override injection" section), treating it as a skippable sub-heading | The override injector runs on EVERY dispatch — fixer, reviewer, browser-agent, test-engineer, analyst, publisher, all of them. The `dispatch_witness` is computed from the RAW template, so skipping injection is INVISIBLE to the witness audit: a perfectly OK witness can sit next to a silently-dropped override. The proof-of-execution is the `stages.<stage>.overlay_source` field — write it, which forces you to have run the injector. If a `customization/<agent>.toml` exists and its rendered `## Project-Specific Instructions` block is not in the dispatched prompt, the project's configuration was silently ignored. STOP and run the injector before dispatching. |
 | Draft pretends "PostToolUse validator will catch it" as fallback | The hook is ADVISORY by default (exit 0). It writes audit lines but does NOT block. Subagent contracts and your own state.json writes are the enforcement. |
 | Draft drifts off the dispatch table mid-run (user gives narrow scope, /fix-bugs deviates to direct implementation) and then wraps up by staging + committing + pushing + opening a PR on its own | The publisher agent IS the contract — it applies the PR labels (per `PR Rules` in Automation Config), uses the PR description template, writes the tracker traceability comment, and triggers the pre-publish hook (step 10) and post-publish hook. Direct VCS calls bypass all of this AND leave step 11 with `WITNESS_MISSING`. Also: deviating from the pipeline does NOT inherit `--yolo` semantics — `--yolo` only authorizes the registered dispatch table (publisher step 11), not arbitrary direct VCS/MCP actions. The host system-prompt rule (`Only create commits when requested by the user`) still applies, and the triage pause and pre-publish checkpoints you skipped by drifting were the user-consent gates. Before any `git add` / `git commit` / `git push` / `gh pr create` / `mcp__gitea__create_pull_request` / `mcp__github__create_pull_request`, STOP and ask the user for explicit authorization — do not proceed with any VCS action without it. |
 

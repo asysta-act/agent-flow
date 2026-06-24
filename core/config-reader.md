@@ -26,7 +26,7 @@ Parse `## Automation Config` from the project's CLAUDE.md. Extract all required 
    - `### Custom Agents` → `custom_agents.post_fix_agent`, `custom_agents.pre_publish_agent` (default: none)
    - `### Worktrees` → `worktrees.batch_size`, `worktrees.base_path`, `worktrees.cleanup` (default: none)
    - `### E2E Test` → `e2e.framework`, `e2e.command` (default: none)
-   - `### Browser Verification` → `browser.base_url`, `browser.start_command`, `browser.on_events`, `browser.timeout` (default: 60), `browser.max_pages` (default: 5), `browser.screenshot_storage` (default: `.agent-flow/{ISSUE-ID}/screenshots`), `browser.exploration` (default: disabled), `browser.exploration_max_clicks` (default: 20)
+   - `### Browser Verification` → `browser.base_url`, `browser.start_command`, `browser.stop_command`, `browser.on_events`, `browser.timeout` (default: 60), `browser.max_pages` (default: 5), `browser.screenshot_storage` (default: `.agent-flow/{ISSUE-ID}/screenshots`), `browser.exploration` (default: disabled), `browser.exploration_max_clicks` (default: 20)
    - `### Error Handling` → `error_handling.on_block` (default: `comment`), `error_handling.max_blocked_per_run` (default: unlimited)
    - `### Feature Workflow` → `feature.query`, `feature.on_start_set` (default: none)
    - `### Decomposition` → `decomposition.max_subtasks` (default: 7), `decomposition.fail_strategy` (default: `fail-fast`), `decomposition.commit_strategy` (default: `squash`), `decomposition.create_tracker_subtasks` (default: `enabled`)

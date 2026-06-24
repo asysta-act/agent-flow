@@ -11,6 +11,7 @@ Before you begin, make sure you have:
 - **Claude Code CLI** installed and working. You should be able to start a Claude Code session from your terminal.
 - **Git** installed and configured with your credentials.
 - **A running project** with source code in a git repository.
+- **Python 3.11+** — *only if you plan to use `customization/*.toml` agent overrides.* Overlay files are parsed by `python3` via `tomllib` (Python 3.11+ stdlib) or the `tomli` backport (`pip install tomli` on Python 3.10). Without a parser, the override injector **silently drops every overlay** — customizations are ignored with no dispatch-time error. `/agent-flow:check-setup` flags this. Skip if you don't use TOML overlays.
 - **An issue tracker** with at least one open bug. Supported trackers:
   - YouTrack
   - GitHub Issues

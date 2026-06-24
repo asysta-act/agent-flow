@@ -48,11 +48,12 @@ Find the row matching the configured Type in the Validation Rules table.
    - Empty or placeholder → [FAIL]
 
 5. Verify optional sections (if they exist, check the format):
-   - Retry Limits, Hooks, Custom Agents, Notifications, Worktrees, E2E Test, Error Handling, Decomposition, Pipeline Profiles, Metrics, Feature Workflow, Local Deployment
+   - Retry Limits, Hooks, Custom Agents, Notifications, Worktrees, E2E Test, Browser Verification, Error Handling, Decomposition, Pipeline Profiles, Metrics, Feature Workflow, Local Deployment, Agent Overrides
    - Exists and correct format → [OK]
    - Does not exist → [SKIP] (optional)
    - Exists but incorrect format → [WARN]
    - Local Deployment (if present): Type must be `docker` or `native` → [WARN] if neither; Start command and Stop command must be non-empty → [WARN] if missing
+   - Browser Verification (if present): On events must be `reproduce`, `verify`, or `reproduce, verify` → [WARN] if other; Stop command (optional) must be non-empty if present → [WARN] if empty
 
 ### Block 2: MCP servers (presence and connectivity)
 
@@ -192,6 +193,9 @@ Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUM
 ### Docker
 [SKIP] Docker - no Dockerfile
 
+### Agent Overrides
+[FAIL] Agent overrides - .toml overlays present (customization/browser-agent.toml customization/fixer.toml) but neither tomllib (Python 3.11+) nor the tomli backport is importable by python3. The injector will SILENTLY DROP these overlays. Fix: install Python 3.11+, or run 'python3 -m pip install tomli'.
+
 ---
 Result: {N} FAIL, {M} WARN — {verdict}
 ```
@@ -221,6 +225,66 @@ Verdict:
        - Found entry referencing `validate-dispatch` → [OK] "PostToolUse hook wired in ~/.claude/settings.json"
        - Not found or file unreadable → [ADVISORY] "PostToolUse hook not configured — dispatch enforcement is opt-in. See docs/guides/dispatch-enforcement.md to install."
     c. All results in this block are advisory — they NEVER contribute to the FAIL count or change the final verdict.
+
+### Block 7: Agent Overrides (TOML overlay parsing)
+
+The override injector (`../../core/agent-override-injector.md`) parses `customization/{agent}.toml`
+overlays via `python3` — `tomllib` (Python 3.11+ stdlib) or the `tomli` backport on older Pythons.
+If that parser is unavailable, `parse_toml_overlay` returns non-zero, `resolve_overlay` fails, and
+the injector's mandatory guarded assignment (`|| additional_instructions=""`) absorbs the error and
+dispatches the agent with the **bare prompt**. This failure is **silent** — the pipeline never
+blocks on overlay failure by design — so a project can carry `.toml` overlays that never actually
+apply, and nothing surfaces it. This block catches that exact condition. The same silent drop also
+happens on TOML syntax errors and unknown-key validation failures, so present-but-unparseable
+overlays are validated end-to-end too.
+
+15. Resolve the override directory from `### Agent Overrides → Path` in Automation Config
+    (default `customization/`). Set `$override_path` to the resolved value and run the probe:
+
+```bash
+# Block 7: Agent override (TOML) parsing prerequisite
+override_path="${agent_overrides_path:-customization}"
+override_path="${override_path%/}"
+
+if [ ! -d "$override_path" ]; then
+  echo "[SKIP] Agent overrides - '$override_path/' not present"
+else
+  toml_files=$(find "$override_path" -maxdepth 1 -type f -name '*.toml' 2>/dev/null | sort)
+  if [ -z "$toml_files" ]; then
+    echo "[SKIP] Agent overrides - no .toml overlays in '$override_path/'"
+  elif ! command -v python3 >/dev/null 2>&1; then
+    echo "[FAIL] Agent overrides - .toml overlays present but python3 is not on PATH. The override injector parses TOML with python3 and will SILENTLY DROP every overlay (the pipeline never blocks on overlay failure). Fix: install Python 3.11+ (tomllib), or Python 3.10 plus 'python3 -m pip install tomli'."
+  elif python3 -c "import tomllib" >/dev/null 2>&1 || python3 -c "import tomli" >/dev/null 2>&1; then
+    pyver=$(python3 -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>/dev/null)
+    echo "[OK] Agent overrides - TOML parser available (python3 ${pyver}); $(echo "$toml_files" | grep -c .) overlay file(s) found"
+  else
+    files=$(echo "$toml_files" | tr '\n' ',' | sed 's/,$//; s/,/, /g')
+    echo "[FAIL] Agent overrides - .toml overlays present (${files}) but neither tomllib (Python 3.11+) nor the tomli backport is importable by python3. The injector will SILENTLY DROP these overlays — configured per-agent customizations are NOT applied. Fix: install Python 3.11+, or run 'python3 -m pip install tomli'."
+  fi
+fi
+```
+
+16. If the probe reported `[OK]` (parser available) AND at least one overlay exists, validate each
+    overlay end-to-end so syntax errors and unknown-key violations — which also drop the overlay
+    silently — are caught. Locate the parser library with Glob: pattern
+    `.claude/plugins/**/skills/setup-agents/lib/toml-merge.sh` first, then
+    `**/skills/setup-agents/lib/toml-merge.sh`, then `skills/setup-agents/lib/toml-merge.sh`
+    relative to CWD. If located, source it. **Note:** `toml-merge.sh` runs `set -euo pipefail`,
+    which propagates into the check-setup shell, so call its functions in guarded form — capture
+    stdout into a variable and branch on the exit status — otherwise a parse/validation failure
+    would abort the whole probe instead of being reported as a per-file `[FAIL]`. For each
+    `customization/{agent}.toml` file (where `{agent}` is the filename without the `.toml`
+    extension) run `if json=$(parse_toml_overlay "$f") && validate_overlay_keys "$json" "{agent}" "$f"; then`
+    … `else` … `fi` and emit:
+    - Parses and validates → [OK] "Agent overrides - {agent}.toml parses and validates"
+    - Fails → [FAIL] "Agent overrides - {agent}.toml is present but fails to parse/validate; the
+      injector will drop it silently. Detail: {stderr from the lib}"
+    - If `toml-merge.sh` cannot be located → [WARN] "Agent overrides - parser library not found;
+      per-file validation skipped (parser-availability check only)."
+
+All `[FAIL]` results in this block **count toward the final FAIL verdict** — a present-but-unparseable
+overlay means a configured customization is silently not being applied, which is a setup defect. A
+clean project with no overlays yields `[SKIP]` and never affects the verdict.
 
 ## Deprecated config detection
 

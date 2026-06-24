@@ -18,6 +18,7 @@ Input: `$ARGUMENTS` = topic or question + optional `--agents <list>` (comma-sepa
    - Max 3 agents per discussion
 
 2. For each agent in agent_list (in parallel):
+   Before dispatch, check Agent Overrides: for each agent you dispatch, follow `../../core/agent-override-injector.md` for that agent's overrides.
    Run agent via Task tool with context:
    ```
    You are participating in a multi-agent discussion about: {topic}

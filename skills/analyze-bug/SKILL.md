@@ -21,6 +21,7 @@ Before any pipeline operation, verify MCP tool availability:
 1. If `$ARGUMENTS` is empty, display: "Usage: /agent-flow:analyze-bug <ISSUE-ID>" and stop.
 2. Verify that CLAUDE.md exists and contains an `## Automation Config` section with `Issue Tracker`. If not, report an error and stop.
 3. Read issue content (title, description, comments) from the issue tracker via MCP. When passing this content to any agent, follow `../../core/external-input-sanitizer.md`: wrap each piece of external content in `--- EXTERNAL INPUT START ---` / `--- EXTERNAL INPUT END ---` markers.
+   Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for analyst overrides.
    Run `agent-flow:analyst --phase triage` on bug $ARGUMENTS
    After successful triage, instruct the agent to post a checkpoint comment to the issue tracker: `[agent-flow] Triage completed. Severity: {severity}. Area: {area}.`
 3a. If triage output contains `## NEEDS_CLARIFICATION` (interactive surface — no state.json, no pipeline pause):
@@ -46,7 +47,7 @@ Before any pipeline operation, verify MCP tool availability:
      Recommendation: {analyst recommendation for what the reporter should clarify}
      ```
    - Display the block result to the user and stop. Do NOT proceed to analyst impact.
-4. If triage OK, run `agent-flow:analyst --phase impact`
+4. If triage OK, before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for analyst overrides, then run `agent-flow:analyst --phase impact`
 5. Display results (triage + impact report)
 
 No code changes, no issue tracker state changes. Analysis only.

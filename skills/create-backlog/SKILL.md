@@ -107,7 +107,7 @@ Context to pass:
 - Epic template path: `{sprint_planning.epic_template}` if configured — otherwise omit (agent uses built-in template)
 - `Max epics: 10`
 
-Before dispatch, read Agent Overrides path from Automation Config (default: `customization/`). Follow `../../core/agent-override-injector.md`: if `{Agent Overrides path}/backlog-creator.md` exists, append its contents to the agent context as `## Project-Specific Instructions\n{file content}`.
+Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for backlog-creator overrides.
 
 If the backlog-creator agent Blocks: display the block message and STOP.
 
@@ -325,7 +325,7 @@ For each epic in `created_issues`:
 
 1. You MUST invoke `Task(subagent_type='agent-flow:architect', model='opus')`. DO NOT inline-execute.
    - Context: `Epic: {epic.title}\nSpec content:\n{epic_card_content}\nParent tracker issue: {tracker_issue_id}`
-   - Before dispatch, follow `../../core/agent-override-injector.md` for architect overrides
+   - Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for architect overrides
    - Expected output: architectural task tree with subtasks (each subtask includes title, scope, files, estimated_lines, maps_to)
 
 2. If architect blocks: LOG WARN "Architect blocked for epic '{epic.title}': {reason}". Continue to next epic — NON-BLOCKING.

@@ -12,7 +12,7 @@ SCAFFOLD_TEMP=$(mktemp -d)
 
 **Pre-dispatch (COST-R4):** Read `model:` from `agents/scaffolder.md` frontmatter (value: `sonnet`). Write to state.json atomically: `scaffolder.started_at`, `scaffolder.model = "sonnet"`, `scaffolder.status = "in_progress"`, counters `0`.
 
-Check Agent Overrides for `scaffolder.md`.
+Check Agent Overrides: if `{Agent Overrides path}/scaffolder.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
 You MUST invoke Task(subagent_type='agent-flow:scaffolder', model='sonnet'). DO NOT inline-execute.
 Context: `spec/README.md` Tech Stack section + project description. Working directory: `$SCAFFOLD_TEMP`.
@@ -91,7 +91,7 @@ In --yolo mode: run without confirmation. On failure → WARN only, continue pip
 **Guard:** Skip if `tracker_effective_status != "ready"` OR `tracker_write_available == false` OR `spec/epics/` empty.
 
 Dispatch backlog-creator agent (sonnet) via Task tool with architect decomposition output.
-Apply agent override if `{Agent Overrides path}/backlog-creator.md` exists.
+Apply agent override: if `{Agent Overrides path}/backlog-creator.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 Receive structured issue cards. For each card: create epic + story sub-issues per tracker type.
 
 Write back-reference comments (`<!-- {TrackerType}: {ISSUE-ID} -->`) into spec/epics/*.md.

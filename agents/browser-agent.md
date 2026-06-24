@@ -26,11 +26,11 @@ If `--phase` is not supplied, default to `reproduce`.
 
 ## Process: Phase reproduce (`--phase reproduce`)
 
-1. Read context: bug description, triage output (including `reproduction_steps` if present), analyst-impact report, and Browser Verification config (Base URL, Start command, Timeout).
+1. Read context: bug description, triage output (including `reproduction_steps` if present), analyst-impact report, and Browser Verification config (Base URL, Start command, Stop command, Timeout).
 
 2. Check prerequisites:
    - Is Playwright installed? Run: `npx playwright --version` (or `node -e "require('playwright')"`)
-   - Is the app running? Attempt a GET to `{Base URL}`. If not running and `Start command` is set: start it via Bash (`run_in_background`), wait up to 15s, retry the health check. Note the `Start command` string — you will need it for cleanup in step 5.
+   - Is the app running? Attempt a GET to `{Base URL}`. If not running and `Start command` is set: start it via Bash (`run_in_background`), wait up to 15s, retry the health check. Note the `Start command` and `Stop command` strings — you will need them for cleanup in step 5.
    - If Playwright not installed → output `## Reproduction Result` with `status: skipped`, reason `playwright-not-installed`. Stop.
    - If app not reachable after startup attempt → output with `status: skipped`, reason `app-not-running`. Stop.
 
@@ -102,7 +102,7 @@ If `--phase` is not supplied, default to `reproduce`.
    ```bash
    timeout {Timeout}s node .agent-flow/{ISSUE-ID}/reproduction-script.js
    ```
-   Default timeout: 60s. If the command exits with code 124 (timeout) → write `.agent-flow/{ISSUE-ID}/reproduction-result.json` with `status: skipped`, reason `timeout`. If the app was started in step 2 via `Start command` → stop it after step 5 completes (success or failure, including any retry in step 6) to avoid port conflicts with downstream pipeline steps. Use `pkill -f "{Start command pattern}"` (the Start command string from config is a sufficient match pattern).
+   Default timeout: 60s. If the command exits with code 124 (timeout) → write `.agent-flow/{ISSUE-ID}/reproduction-result.json` with `status: skipped`, reason `timeout`. If the app was started in step 2 via `Start command` → stop it after step 5 completes (success or failure, including any retry in step 6) to avoid port conflicts with downstream pipeline steps. To stop it: if `Stop command` is set in config, run it via Bash; otherwise fall back to `pkill -f "{Start command pattern}"` (the Start command string is a sufficient match pattern). Prefer the configured `Stop command` — it is the reliable option on non-POSIX hosts where `pkill` is unavailable, or when the `Start command` is a launcher that exits before the app it spawned (so the pattern no longer matches the running process).
 
 6. If step 5 fails unexpectedly (script error, not a reproduction failure) → run once more. If fails again → write `status: skipped`, reason `script-error`, detail: error message.
 
@@ -123,7 +123,7 @@ If `--phase` is not supplied, default to `reproduce`.
 
 ## Process: Phase verify (`--phase verify`)
 
-1. Read context: reproduction result from `.agent-flow/{ISSUE-ID}/reproduction-result.json`, fixer diff, acceptance criteria, Browser Verification config (Base URL, Timeout, Max pages, Exploration, Exploration max clicks, On events).
+1. Read context: reproduction result from `.agent-flow/{ISSUE-ID}/reproduction-result.json`, fixer diff, acceptance criteria, Browser Verification config (Base URL, Start command, Stop command, Timeout, Max pages, Exploration, Exploration max clicks, On events).
    - Check `On events` — if it does not include `verify` → output verdict `SKIPPED`, reason `not-configured`. Stop.
 
 2. Check prerequisites (same as reproduce phase — Playwright installed, app running). If either missing → output verdict `SKIPPED`, stop.
@@ -183,7 +183,9 @@ If `--phase` is not supplied, default to `reproduce`.
    }
    ```
 
-6. Output:
+6. **Cleanup:** If you started the app in step 2 via `Start command`, stop it before returning (same as reproduce phase step 5): run the configured `Stop command` if set, otherwise fall back to `pkill -f "{Start command pattern}"`. Prefer `Stop command` — it is the reliable option on non-POSIX hosts where `pkill` is unavailable, or when the `Start command` is a launcher that exits before the app it spawned. If the app was already running when you checked `Base URL`, leave it running.
+
+7. Output:
 
    ```markdown
    ## Browser Verification Report
@@ -208,7 +210,7 @@ If `--phase` is not supplied, default to `reproduce`.
 |---------|--------|----------|
 | `--phase reproduce` flag | dispatching skill prompt | no (default if absent) |
 | Bug description + triage output | upstream analyst --phase triage | yes |
-| `Browser Verification` config block | Automation Config (Base URL, Start command, Timeout, Screenshot storage) | yes |
+| `Browser Verification` config block | Automation Config (Base URL, Start command, Stop command, Timeout, Screenshot storage) | yes |
 
 #### Outputs
 
@@ -228,7 +230,7 @@ If `--phase` is not supplied, default to `reproduce`.
 | Reproducer JSON from reproduce phase | `.agent-flow/{ISSUE-ID}/reproduction-result.json` (CWD file) | no (falls back to SKIPPED) |
 | Fixer diff | upstream fixer | yes |
 | Acceptance criteria | upstream (analyst --phase triage / spec-analyst) | yes |
-| `Browser Verification` config block | Automation Config (On events required + Exploration optional + Exploration max clicks optional) | yes |
+| `Browser Verification` config block | Automation Config (On events required + Stop command optional + Exploration optional + Exploration max clicks optional) | yes |
 
 #### Outputs
 
@@ -261,7 +263,7 @@ Do NOT attempt to write `tool_uses`, `completed_at`, or `status="completed"` —
 - NEVER block the pipeline based on Sub-phase B (exploration) findings — soft evidence only
 - NEVER submit forms, click delete buttons, or perform destructive actions during exploration or reproduction
 - NEVER run Sub-phase B if Sub-phase A verdict is FAILED — pointless and wastes tokens
-- NEVER leave a background dev server running after completion — stop any server started via `Start command` before returning
+- NEVER leave a background dev server running after completion — stop any server you started: run the configured `Stop command` if set, otherwise `pkill -f` the `Start command` pattern, before returning
 - NEVER commit `.agent-flow/` artifact files (reproduction-script.js, reproduction-result.json, verification-result.json, verifier-script.js)
 - NEVER run if `Browser Verification` section is absent from Automation Config
 - NEVER run the verify phase if `On events` in config does not include `verify` (check in Process step 1; output verdict SKIPPED if condition is met after section is present)

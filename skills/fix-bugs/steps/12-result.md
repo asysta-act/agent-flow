@@ -100,6 +100,62 @@ missing audit log.
 +============================================================+
 ```
 
+## Step 12.3b: Overlay-Drop Surfacing (silently-dropped override surfacing)
+
+The `dispatch_witness` is computed from the RAW prompt template; the Agent Override overlay is
+appended AFTER, so a silently-dropped overlay is INVISIBLE to the witness audit (Step 12.3 cannot
+catch it). The `stages.<stage>.overlay_source` field is the only signal that the injector ran.
+This sub-step surfaces the mismatch where a `customization/<agent>.toml` exists for a stage's
+agent but the recorded `overlay_source` shows the overlay was NOT applied.
+
+Resolve the override directory from `### Agent Overrides → Path` in Automation Config (default
+`customization/`). For each stage block in `.agent-flow/{ISSUE-ID}/state.json` `stages.<stage>`:
+
+1. Read `stages.<stage>.overlay_source`. If it is absent (legacy run) or equals `toml`, skip the
+   stage (no anomaly — overlay applied, or no assertion recorded).
+2. Derive the agent file basename: read `stages.<stage>.agent_name` and strip the `agent-flow:`
+   namespace prefix (e.g. `agent-flow:fixer` → `fixer`).
+3. Classify by the `overlay_source` value — each is an **OVERLAY DROP ANOMALY** but with a
+   different trigger (do NOT gate both on `.toml` existence):
+   - `md_rejected` → **always** an anomaly. This value is emitted only when `<basename>.md` exists
+     while `<basename>.toml` does NOT, so checking for `.toml` here would always be false and hide
+     it. A legacy `.md` overlay is present but unsupported (the `.toml` form is required). Record
+     `<stage>`, `<agent_name>`, `md_rejected`, and the rejected `{Agent Overrides path}/<basename>.md`
+     path for the render block below.
+   - `none` → an anomaly **only if** `{Agent Overrides path}/<basename>.toml` EXISTS: a
+     project-configured overlay was present on disk but `overlay_source` proves it never reached the
+     dispatched prompt (the injector absorbed a parse/validation failure). Record `<stage>`,
+     `<agent_name>`, `none`, and the resolved `.toml` path. If no `<basename>.toml` exists, this is a
+     legitimate `none` (no overlay configured) — skip, no anomaly.
+
+If no stage produced a mismatch, render nothing (clean — consistent with the WITNESS_OK convention
+in Step 12.3). NEVER fail the terminal report on overlay drops — this surfacing is advisory only,
+exactly like the witness surfacing above.
+
+### Overlay-drop block render template
+
+```
++============================================================+
+| OVERLAY-DROP ANOMALY (run_id: {run_id})                    |
+| Issue: {issue_id}                                          |
+| Pipeline: fix-bugs                                         |
+| A configured customization/<agent>.toml overlay existed    |
+| but overlay_source proves it was silently dropped.         |
++============================================================+
+| Stage              | Agent            | overlay_source      |
+|--------------------|------------------|---------------------|
+| {stage_name_1}     | {agent_name_1}   | none                |
+| {stage_name_2}     | {agent_name_2}   | md_rejected         |
++------------------------------------------------------------+
+| Dropped overlay file(s):                                   |
+|   {Agent Overrides path}/{basename_1}.toml  (none)         |
+|   {Agent Overrides path}/{basename_2}.md    (md_rejected)  |
+| Recommended: re-run with --step-mode and confirm the       |
+|   injector applied each customization/<agent>.toml; rename  |
+|   any legacy customization/<agent>.md to .toml.            |
++============================================================+
+```
+
 ## Step 12.4: pipeline-completed webhook
 
 After all state writes and terminal output, fire `pipeline-completed` if Notifications → Webhook URL

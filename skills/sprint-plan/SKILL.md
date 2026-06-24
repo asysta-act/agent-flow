@@ -116,11 +116,9 @@ For each fetched issue: check tracker comments for `[agent-flow] Triage complete
 
 ### Step 3: Run priority-engine
 
+Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for priority-engine overrides.
 You MUST invoke `Task(subagent_type='agent-flow:priority-engine', model='opus')`. DO NOT inline-execute.
 Context: list of issues + historical data (if available) + triage complexity map.
-
-Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md`.
-If `{Agent Overrides path}/priority-engine.md` exists, append its content to agent context as `## Project-Specific Instructions\n{file content}`.
 
 If priority-engine fails or returns an error: BLOCK with:
 ```
@@ -134,15 +132,13 @@ Recommendation: Check agent logs. Run /agent-flow:prioritize standalone to diagn
 
 ### Step 4: Run sprint-planner
 
+Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for sprint-planner overrides.
 You MUST invoke `Task(subagent_type='agent-flow:sprint-planner', model='sonnet')`. DO NOT inline-execute.
 Context:
 - Priority-engine output (full ranked list: P0/P1/P2 tiers)
 - Sprint Planning config values: sprint_duration, capacity_unit, effective_capacity, velocity_source
 - Triage complexity map (from Step 2)
 - `--all` flag presence (if set, sprint-planner generates multi-sprint release plan)
-
-Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md`.
-If `{Agent Overrides path}/sprint-planner.md` exists, append its content to agent context as `## Project-Specific Instructions\n{file content}`.
 
 If sprint-planner fails or Blocks: BLOCK pipeline with sprint-planner's block detail.
 

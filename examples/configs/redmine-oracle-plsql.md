@@ -173,7 +173,8 @@ Refs #{issue_id}
 |------|---------|
 | Base URL | `http://localhost:3000` |
 | Start command | `npm start` |
-| On events | `post-fix` |
+| Stop command | `npm stop` |
+| On events | `reproduce, verify` |
 | Timeout | 30 |
 | Max pages | 3 |
 | Screenshot storage | `.agent-flow/screenshots/` |

@@ -84,6 +84,36 @@ See [Automation Config Reference](../reference/automation-config.md) for the com
 - Use `--skip-build` flag to skip this validation if your build requires specific environment setup
 - Check that the commands in Build & Test section use the correct syntax for your project
 
+### Agent Overrides (customization/*.toml) Not Applied
+
+**Symptom:** You created `customization/{agent}.toml` overrides, but the agents behave as if the
+overrides do not exist — added constraints, process steps, or `[limits]` are ignored. The pipeline
+runs to completion with no error about the overlay.
+
+**Cause:** The override injector parses TOML with `python3` using `tomllib` (Python 3.11+ stdlib) or
+the `tomli` backport. If `python3` is missing from PATH, or neither `tomllib` nor `tomli` is
+importable, parsing fails — and because the injector **never blocks the pipeline on overlay failure**,
+every overlay is **silently dropped** (only an `[ERROR]` to stderr). A second, unrelated cause is the
+orchestrator skipping the per-dispatch injection step entirely; the dispatch `state.json` records this
+as `stages.<stage>.overlay_source` — a value of `none` next to an existing `customization/{agent}.toml`
+means the overlay was not injected.
+
+**Solution:**
+1. Verify a TOML parser is importable:
+   ```bash
+   if python3 -c "import tomllib" 2>/dev/null; then echo "tomllib OK (3.11+)";
+   elif python3 -c "import tomli" 2>/dev/null; then echo "tomli OK";
+   else echo "NO PARSER"; fi
+   ```
+2. If `NO PARSER`: install Python 3.11+, or on Python 3.10 run `python3 -m pip install tomli`.
+3. Run `/agent-flow:check-setup` — it reports `[FAIL]` when a `.toml` overlay exists but no parser is
+   importable, and `[OK]` (with the detected `python3` version) when the parser is available.
+4. Confirm provenance: each dispatch appends one line to `.agent-flow/pipeline.log`, e.g.
+   `agent=browser-agent overlay_source=toml overlay_path=customization/browser-agent.toml`. A line with
+   `overlay_source=none` for an agent that has a `.toml` file means the overlay was not applied.
+5. See [TOML Overlay Syntax Guide](toml-overlay-syntax.md) for the requirement note and
+   [Installation Guide](installation.md#prerequisites) for the Python prerequisite.
+
 ### Config Migration from Older Versions
 
 **Symptom:** check-setup reports issues with config format, or skills reference sections that do not exist in your config.

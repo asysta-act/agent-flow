@@ -429,6 +429,18 @@ Applies to all stages in the hardcoded `STAGES` whitelist (10 entries): `triage`
 - **Used by:** all 17 agents via the `## Step Completion Invariants` section.
 - **Schema version impact:** `schema_version` REMAINS `"1.0"`. Additive.
 
+#### `stages.{stage}.overlay_source`
+
+- **Type:** string enum (`"toml"` | `"none"` | `"md_rejected"`)
+- **Purpose:** Proof-of-execution that the orchestrator ran the Agent Override injector (`core/agent-override-injector.md`) for this stage before dispatch. Because `dispatch_witness` is computed from the RAW prompt template (the overlay is appended AFTER the witness is computed), a silently-dropped overlay is INVISIBLE to the witness audit; `overlay_source` is the only state.json signal that the override was resolved. Consumed by the terminal/dispatch-audit step of each pipeline (`skills/fix-bugs/steps/12-result.md`, `skills/implement-feature/steps/08-publish.md`, `skills/scaffold/steps/08-final-report.md`), which renders an ANOMALY line when this field is `none`/`md_rejected` yet a `customization/{agent-name}.toml` overlay exists for the stage's agent.
+- **Values:** mirror the canonical set in `core/agent-override-injector.md` (Output Contract):
+  - `toml` — a `.toml` overlay was loaded and merged into the agent prompt.
+  - `none` — no overlay file exists for this agent, OR the injector absorbed a resolve failure (bare prompt used).
+  - `md_rejected` — a legacy `.md` overlay is present but unsupported (no `.toml` companion); the `.md` is NOT applied.
+- **Absence:** field MAY be absent in state.json blocks for stages completed in older pipeline runs (legacy runs predating overlay-source recording). Terminal surfacing treats absence as "no overlay assertion available" and renders nothing (never a failure).
+- **Added by:** orchestrator/override-injector, in the same atomic state.json write as `dispatched_at`, `dispatch_witness`, `agent_name`, and `stage_name`, immediately before Task() dispatch (the same pre-dispatch ritual as the witness).
+- **Schema version impact:** `schema_version` REMAINS `"1.0"`. This field is additive — backward-compatible; legacy runs without it remain valid.
+
 #### Threat model (dispatch witness - honest acknowledgment)
 
 The `dispatch_witness` field is a **dispatch RECEIPT, not a cryptographic ATTESTATION**. The threat model is explicit about three properties:

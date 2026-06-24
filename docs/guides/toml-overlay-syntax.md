@@ -22,6 +22,16 @@ The system validates TOML files strictly: unknown keys cause immediate dispatch 
 message, so typos in key names are caught immediately. The `[meta]` table is the exception —
 it is **free-form** and accepts any sub-keys without validation.
 
+> **Requirement — a TOML parser must be available.** Overlay files are parsed by `python3` using
+> `tomllib` (Python 3.11+ stdlib) or the `tomli` backport on older Pythons. If `python3` is missing,
+> or neither `tomllib` nor `tomli` is importable, the injector **silently drops every overlay**: the
+> pipeline never blocks on overlay failure (by design), so your `customization/*.toml` files are simply
+> ignored with no dispatch-time error — only an `[ERROR]` to stderr. Verify with
+> `python3 -c "import tomllib"` (3.11+) or `python3 -c "import tomli"`; on Python 3.10 install the
+> backport via `python3 -m pip install tomli`. Run `/agent-flow:check-setup` to confirm — it reports
+> `[FAIL]` when a `.toml` overlay exists but no parser is importable. See the
+> [Installation Guide](installation.md#prerequisites) prerequisites for details.
+
 ---
 
 ## 2. Per-Agent Overrideable Keys Reference

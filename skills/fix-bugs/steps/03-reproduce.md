@@ -61,7 +61,7 @@ Bug description: {issue description}.
 Triage output: {full triage output including reproduction_steps if present}.
 Impact report: {analyst --phase impact output}.
 Browser Verification config: Base URL = {Base URL}, Start command = {Start command or "none"},
-  Timeout = {Timeout}, Screenshot storage = {Screenshot storage}.
+  Stop command = {Stop command or "none"}, Timeout = {Timeout}, Screenshot storage = {Screenshot storage}.
 ```
 
 ## Post-dispatch state write

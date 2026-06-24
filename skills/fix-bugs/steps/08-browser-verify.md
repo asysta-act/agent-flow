@@ -48,7 +48,7 @@ Context for the agent:
 --phase verify.
 EXPECTED_AGENT_NAME = agent-flow:browser-agent
 EXPECTED_STAGE_NAME = browser_verification
-Browser Verification config: {full config section}.
+Browser Verification config: {full config section — Base URL, Start command, Stop command, On events, Timeout, Max pages, Exploration, Exploration max clicks}.
 Reproduction result: {contents of .agent-flow/{ISSUE-ID}/reproduction-result.json or
                        "browser-agent reproduce was skipped"}.
 Fixer diff: {git diff HEAD~1}.

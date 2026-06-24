@@ -154,7 +154,7 @@ Projects using this plugin must have `## Automation Config` in their CLAUDE.md w
 | Notifications | Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`) | (none) |
 | Worktrees | Batch size, Base path, Cleanup | (none) |
 | E2E Test | Framework, Command | (none) |
-| Browser Verification | Base URL, Start command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks | (none) |
+| Browser Verification | Base URL, Start command, Stop command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks | (none) |
 | Error Handling | On block, Max blocked per run | comment, unlimited |
 | Feature Workflow | Feature query, On start set | (none) |
 | Decomposition | Max subtasks, Fail strategy, Commit strategy, Create tracker subtasks | 7, fail-fast, squash, enabled |
@@ -200,7 +200,7 @@ Optional. Keys: Framework, Command. Default (none).
 
 ### Browser Verification
 
-Optional. Keys: Base URL, Start command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks. Default (none).
+Optional. Keys: Base URL, Start command, Stop command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks. Default (none).
 
 ### Error Handling
 

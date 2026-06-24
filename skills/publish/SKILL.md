@@ -205,6 +205,7 @@ Read `Type` from Automation Config → `Issue Tracker` (default: `youtrack`).
 
 ### Step 5 — Dispatch publisher agent (haiku, Task)
 
+Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for publisher overrides.
 You MUST invoke `Task(subagent_type='agent-flow:publisher', model='haiku')`. DO NOT inline-execute. The agent will commit, push, and create the PR.
 
 Context:

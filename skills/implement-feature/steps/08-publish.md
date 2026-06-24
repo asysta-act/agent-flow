@@ -99,6 +99,39 @@ For investigation: cat .agent-flow/dispatch-audit.log
 If only EXPECTED_OPTIONAL_NOT_RUN entries (and OK entries), render NO block (clean run).
 If `.agent-flow/dispatch-audit.log` does not exist: silent (NEVER fail the terminal report).
 
+## Step 8.4: Overlay-Drop Surfacing (silently-dropped override surfacing)
+
+The `dispatch_witness` is computed from the RAW prompt template; the Agent Override overlay is
+appended AFTER, so a silently-dropped overlay is INVISIBLE to the witness audit (Step 8.3 cannot
+catch it). The `stages.<stage>.overlay_source` field is the only signal that the injector ran.
+This sub-step surfaces the mismatch where a `customization/<agent>.toml` exists for a stage's
+agent but the recorded `overlay_source` shows the overlay was NOT applied.
+
+Resolve the override directory from `### Agent Overrides → Path` in Automation Config (default
+`customization/`). For each stage block in `state.json` `stages.<stage>`:
+
+1. Read `stages.<stage>.overlay_source`. If absent (legacy run) or equal to `toml`, skip (no anomaly).
+2. Derive the agent file basename from `stages.<stage>.agent_name` by stripping the `agent-flow:`
+   namespace prefix (e.g. `agent-flow:fixer` → `fixer`).
+3. Classify by value — each is an **OVERLAY DROP ANOMALY** with a different trigger (do NOT gate
+   both on `.toml` existence):
+   - `md_rejected` → **always** an anomaly. It is emitted only when `<basename>.md` exists while
+     `<basename>.toml` does NOT, so a `.toml` check would always hide it. A legacy `.md` overlay is
+     present but unsupported (the `.toml` form is required). Dropped file: `<basename>.md`.
+   - `none` → an anomaly **only if** `{Agent Overrides path}/<basename>.toml` EXISTS (the injector
+     absorbed a parse/validation failure on a present overlay). Otherwise it is a legitimate `none`
+     (no overlay configured) — skip. Dropped file: `<basename>.toml`.
+
+If any mismatch exists, render:
+```
+[agent-flow] Overlay-drop anomalies detected (configured override silently dropped):
+  Stage: {stage_name}  Agent: {agent_name}  overlay_source: {none|md_rejected}  Dropped: {Agent Overrides path}/{basename}.{toml|md}
+  ...
+Recommended: re-run /agent-flow:implement-feature with --step-mode and confirm each customization/<agent>.toml is applied (rename any legacy customization/<agent>.md to .toml).
+```
+If no stage produced a mismatch, render NO block (clean run — consistent with Step 8.3). NEVER fail
+the terminal report on overlay drops — advisory surfacing only, exactly like the dispatch-audit block.
+
 ## Pipeline completion
 
 **Pipeline accumulator (COST-R6):** Before writing the terminal `status`, compute and write to `state.json`:

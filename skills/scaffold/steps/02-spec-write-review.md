@@ -15,7 +15,7 @@ Determine input for spec-writer:
 
 **Pre-dispatch (COST-R4):** Read `model:` from `agents/spec-writer.md` frontmatter (value: `opus`). Write to state.json atomically: `spec_writer.started_at`, `spec_writer.model = "opus"`, `spec_writer.status = "in_progress"`, usage counters to `0`.
 
-Check Agent Overrides: if `{Agent Overrides path}/spec-writer.md` exists, append as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
+Check Agent Overrides: if `{Agent Overrides path}/spec-writer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
 You MUST invoke Task(subagent_type='agent-flow:spec-writer', model='opus'). DO NOT inline-execute.
 Context: input source + MODE + tech stack flags (--lang, --framework, --db, --ci)
@@ -28,7 +28,7 @@ Read `Spec iterations` from Automation Config → Retry Limits (default 5; on fr
 
 For each iteration:
 1. **Pre-dispatch spec_reviewer (COST-R4):** Write `spec_reviewer.started_at`, `spec_reviewer.model = "opus"`, status `"in_progress"`, counters `0`.
-2. Check Agent Overrides for `spec-reviewer.md`.
+2. Check Agent Overrides: if `{Agent Overrides path}/spec-reviewer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 3. You MUST invoke Task(subagent_type='agent-flow:spec-reviewer', model='opus'). DO NOT inline-execute.
    Context: `spec/` folder path + review mode
 4. **Post-dispatch (COST-R2, COST-R3, COST-R5):** Accumulate cumulatively: `spec_reviewer.tokens_used += iteration_tokens`, `spec_reviewer.duration_ms += iteration_duration_ms`, `spec_reviewer.tool_uses += iteration_tool_uses`.

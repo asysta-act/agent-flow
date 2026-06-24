@@ -23,7 +23,7 @@ For each batch in order:
     **Pre-dispatch fixer_reviewer (COST-R4, first iteration per subtask only):** Write to state.json:
     `fixer_reviewer.started_at`, `fixer_reviewer.model = "opus"`, `fixer_reviewer.status = "in_progress"`, counters `0`.
 
-    Check Agent Overrides for `fixer.md`.
+    Check Agent Overrides: if `{Agent Overrides path}/fixer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
     You MUST invoke Task(subagent_type='agent-flow:fixer', model='opus'). DO NOT inline-execute.
     Context: subtask scope + acceptance_criteria + architecture design + `Max build retries = {Build retries from CLAUDE.md, default 3}`.
@@ -63,7 +63,7 @@ For each batch in order:
 
     ### 05b. Reviewer
 
-    Check Agent Overrides for `reviewer.md`.
+    Check Agent Overrides: if `{Agent Overrides path}/reviewer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
     You MUST invoke Task(subagent_type='agent-flow:reviewer', model='opus'). DO NOT inline-execute.
     Context: diff from fixer + acceptance_criteria + `Max fixer iterations = {Fixer iterations from CLAUDE.md, default 5}`.

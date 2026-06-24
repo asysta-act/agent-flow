@@ -9,6 +9,14 @@ Step by step: from a clean slate to a working pipeline.
 | Claude Code CLI | `claude --version` |
 | Git | `git --version` + `git config --global user.email` |
 | Access to your Git server (SSH or HTTPS) | See section below |
+| Python 3.11+ — **only if** you use `customization/*.toml` agent overrides | `python3 -c "import tomllib"` (3.11+) **or** `python3 -c "import tomli"` (3.10 + `pip install tomli`) |
+
+> **Agent overrides need a TOML parser.** Per-agent customization files (`customization/{agent}.toml`)
+> are parsed by `python3` using `tomllib` (Python 3.11+ stdlib) or the `tomli` backport. If neither is
+> importable, the override injector **silently drops every overlay** — your customizations are ignored
+> and the pipeline does **not** block or warn at dispatch time. Install Python 3.11+, or on Python 3.10
+> run `python3 -m pip install tomli`. `/agent-flow:check-setup` verifies this and reports `[FAIL]` if a
+> `.toml` overlay exists but no parser is available. You can skip this entirely if you do not use TOML overlays.
 
 ## 1. Gitea Access
 

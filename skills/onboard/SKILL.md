@@ -188,6 +188,7 @@ Select sections to configure (comma-separated numbers):
   [ 9] E2E Test — end-to-end testing framework
   [10] Decomposition — task decomposition for complex features
   [11] Metrics — pipeline analytics configuration
+  [12] Browser Verification — browser-based bug reproduction and fix verification
   [13] Module Docs — path to per-module documentation for agents
   [14] Local Deployment — start/stop local environment for testing
 ```
@@ -214,6 +215,7 @@ Select sections to configure (comma-separated numbers):
 - Notifications: Webhook URL, On events (all default: none)
 - Worktrees: Batch size (default: 3), Base path (default: `.worktrees/`), Cleanup (default: `auto`)
 - E2E Test: Framework, Command (all default: none)
+- Browser Verification: "Do you want to configure browser-based reproduction/verification? [y/N]" — if yes: Base URL (default: `http://localhost:3000`), Start command (default: none), Stop command (default: none), On events (default: `reproduce, verify` — must be `reproduce`, `verify`, or `reproduce, verify`), Timeout (default: `30`), Max pages (default: `5`)
 - Decomposition: Max subtasks (default: 7), Fail strategy (default: `fail-fast`), Commit strategy (default: `squash`)
 - Metrics: Output (default: `stdout`), Period (default: `30 days`)
 - Module Docs: Path (default: none)
