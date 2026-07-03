@@ -334,6 +334,12 @@ gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file <notes>
 
 **Bundled version = the highest individual classification.** Classify each bundled PR against the Versioning Policy table, then the release takes the max: any MAJOR → MAJOR; else any MINOR → MINOR; else PATCH. Prefer keeping individual source PRs version-neutral (no `plugin.json` / `marketplace.json` / `CHANGELOG` edits) so bumps never compete or conflict; finalize the single bump + the combined CHANGELOG entry on the integration branch. If one source PR already carries the bump, ensure the others do not and reconcile the CHANGELOG on the integration branch.
 
+### Changelog Entry Content
+
+A CHANGELOG entry documents *what changed for a consumer* of the plugin — new/changed/fixed behavior, contract changes, and why the old behavior was wrong. It NEVER documents the internal process used to find or produce the change: no "found via N-agent review", no naming the subagents/tools/workflow that did the work, no audit-methodology notes. That belongs in the PR description or commit body, not in a file consumers read to learn what to update.
+
+Ground the "why" in the observed defect, not the workflow that discovered it — e.g. "status was derived only from X, never from Y, so Z was silently misclassified" is a good changelog line; "verifier agent flagged this and an orchestrator confirmed it" is not.
+
 ## Cross-File Invariants
 
 The following invariants MUST hold across release commits. Phase 8 verification scenarios assert each:
