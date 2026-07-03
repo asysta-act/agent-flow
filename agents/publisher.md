@@ -44,11 +44,11 @@ Follow these steps exactly, in order:
 
    - Stage changed files: `git add {specific files}` — never use `git add .` or `git add -A`
 - Commit with message: concise English summary referencing issue ID
-- Examples by mode:
-  - Bug-fix: `fix(auth): prevent token expiration on refresh [PROJ-123]`
-  - Feature: `feat(auth): add OAuth2 provider support [PROJ-456]`
-  - Scaffold: `scaffold(project): initialize API server with health endpoint [PROJ-789]`
+- Examples by workflow type (per the **Mode hint** input — see Output Contract § Inputs):
+  - Bug-fix (Mode hint absent): `fix(auth): prevent token expiration on refresh [PROJ-123]`
+  - Feature (Mode hint = `Mode: feature`): `feat(auth): add OAuth2 provider support [PROJ-456]`
 - These are git **commit** conventions (Conventional Commits with a trailing `[ISSUE-ID]`) and are independent of the PR **Title format** (Step 6). The bracketed `[ISSUE-ID]` belongs in commit messages; it is NOT carried into the normalized PR title.
+- Scaffold pipeline runs never reach this agent — the scaffolder agent's own push and tracker-issue steps (`skills/scaffold/steps/03-scaffold.md`) own all VCS/PR actions for scaffold, so there is no Scaffold commit-message example here. See Constraints.
 
 5. **Push Branch**
 
@@ -58,12 +58,12 @@ Follow these steps exactly, in order:
 
 6. **Create Pull Request**
 
-   - **Title:** Build the PR title per the **Title format** rule from PR Rules (Automation Config), using the issue ID, mode keyword, and issue summary (from issue tracker) — NOT the branch name. If PR Rules does not define a Title format, fall back to `{issue-id} {Mode}: {summary}` — the issue ID, the mode keyword (`Fix` / `Feat` / `Scaffold`), and the issue summary (so the mode is always present even with no configured format).
+   - **Title:** Build the PR title per the **Title format** rule from PR Rules (Automation Config), using the issue ID, workflow-type keyword, and issue summary (from issue tracker) — NOT the branch name. If PR Rules does not define a Title format, fall back to `{issue-id} {Keyword}: {summary}` — the issue ID, the workflow-type keyword (`Fix` for bug-fix, `Feat` for feature — derived from the **Mode hint** input, not from the publish-flow Mode in the Inputs table), and the issue summary (so the keyword is always present even with no configured format).
 - **Description:** Use PR Description Template from Automation Config (always English). Fill in ALL template sections:
   - Build the PR body as a multi-line string with real line breaks between sections — follow `../core/mcp-body-formatting.md`.
   - Summary, Changes, Testing, Issue link
-  - Bug-fix mode: include **Root Cause** section
-  - Feature/scaffold mode: include **Objective** section (replaces Root Cause)
+  - Bug-fix (Mode hint absent): include **Root Cause** section
+  - Feature (Mode hint = `Mode: feature`): include **Objective** section (replaces Root Cause)
 - **Labels:** Add labels from PR Rules section only.
   - **Label ID resolution:** Some MCP servers (e.g., Gitea) require numeric label IDs for PR creation but may not return IDs from the label listing tool. If the MCP label listing tool does not return IDs, retrieve them via a direct API call: `GET /api/v1/repos/{owner}/{repo}/labels` — each label object includes an `id` field. Use the Instance URL from Automation Config as the API base.
 - **Base branch:** From Automation Config (Source Control section)
@@ -89,6 +89,8 @@ Follow these steps exactly, in order:
    This ownership check exists because a previous incident saw a publish attempt parse a `None` PR number out of a malformed create-response, then guess `pr_number = previous_max + 1`, and proceed to PATCH the title and DELETE labels on a stranger's open PR. The authoritative ownership signal is the create-returned id from Step 6a; this head/base re-check is the fail-closed corroboration that makes a guessed or recycled id detectable instead of silently mutating an unrelated PR.
 
 7. **Update Issue Tracker**
+
+   This step is the **sole tracker-mutation point** for the publish flow. Dispatching skills and commands (including `/agent-flow:publish`) MUST NOT independently set the issue state or post their own PR-link comment after invoking this agent — doing so duplicates this step and produces a double comment on the issue. This agent's Step 7 always owns the mutation; a dispatcher that also performs it has a contract bug in the dispatcher, not here.
 
    - When `mode` field in dispatch context indicates `pr-only-*`, skip tracker state transitions and tracker comments; PR creation proceeds normally.
 - For mode `full-publish`: Set issue state: "For Review" (or equivalent from Automation Config → State transitions); add comment to issue with PR link. After the status-set MCP call, follow `../core/status-verification.md` to verify the transition succeeded.
@@ -116,6 +118,7 @@ Tracker row values by mode:
 | Section | Source | Required |
 |---------|--------|----------|
 | Mode (full-publish / pr-only-404 / pr-only-no-id) | dispatching skill prompt | yes |
+| Mode hint | dispatching skill (`Mode: feature` for feature workflows; absent in bug-fix mode) — same convention as `agents/fixer.md`, `agents/reviewer.md`, `agents/test-engineer.md` | no (defaults to bug-fix; scaffold pipeline never dispatches this agent — see Constraints) |
 | Source Control config | Automation Config (Remote, Base branch, Branch naming) | yes |
 | PR Rules + PR Description Template | Automation Config | yes |
 | Issue Tracker config (Type, State transitions) | Automation Config | yes (skipped only in pr-only-* modes) |
@@ -155,14 +158,15 @@ This invariant check is the agent-side half of the 3-layer defense; pairs with `
 ## Constraints
 
 - NEVER push to main/development directly — always create a PR
+- NEVER assume you were dispatched for a Scaffold pipeline run — scaffold's VCS/PR actions (push, tracker-issue creation) are owned entirely by the scaffolder agent (`skills/scaffold/steps/03-scaffold.md`); this agent is dispatched only for bug-fix and feature workflows
 - NEVER force push — if push fails due to diverged history, Block
 - NEVER use `git add .` or `git add -A` — stage specific files only (this applies to the publisher's scope; orchestrating commands may use different staging strategies)
 - NEVER include "Generated with Claude Code" footer in PR description — if the tool auto-appends it, that is acceptable, but do NOT add it manually
 - NEVER use `\n` as a line separator in MCP tool parameters -- use actual newlines. See `../core/mcp-body-formatting.md` for the full formatting rule.
-- PR description always in English
+- NEVER write the PR description in a language other than English
 - NEVER guess, compute, or assume a PR number (e.g. "previous + 1", "next id after the last open PR"). The PR `number` MUST come from the create call's own response; if it is unreadable, the create FAILED — Block. See Step 6a.
 - NEVER perform a mutating call (PATCH / DELETE / POST comment) against a PR or issue id without first verifying `head.ref` == current branch AND `base.ref` == configured base (a missing field counts as a mismatch). See Step 6b.
-- On failure: Block using the Block Comment Template:
+- NEVER report a failure without the Block Comment Template — on any failure, Block using this exact format:
   ```
   [agent-flow] 🔴 Pipeline Block
   Agent: publisher

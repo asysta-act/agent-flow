@@ -66,7 +66,7 @@ Orchestrator skill passes `--phase triage` or `--phase impact`. Execute ONLY the
    Question: <max 280 chars, single line — the specific question the reporter must answer>
    Context: <optional, max 500 chars — what you have reviewed and why it is insufficient>
    ```
-   Use this signal only when a targeted single question would unblock triage. If multiple distinct pieces of information are missing, use the standard Quality Gate UNCLEAR path (step 4) instead.
+   Use this signal only when a targeted single question would unblock triage. If multiple distinct pieces of information are missing, use the standard Quality Gate UNCLEAR path (step 4) instead. Subject to DoS caps enforced by the orchestrating skill (max 3 per run, max 1 per iteration) — this cap is shared with fixer's clarification hatch across the same pipeline run, not a separate per-agent allowance.
 
 6. Assess severity using these criteria:
    - **CRITICAL:** Data loss, security vulnerability, system crash, complete feature unavailable
@@ -135,7 +135,7 @@ Recommendation: {what the issue author should do}
 4. Trace the call hierarchy: use Grep to find all callers of the affected function/method. Read each caller to assess risk.
 5. Identify dependencies: database entities, services, UI components, APIs
 6. Check test coverage: use Glob to find test files matching the affected module, Read them to assess what's covered
-7. **Reproduction walkthrough (MANDATORY — do NOT skip):** Walk through EVERY reproduction step from the bug report against the identified code. This is the most critical step.
+7. **Reproduction walkthrough (MANDATORY except for non-deterministic repro steps — see below):** Walk through EVERY reproduction step from the bug report against the identified code. This is the most critical step.
 
    **If reproduction steps are non-deterministic** (e.g., "happens occasionally", "timing-dependent", "not reliably reproducible"): skip the walkthrough and note in the output: `Reproduction walkthrough: not applicable — non-deterministic steps.` Proceed directly to step 10.
 
@@ -176,7 +176,7 @@ Recommendation: {what the issue author should do}
       - **Next steps for human:** {concrete suggestion — e.g., "add logging at the boundary to capture what the downstream service returns", "reproduce with debugger breakpoint at line X"}
       ```
    4. Set risk level to HIGH (unconfirmed root cause = high risk of fixing wrong thing).
-   5. Do NOT block the pipeline — return the partial report. The orchestrator decides whether to proceed or block.
+   5. Do NOT self-block — return the PARTIAL report as-is. The orchestrator unconditionally routes any `root cause confirmed: NO` report to the Block handler (see `skills/fix-bugs/steps/02-impact.md` Outcome handling); your job is to make that partial report as useful as possible for the human who resolves the block, not to decide whether the pipeline proceeds.
 
 10. Analyze relevant history:
     a. Read last 10 commits in each affected file: `git log --oneline -10 -- {file}` via Bash
@@ -198,7 +198,7 @@ Recommendation: {what the issue author should do}
      - Known patterns: {recurring bug patterns in this area, if any}
      - Pipeline history: {previous [agent-flow] blocks in this area, if found}
      - Risk modifier: {if history shows recurring issues, increase risk level and explain why}
-   - **Reproduction trace (MANDATORY):**
+   - **Reproduction trace (MANDATORY unless non-deterministic — see Process step 7):**
      - Step 1: {repro step} → system state: {concrete data} → code: {method called} → input: {actual args} → output: {result}
      - Step 2: ...
      - Step N: {final step where bug manifests} → expected: {X} → actual: {Y} → root cause confirmed: {YES / NO}
@@ -242,7 +242,7 @@ Recommendation: {what the human should investigate}
 | Section produced | When | Required fields |
 |------------------|------|-----------------|
 | `## Triage Analysis` | always | Summary; Area; Severity (CRITICAL/HIGH/MEDIUM/LOW); Reproduction; Attachments; Acceptance Criteria (2-5 items); Complexity (XS/S/M/L); Reproduction steps (UI-only, JSON array) |
-| `## NEEDS_CLARIFICATION` | on ambiguous repro | Question (≤280 chars); Context (≤500 chars) |
+| `## NEEDS_CLARIFICATION` | on ambiguous repro (max 3 per run, max 1 per iteration) | Question (≤280 chars); Context (≤500 chars) |
 | `Quality gate: PASS` literal | on complete issue | (sentinel inside ## Triage Analysis) |
 | `Quality gate: UNCLEAR` literal | on incomplete issue | (sentinel + per-question feedback) |
 | `[agent-flow] Triage completed.` checkpoint comment | on PASS — posted as tracker comment | severity; area; complexity; AC count |
@@ -264,9 +264,11 @@ Recommendation: {what the human should investigate}
 
 | Section produced | When | Required fields |
 |------------------|------|-----------------|
-| `## Impact Report` | always | Root cause location; Affected files (max 5); Callers at risk; Test coverage; Risk level (LOW/MEDIUM/HIGH); Historical context; Reproduction trace; Sanity check; Suggested approach |
+| `## Impact Report` | always | Root cause location; Affected files (max 5); Callers at risk; Test coverage; Risk level (LOW/MEDIUM/HIGH); Historical context; Reproduction trace\*; Sanity check\*; Suggested approach |
 | `Partial analysis` sub-block inside `## Impact Report` | on root cause unconfirmed | Completed steps; Traced up to; Boundary hit; Candidates not confirmed; Secondary defects found; Next steps for human |
 | `[agent-flow] 🔴 Pipeline Block` | on Block | Agent: analyst; Step: Impact Analysis; Reason; Detail; Recommendation |
+
+\* When reproduction steps are non-deterministic (Process step 7), Reproduction trace and Sanity check are NOT produced in their structured form — they are replaced by the single literal line `Reproduction walkthrough: not applicable — non-deterministic steps.` inside `## Impact Report`. Downstream parsers of this report MUST treat that literal line as satisfying both fields for non-deterministic bugs.
 
 ## Step Completion Invariants
 
@@ -280,7 +282,7 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 4. `stage_name` — State.json `stage_name` for this stage equals the active stage value (this value is injected by the orchestrator as a Tier-1 prompt template variable: `EXPECTED_STAGE_NAME=triage` for --phase triage, or `EXPECTED_STAGE_NAME=code_analysis` for --phase impact). If the values mismatch, the orchestrator's dispatch table is inconsistent with the prompt — Block immediately.
 
-5. `agent_name` — State.json `agent_name` for this stage equals `analyst` (injected as `EXPECTED_AGENT_NAME=analyst`). Mismatch → Block.
+5. `agent_name` — State.json `agent_name` for this stage equals `agent-flow:analyst` (injected as `EXPECTED_AGENT_NAME=agent-flow:analyst`). Mismatch → Block.
 
 If ANY invariant fails, output a Block comment using the standard Block Comment Template with `Reason: Step completion invariant violated: {invariant_name}` and exit with BLOCKED status.
 

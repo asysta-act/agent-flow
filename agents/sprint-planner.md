@@ -23,7 +23,8 @@ Fibonacci story point mapping, velocity interpretation, overflow analysis.
 1. Receive inputs:
    - Priority-engine output: ranked issue tables (P0, P1, P2) with per-issue Impact, Risk, Effort, Score, Rationale, Dependencies
    - Sprint Planning config: Sprint duration, Capacity unit, effective_capacity (or null for unconstrained), velocity_source
-   - Optional: triage checkpoint data (complexity estimates per issue from `[agent-flow] Triage completed` comments)
+   - Optional: triage/spec-analysis checkpoint data (complexity estimates per issue from
+     `[agent-flow] Triage completed` or `[agent-flow] Spec analysis completed` comments)
 
 2. Parse priority-engine output. For each issue, extract:
    - Issue ID, title, tier (P0/P1/P2), Impact score, Risk score, Effort score, Score (composite), Dependencies
@@ -34,7 +35,8 @@ Fibonacci story point mapping, velocity interpretation, overflow analysis.
 
 3. Resolve effort size for each issue using this precedence order:
 
-   a. **Triage complexity** (from `[agent-flow] Triage completed` comment — highest precedence):
+   a. **Triage complexity** (from a `[agent-flow] Triage completed` or `[agent-flow] Spec analysis
+      completed` comment — highest precedence):
 
       ```
       COMPLEXITY_TO_POINTS = {XS: 1, S: 2, M: 3, L: 5}
@@ -52,10 +54,12 @@ Fibonacci story point mapping, velocity interpretation, overflow analysis.
 
    Always record which mapping was used (triage/effort/default) per issue in the output.
 
-4. Compute effective capacity using a 3-tier velocity source lookup:
-   - **historical**: use average velocity from prior sprint metrics (from `/agent-flow:metrics` output or Sprint Planning config)
-   - **heuristic**: if no historical data, derive from team size × duration × assumed per-person daily rate
-   - **manual**: use the value directly from Sprint Planning config; if null, treat as unconstrained
+4. Use capacity as received — do not recompute it. `effective_capacity` and `velocity_source` were
+   already resolved by the dispatching skill's 3-tier capacity model (`skills/sprint-plan/SKILL.md`
+   Step 0c, "Capacity model") before this agent was invoked. Consume the values handed to you in
+   step 1 as-is. NEVER re-derive capacity from team size, headcount, or an assumed per-person rate —
+   that would violate the Constraints below. If `effective_capacity` is null, proceed in unconstrained
+   mode (step 5c).
 
 5. Walk the ranked list top-to-bottom (P0 first, then P1, then P2; descending score within tier):
 
@@ -69,7 +73,12 @@ Fibonacci story point mapping, velocity interpretation, overflow analysis.
 
    c. **Unconstrained mode** — if effective_capacity is null, include all issues up to Max issues limit (default: 20, max: 50)
 
-   d. **Flag** `decompose_recommended` when Effort score >= 4 OR Risk = 5
+   d. **Flag** `decompose_recommended` when the step-3 *resolved* effort size lands in the largest
+      tier — triage complexity `L` (5 SP / 16h), or priority-engine Effort score 4-5 used as the
+      step-3 fallback (5-8 SP / 4-8h) — OR Risk = 5. Always judge this from whichever effort signal
+      actually won under the step-3 precedence order; NEVER flag (or skip flagging) based on the raw
+      priority-engine Effort field alone when triage complexity was available and resolved a smaller
+      tier
 
    e. All remaining issues go to the Overflow section
 
@@ -103,16 +112,12 @@ Fibonacci story point mapping, velocity interpretation, overflow analysis.
 
    Omit sections that are empty (no Dependency Warnings if none, no Cold Start Warnings if velocity_source is "historical").
 
-8. `--all` mode — when received as a flag in context: repeat steps 5-7 for overflow issues,
-   filling subsequent sprints until all issues are allocated. Append a release summary:
-
-   ```markdown
-   ### Release Summary
-   | Sprint | Issues | {unit} | Notable |
-   |--------|--------|--------|---------|
-   | Sprint 2026-W16 | 3 | 35 SP | includes P0 blocker |
-   | Sprint 2026-W18 | 2 | 20 SP | -- |
-   ```
+8. `--all` mode — the `--all` flag does not change this agent's own process. Sprint-planner ALWAYS
+   plans exactly one sprint per invocation (steps 5-7) from the issue list it was given in step 1.
+   Multi-sprint iteration — advancing the sprint window, re-invoking sprint-planner once per batch of
+   remaining overflow issues, and compiling the cross-sprint Release Summary once all sprints are
+   planned — is owned entirely by the dispatching skill (`skills/sprint-plan/SKILL.md` Step 7). Do
+   NOT repeat steps 5-7 internally and do NOT emit a `### Release Summary` section from this agent.
 
 ## Output Contract
 
@@ -121,9 +126,9 @@ Fibonacci story point mapping, velocity interpretation, overflow analysis.
 | Section | Source | Required |
 |---------|--------|----------|
 | Priority-engine output | upstream priority-engine `## Backlog Prioritization` | yes |
-| Sprint Planning config | Automation Config: Sprint Planning section | yes |
-| Triage checkpoint comments (optional, for complexity precedence) | issue tracker | no |
-| `--all` mode flag | dispatching skill prompt | no |
+| Sprint Planning config (sprint_duration, capacity_unit, effective_capacity, velocity_source — pre-resolved by the dispatching skill from Automation Config: Sprint Planning section) | dispatching skill context | yes |
+| Triage/spec-analysis checkpoint comments (optional, for complexity precedence) | issue tracker | no |
+| `--all` mode flag (informational only — does not change this agent's single-sprint process; see step 8) | dispatching skill prompt | no |
 
 ### Outputs
 
@@ -134,7 +139,6 @@ Fibonacci story point mapping, velocity interpretation, overflow analysis.
 | `### Overflow` sub-table | always (may be empty if all fit) | columns # / Issue / Tier / SP / Reason |
 | `### Dependency Warnings` | when at-risk dependencies exist | bulleted list |
 | `### Cold Start Warnings` | when velocity_source != "historical" | (advisory text) |
-| `### Release Summary` | on `--all` mode | columns Sprint / Issues / unit / Notable |
 | `[agent-flow] 🔴 Pipeline Block` | on Block | Agent: sprint-planner; Step: Sprint Planning; Reason; Detail; Recommendation |
 
 ## Step Completion Invariants
@@ -163,7 +167,7 @@ If ANY invariant fails: Block with `Reason: Step completion invariant violated: 
 - NEVER generate sprint goals or strategic alignment statements
 - NEVER persist state or write files
 - Maximum issues per sprint: respect Max issues config value (default: 20, max: 50)
-- Effort mapping is fixed and transparent — always record which mapping was applied per issue
+- NEVER apply an effort mapping other than the fixed table in step 3, and NEVER omit which mapping (triage/effort/default) was applied per issue in the output
 - If priority-engine output is missing or unparseable: Block using the Block Comment Template:
   ```
   [agent-flow] 🔴 Pipeline Block

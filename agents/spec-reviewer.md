@@ -27,7 +27,7 @@ scope analysis, YAGNI detection, feasibility assessment, specification standards
    - `spec/epics/*.md` — all epic files
 
 2. Check completeness — every REQUIRED section must be present and filled:
-   - spec/README.md: Vision & Goals, Users & Personas, Tech Stack, Out of Scope
+   - spec/README.md: Vision & Goals, Users & Personas, Tech Stack, Design & UX (REQUIRED when the project is a web application — frontend, fullstack, or server-rendered with browser UI; not required for CLI tools, libraries, and pure API projects), Out of Scope
    - spec/architecture.md: High-Level Overview, Data Flow, Non-Functional Requirements
    - spec/verification.md: Test Strategy, Definition of Done, Risks & Assumptions
    - spec/epics/*.md: Description, User Stories with acceptance criteria, Dependencies, Priority
@@ -39,8 +39,8 @@ scope analysis, YAGNI detection, feasibility assessment, specification standards
    - Formatted correctly:
      - Behavioral criteria use GWT format (Given/When/Then)
      - NFRs and constraints use rule-oriented format (MUST/SHOULD/COULD)
-     - Flag criteria that use GWT but have vague content as WARN (not BLOCK)
-     - Flag behavioral criteria that don't use GWT as WARN (suggest reformatting)
+     - GWT structure alone does not satisfy the Testable/Specific/Measurable bar above — criteria that use GWT but have vague content (e.g. "Given the system, When it runs, Then it works properly") are still BLOCK, exactly as any other vague criterion
+     - Flag behavioral criteria that don't use GWT format as WARN (formatting-only suggestion to reformat; not a content defect)
 
 4. Check consistency — no contradictions between sections:
    - Tech stack in README matches architecture assumptions
@@ -84,7 +84,7 @@ instead of specification review mode. The input is both the spec/ folder AND the
    - For each AC: search for relevant files by keywords from the AC text (Grep/Glob)
    - Read at most 20 source files and 10 test files total
    - Prioritize files referenced in spec/architecture.md and epic descriptions
-   - Generated config files (CLAUDE.md, Dockerfile, CI config)
+   - Also check generated config files (CLAUDE.md, Dockerfile, CI config) for consistency with the spec's tech-stack and NFR requirements
 3. For each epic in spec/epics/*.md:
    - For each acceptance criterion in the epic:
      - Search the codebase for evidence of implementation (function names, API endpoints, test assertions)
@@ -107,10 +107,11 @@ instead of specification review mode. The input is both the spec/ folder AND the
    - **Summary:** {1-2 sentence overall assessment}
    ```
 
-   Verdict rules:
+   Verdict rules (apply in order — first matching rule wins):
    - All AC IMPLEMENTED + all NFR RESPECTED → PASS
    - Any AC MISSING → FAIL
-   - All AC at least PARTIALLY + no NFR VIOLATED → PARTIAL
+   - Any NFR VIOLATED → FAIL
+   - All AC at least PARTIALLY → PARTIAL (reached only when no AC is MISSING and no NFR is VIOLATED, per the rules above)
 
 ## Output Contract
 
@@ -153,13 +154,13 @@ Invariant fields checked: `dispatched_at`, `dispatch_witness`, `status`, `stage_
 
 Before returning to the orchestrator, you SHALL verify the following 5 invariants by reading `.agent-flow/{ISSUE_ID}/state.json`:
 
-1. **`dispatched_at`** — Field is present and non-empty for stage `{EXPECTED_STAGE_NAME}` (here: `spec_review`). Orchestrator wrote this pre-dispatch as a timestamp; absence proves the dispatch flow was bypassed.
+1. **`dispatched_at`** — Field is present and non-empty for stage `{EXPECTED_STAGE_NAME}` (here: `spec_reviewer`). Orchestrator wrote this pre-dispatch as a timestamp; absence proves the dispatch flow was bypassed.
 
 2. **dispatch_witness** — Field is present, exactly 64 hex characters, and matches `sha256({subagent_type}|{model}|{prompt_head_128})` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh check_dispatch_witness`.
 
 3. **status** — Equals `"in_progress"` for this stage at the moment of your check. Status flips to `"completed"` only AFTER you return; observing `"in_progress"` proves the dispatch flow ran.
 
-4. **stage_name** — Equals `spec_review` (orchestrator-injected as the `EXPECTED_STAGE_NAME` Tier-1 prompt variable). Mismatch indicates wiring drift.
+4. **stage_name** — Equals `spec_reviewer` (orchestrator-injected as the `EXPECTED_STAGE_NAME` Tier-1 prompt variable). Mismatch indicates wiring drift.
 
 5. **agent_name** — Equals `spec-reviewer` (orchestrator-injected as the `EXPECTED_AGENT_NAME` Tier-1 prompt variable). Mismatch indicates wrong subagent routed.
 
