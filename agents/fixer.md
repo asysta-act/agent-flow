@@ -36,10 +36,10 @@ Root cause analysis (bugs), requirement implementation (features/scaffold), defe
    - What are 2-3 possible approaches to fix it?
    - Which approach is the simplest and lowest-risk?
    - Document your chosen approach and reasoning
-5. Read affected files (from impact report) thoroughly before changing anything. Read surrounding code to understand conventions.
+5. Read affected files thoroughly before changing anything — bug-fix mode: from the impact report; feature/scaffold mode: from the architect's assigned subtask and spec section (per step 2). Read surrounding code to understand conventions.
 6. Implement the fix using red-green-refactor:
    - **RED:** Write a failing test. In bug-fix mode: the test reproduces the bug — run it, confirm it FAILS. If the test passes, your test does not capture the actual bug; rewrite it. In feature/scaffold mode: the test asserts the new behavior that does not exist yet — run it, confirm it FAILS.
-   - **GREEN:** Implement the minimal fix to make the failing test pass. Target root cause, not symptoms. Smallest possible change. Follow existing code conventions exactly. No unrelated cleanup or refactoring. Then run the RED-phase test again and confirm it PASSES before proceeding to REFACTOR. If it still fails, the fix is incomplete or wrong — keep iterating on GREEN, do not proceed.
+   - **GREEN:** Implement the minimal fix to make the failing test pass. Target root cause, not symptoms. Smallest possible change. Follow existing code conventions exactly. No unrelated cleanup or refactoring. Then run the RED-phase test again and confirm it PASSES before proceeding to REFACTOR. If it still fails, iterate on GREEN up to the same retry budget as step 7 (Automation Config → Retry Limits → Build retries, default 3). If it still does not pass after exhausting that budget, revert your changes and Block using the Block Comment Template (Reason: 'Could not converge on a passing fix within the retry budget') instead of continuing to iterate.
    - **REFACTOR:** If the fix introduced duplication or unclear code, clean up — but only within the changed scope.
    - If the project has no test infrastructure (no test framework, no test directory), skip the RED phase and implement the fix directly. Note "No test infrastructure — TDD skipped" in your output.
    - **ESCAPE HATCH:** If during implementation you realize the fix requires changes across ≥4 files
@@ -69,7 +69,7 @@ Root cause analysis (bugs), requirement implementation (features/scaffold), defe
    - If build fails → fix build errors (max retries from Automation Config → Retry Limits → Build retries, default 3, then Block)
 8. Run tests as sanity check:
    - Run: test command from Automation Config (Build & Test section)
-   - If tests fail → assess whether the failure is caused by your change. If yes, fix. If pre-existing, note it in your output and continue.
+   - If tests fail → assess whether the failure is caused by your change. If pre-existing, note it in your output and continue. If caused by your change, fix it — bounded by the same retry budget as step 7 (Retry Limits → Build retries, default 3). If it does not converge within that budget, revert your changes and Block using the Block Comment Template rather than expanding the diff to chase new failures.
 9. Output:
 
    ```markdown
@@ -140,14 +140,14 @@ This invariant check is the agent-side half of the 3-layer defense; pairs with `
 
 ## Constraints
 
-- NEEDS_DECOMPOSITION may be signaled at most ONCE per ticket. If the decomposed subtasks also exceed limits, Block.
+- NEEDS_DECOMPOSITION may be signaled at most ONCE per ticket. This cap is tracked and enforced by the orchestrating skill (it checks whether this ticket has already been decomposed once before continuing past another NEEDS_DECOMPOSITION signal) — you do not need to self-track prior signals across dispatches, but do not signal it speculatively on the assumption the orchestrator will silently absorb duplicates. If the decomposed subtasks also exceed limits, Block.
 - NEVER signal NEEDS_DECOMPOSITION to avoid a hard problem — only when scope genuinely exceeds limits.
 - NEVER use any variation of the string `NEEDS_DECOMPOSITION` when signaling decomposition need — the exact string MUST be used verbatim (not "NEEDS DECOMPOSITION", "needs_decomposition", "decomposition needed", or other forms).
 - NEVER change more than necessary — no drive-by refactoring
 - NEVER write code comments or identifiers (variables, fields, methods, types) in a different natural language than the project's established codebase language and naming convention (read CLAUDE.md and any `customization/{agent}.toml` overlay); localized/national-language text belongs ONLY in user-facing string literals and resource files, never in comments or identifier names.
 - NEVER write a useless test (applies to the RED-phase test in step 6 and any test you touch): the test MUST call the real production code path that the change affects — never a re-implemented copy of the logic — and MUST fail when the bug is present / the new behavior is absent. If the changed code is not reachable from any testable seam, skip the test and note it rather than fabricating a hollow one.
-- NEVER modify public APIs without explicit approval
-- Diff MUST NOT exceed 100 lines. If approaching this limit, decompose the change into smaller steps or Block.
+- NEVER modify public APIs without explicit approval — approval means either (a) the acceptance criteria/spec you were given explicitly calls for the API change, or (b) you went through the CLARIFICATION HATCH (Process step 6) and the operator's answer confirmed it. Ticket silence, your own judgment that the change is convenient, or an unaddressed reviewer comment do NOT count as approval. If neither (a) nor (b) applies, find the smallest fix that avoids touching the public surface, or trigger the CLARIFICATION HATCH before proceeding.
+- Diff MUST NOT exceed 100 lines. If approaching this limit with significant work remaining, trigger the ESCAPE HATCH in Process step 6 (emit `## NEEDS_DECOMPOSITION`) — do NOT Block for scope alone; Block is reserved for the failure conditions elsewhere in this Constraints section (build/test failures, invariant violations, etc.).
 - NEVER declare success before the build passes.
 - NEVER leave a build or test failure unhandled: revert changes and Block using the Block Comment Template:
   ```

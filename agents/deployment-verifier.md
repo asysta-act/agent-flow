@@ -24,14 +24,17 @@ Port conflict detection, Docker Compose management, health check polling pattern
 2. **Port validation and scan:** For each port in the `Ports` list:
    - **Validate port value first:** confirm it matches digits-only and is in range 1–65535. If any port fails validation → set verdict to `PORT_CONFLICT`, output "Invalid port value: {port}. Ports must be numeric (1-65535).", and STOP — do not proceed to port scan or start.
    - Check if the port is occupied using platform-appropriate tools (`lsof -i :{port}` on macOS/Linux, `netstat -ano | findstr :{port}` on Windows)
-   - If occupied: identify the process name and PID
+   - If occupied: identify the PID from the tool above. On macOS/Linux, `lsof -i :{port}` already includes the process name in its output. On Windows, `netstat -ano` yields only the PID column — resolve the process name separately via `tasklist /FI "PID eq {pid}"` (or `Get-Process -Id {pid}` in PowerShell).
    - Record: `{port} → free | occupied by {process} (PID {pid})`
 
 3. **Pre-start validation** (only if action = start):
-   - If ANY configured port is occupied by a process that is NOT part of the current deployment:
+   - Determine ownership of each occupied port using a concrete, deterministic test — never infer ownership from judgment:
+     - **Type = docker:** Run `docker compose ps --format json` (scoped to the project's compose file). The occupying process counts as "ours" only if it is a container listed in that output whose name/labels match the project's compose service names. Any other occupant is a conflict.
+     - **Type = native:** The occupying process counts as "ours" only if (a) its command line / binary name matches the configured `Start command`, or (b) its PID matches a `native_pid` recorded by this project from a prior start (e.g., a PID file at `.agent-flow/deploy/native.pid`). Any other occupant is a conflict.
+   - If ANY configured port is occupied by a process that fails the ownership test above:
      → Set verdict to `PORT_CONFLICT`, report which ports are blocked and by what
      → Do NOT attempt to start — port conflicts cause silent failures
-   - If ports are occupied by the current deployment's processes (e.g., same Docker containers) → treat as "already running", skip to health check
+   - If ALL occupied ports pass the ownership test above → treat as "already running", skip to health check
 
 4. **Start app** (only if action = start AND pre-start validation passes):
    - If Type = docker:
@@ -53,17 +56,21 @@ Port conflict detection, Docker Compose management, health check polling pattern
    - Max poll attempts: `Health check timeout / 2` (at the 2-second interval)
 
 6. **Cleanup on failure** (only if action = start AND verdict is UNHEALTHY or START_FAILED — i.e., only after this invocation actually attempted a start):
+   - **If Type = docker: run Step 7 (Docker inspection) FIRST, before anything else in this step.** Capture container status, restart counts, and the last-20-lines log tail while the containers still exist — `docker compose down` (or the configured Stop command) removes them, and diagnostics captured after teardown are typically empty. Only after Step 7's diagnostics are captured, proceed with the cleanup bullets below.
    - Run `{Stop command}` to release resources.
    - If Type = native and `native_pid` was captured: verify the process is gone; if Stop command fails or the process is still running, report: "Cleanup failed. Kill PID {native_pid} manually to free the port."
    - If Type = docker and Stop command fails: report the full error (first 500 chars) so the user can intervene.
    - Re-run port scan to confirm ports are freed; if still occupied, include a warning in the report.
    - Do NOT run this step for verdict = `PORT_CONFLICT`: per steps 2–3, a `PORT_CONFLICT` verdict means no start was ever attempted, so this invocation created no resources to release — running the Stop command in that case would risk tearing down a pre-existing deployment this invocation does not own.
 
-7. **Docker inspection** (only if Type = docker):
+7. **Docker inspection** (only if Type = docker; per Step 6, this step MUST run before any teardown when verdict is UNHEALTHY or START_FAILED):
    - List all containers: name, status, ports, health
    - Check for restart loops: if any container restarted >3 times → flag as unstable
    - Check logs for error patterns (last 20 lines per container): `docker compose logs --tail=20 {service}`
-   - Before including log output in the report, redact values matching common secret patterns: lines containing `PASSWORD=`, `TOKEN=`, `SECRET=`, `API_KEY=`, `PRIVATE_KEY=`, or `Authorization:` headers. Replace the matched value portion with `[REDACTED]` (keep the key name visible, e.g., `PASSWORD=[REDACTED]`).
+   - Before including log output in the report, redact secrets using a class-based rule, not a fixed token list: for any line matching a `KEY=value` or `"key": "value"` pattern, redact the value if KEY contains, case-insensitively, any of these substrings anywhere in the key name: `PASSWORD`, `SECRET`, `TOKEN`, `KEY`, `CREDENTIAL`, `AUTH`, `PASS`. Match on substring containment, not exact key equality — e.g. `AWS_SECRET_ACCESS_KEY=AKIA...` → `AWS_SECRET_ACCESS_KEY=[REDACTED]` (matches via `SECRET`/`KEY` as substrings, not a literal `SECRET=` token). Also redact:
+     - Connection-string credentials embedded mid-value, e.g. `DATABASE_URL=postgres://user:hunter2@host/db` → `DATABASE_URL=postgres://user:[REDACTED]@host/db`.
+     - `Authorization:` / `Proxy-Authorization:` headers, matched case-insensitively.
+     Replace only the matched value/credential portion with `[REDACTED]` (keep the key name and surrounding structure visible, e.g., `PASSWORD=[REDACTED]`).
 
 8. **Stop app** (only if action = stop):
    - Run `{Stop command}` (default: `docker compose down`)
@@ -73,7 +80,7 @@ Port conflict detection, Docker Compose management, health check polling pattern
    - Otherwise → verdict `SKIPPED` (stop completed cleanly; nothing further to verify)
 
 9. **Determine final verdict:**
-   - `HEALTHY` — app running, health check passes, no port conflicts
+   - `HEALTHY` — app running, no port conflicts, and either the health check passes OR `health: skipped` (no `Health check URL` configured) — a skipped health check is NOT a failure and counts toward HEALTHY, not UNHEALTHY
    - `UNHEALTHY` — app running but health check fails (health = `UNHEALTHY` or `UNREACHABLE`) or containers unstable
    - `PORT_CONFLICT` — cannot start due to occupied ports; no start was attempted
    - `START_FAILED` — start command failed, containers exited immediately (docker), or the process exited before health checks began (native)
@@ -91,7 +98,7 @@ Port conflict detection, Docker Compose management, health check polling pattern
       "started_at": "ISO-8601",
       "verified_at": "ISO-8601",
       "error": null,
-      "containers": [{"name": "...", "status": "running|exited|restarting", "port": 0}]
+      "containers": [{"name": "...", "status": "running|exited|restarting", "port": 0, "restart_count": 0, "unstable": false, "log_issues": ["..."]}]
     }
     ```
 
@@ -120,7 +127,7 @@ Port conflict detection, Docker Compose management, health check polling pattern
 | Section produced | When | Required fields |
 |------------------|------|-----------------|
 | `## Deployment Verification Report` | always | Verdict (HEALTHY / UNHEALTHY / PORT_CONFLICT / START_FAILED / STOP_FAILED / SKIPPED); Type (docker / native); Ports summary; Health check; Containers (docker only); Issues |
-| `.agent-flow/deploy/{timestamp}/result.json` | when not SKIPPED | verdict; type; health; health_url; ports[]; started_at; verified_at; error; containers[] |
+| `.agent-flow/deploy/{timestamp}/result.json` | when not SKIPPED | verdict; type; health; health_url; ports[]; started_at; verified_at; error; containers[] (each with `restart_count`, `unstable`, `log_issues[]` populated when Type=docker, per Step 7) |
 
 ## Step Completion Invariants
 
@@ -148,7 +155,7 @@ Do NOT attempt to write `tool_uses`, `completed_at`, or `status="completed"` —
 - NEVER exceed the Health check timeout — hard cap on polling duration
 - NEVER run if Local Deployment section is absent from Automation Config — output verdict SKIPPED
 - NEVER expose secrets or credentials found in container logs or process output
-- NEVER report a verdict other than `START_FAILED` when Type = `docker` and `docker` / `docker compose` are not installed — use message: "Docker not found. Install Docker or change Local Deployment Type to native."
+- NEVER report a verdict other than `START_FAILED` when action = `start`, Type = `docker`, and `docker` / `docker compose` are not installed — use message: "Docker not found. Install Docker or change Local Deployment Type to native." For action = `check` or action = `stop` with docker missing, report verdict `SKIPPED` with the same "Docker not found" message instead — no start was attempted in that case, so `START_FAILED` (defined in Step 9 as tied to a failed start attempt) does not apply.
 - NEVER attempt a start before the port conflict check completes — it is the primary safety gate and MUST run first
 - NEVER swallow a Start command or Stop command failure silently — report the full error output (first 500 chars) and set the appropriate verdict
 - NEVER commit `.agent-flow/deploy/` artifact files (result.json)

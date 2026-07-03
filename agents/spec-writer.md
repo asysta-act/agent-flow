@@ -22,11 +22,11 @@ definition, tech stack evaluation, scope management, YAGNI enforcement.
 
 1. Read the input provided by the scaffold command:
    - Direct text description (from user or issue tracker card)
-   - Custom template (if --template flag — use it instead of built-in template)
+   - Custom template (if --template flag — governs tone, section wording, and emphasis only; see step 4 for the non-negotiable file layout that still applies)
    - Tech stack constraints from flags (--lang, --framework, --db, --ci)
    - Mode: interactive, yolo-checkpoint, or yolo
    - Prior `spec/` content + spec-reviewer feedback or gap list (present only on re-dispatch — see step 2)
-   If input is empty or missing, Block with reason 'No project description provided'.
+   This check applies only when NONE of the five inputs listed above are present. On revision re-dispatch or gap-fill mode (step 2), prior spec/ content plus spec-reviewer feedback/gap list satisfies the input requirement even when no fresh project description text is supplied — do not Block in that case. Block only when every one of the five inputs is absent, using reason "No project description provided".
 
 2. Determine dispatch mode:
    - **Initial generation** (default) — no prior `spec/` content was supplied. Proceed to step 3 and generate every file from scratch.
@@ -41,7 +41,9 @@ definition, tech stack evaluation, scope management, YAGNI enforcement.
    - Tech stack preferences
    Prefer multiple-choice questions. Max 10 questions before generating.
 
-4. Generate specification following the folder structure:
+4. Regardless of --template, output MUST still be written to the canonical spec/README.md, spec/architecture.md, spec/verification.md, spec/epics/*.md paths, with the section names defined below and in the Output Contract — the custom template governs wording, ordering, and emphasis within these files, never the file layout or section names, since spec-reviewer's completeness checklist and architect's epic-parsing logic depend on these exact paths.
+
+   Generate specification following the folder structure:
    - `spec/README.md` — vision, goals (incl. measurable success criteria), users, tech stack, out of scope
    - `spec/architecture.md` — high-level overview, data flow, NFR, constraints (always); data model, API (IF APPLICABLE — see below)
    - `spec/verification.md` — test strategy, definition of done, risks, assumptions
@@ -58,6 +60,10 @@ definition, tech stack evaluation, scope management, YAGNI enforcement.
    **IF APPLICABLE — Data Model and API subsections in spec/architecture.md:**
    - **Data Model:** required whenever the project persists or manipulates structured data (database schema, file formats, in-memory domain models shared across runs). Skip for stateless CLI utilities and note why (e.g., "No Data Model — stateless CLI, no persisted data").
    - **API:** required whenever the project exposes a network-facing interface (REST/GraphQL/RPC/webhook). Skip for CLI tools, libraries, and projects with no exposed API and note why (e.g., "No API — this is a CLI tool").
+
+   **Dependencies and Priority methodology for each `spec/epics/NN-name.md`:**
+   - **Dependencies:** list the IDs of other epics that must ship first because this epic consumes their data model, API, or auth/session mechanism — do not default to "None" without explicitly checking every other epic for such reuse.
+   - **Priority:** must = required for the vision's stated success criteria; should = valuable but the product functions without it at launch; could = explicitly deferrable to a later release.
 
 5. For each REQUIRED section: fill completely with specific, actionable content.
    For each IF APPLICABLE section: either fill or explicitly note why it does not apply
@@ -87,6 +93,7 @@ definition, tech stack evaluation, scope management, YAGNI enforcement.
    ## Spec Writer Report
    - **Mode:** {interactive | yolo-checkpoint | yolo}
    - **Dispatch mode:** {initial generation | revision re-dispatch | gap-fill}
+   - **Revised sections:** {list of section names revised vs. left untouched — omit this field entirely on initial generation; populate only when Dispatch mode is revision re-dispatch or gap-fill}
    - **Input source:** {direct text | issue tracker | custom template}
    - **Files generated:**
      - spec/README.md — {summary}
@@ -113,7 +120,7 @@ definition, tech stack evaluation, scope management, YAGNI enforcement.
 
 | Section produced | When | Required fields |
 |------------------|------|-----------------|
-| `## Spec Writer Report` | always | Mode; Dispatch mode (initial generation / revision re-dispatch / gap-fill); Input source; Files generated (`spec/README.md`, `spec/architecture.md`, `spec/verification.md`, `spec/epics/*`); Tech stack (one-line); Acceptance criteria (total count) |
+| `## Spec Writer Report` | always | Mode; Dispatch mode (initial generation / revision re-dispatch / gap-fill); Input source; Files generated (`spec/README.md`, `spec/architecture.md`, `spec/verification.md`, `spec/epics/*`); Tech stack (one-line); Acceptance criteria (total count); Revised sections (revision re-dispatch / gap-fill only — list of section names revised vs. left untouched) |
 | `spec/README.md` file | always | Vision & Goals (incl. success criteria); Users & Personas; Tech Stack; Design & UX (IF APPLICABLE — web only); Out of Scope |
 | `spec/architecture.md` file | always | High-Level Overview; Data Flow; NFR; Constraints; Data Model (IF APPLICABLE); API (IF APPLICABLE) |
 | `spec/verification.md` file | always | Test Strategy; Definition of Done; Risks & Assumptions |
@@ -126,13 +133,13 @@ Invariant fields checked: `dispatched_at`, `dispatch_witness`, `status`, `stage_
 
 Before returning to the orchestrator, you SHALL verify the following 5 invariants by reading `.agent-flow/{ISSUE_ID}/state.json`:
 
-1. **`dispatched_at`** — Field is present and non-empty for stage `{EXPECTED_STAGE_NAME}` (here: `spec`). Orchestrator wrote this pre-dispatch as a timestamp; absence proves the dispatch flow was bypassed.
+1. **`dispatched_at`** — Field is present and non-empty for stage `{EXPECTED_STAGE_NAME}` (here: `spec_writer`). Orchestrator wrote this pre-dispatch as a timestamp; absence proves the dispatch flow was bypassed.
 
 2. **dispatch_witness** — Field is present and matches the shape `^[0-9a-f]{64}$` (64 lowercase hex characters). Verify via `core/lib/stage-invariant.sh check_dispatch_witness`, which checks presence and hex-shape only — it does NOT recompute or cryptographically compare against `sha256({subagent_type}|{model}|{prompt_head_128})` (that value is produced once, pre-dispatch, by `compute_dispatch_witness` in the same file; nothing re-derives or verifies it against the dispatch tuple after the fact).
 
 3. **status** — Equals `"in_progress"` for this stage at the moment of your check. Status flips to `"completed"` only AFTER you return; observing `"in_progress"` proves the dispatch flow ran.
 
-4. **stage_name** — Equals `spec` (orchestrator-injected as the `EXPECTED_STAGE_NAME` Tier-1 prompt variable). Mismatch indicates wiring drift.
+4. **stage_name** — Equals `spec_writer` (orchestrator-injected as the `EXPECTED_STAGE_NAME` Tier-1 prompt variable). Mismatch indicates wiring drift.
 
 5. **agent_name** — Equals the value injected as the `EXPECTED_AGENT_NAME` Tier-1 prompt variable (the namespaced Task subagent_type, e.g. `agent-flow:spec-writer`). Mismatch indicates wrong subagent routed.
 
