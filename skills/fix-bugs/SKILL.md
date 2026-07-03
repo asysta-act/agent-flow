@@ -47,6 +47,9 @@ GOT_BATCH=false; BATCH_N=""; POSITIONAL=""; DRY_RUN=false
 GOT_YOLO=false; GOT_STEP_MODE=false; GOT_DECOMPOSE=false; GOT_NO_DECOMPOSE=false
 PROFILE_NAME=""; CLARIFICATION_TEXT=""
 read -ra ARG_TOKENS <<< "$ARGUMENTS"
+# read -ra splits quoted multi-word values into tokens; reconstruct until next known flag.
+# KNOWN LIMITATION: a value containing a flag-like substring stops reconstruction early.
+KNOWN_FLAG_RE='^(--batch|--dry-run|--yolo|--step-mode|--decompose|--no-decompose|--profile|--clarification)$'
 i=0
 while [ $i -lt ${#ARG_TOKENS[@]} ]; do
   tok="${ARG_TOKENS[$i]}"
@@ -57,8 +60,22 @@ while [ $i -lt ${#ARG_TOKENS[@]} ]; do
     --step-mode)     GOT_STEP_MODE=true ;;
     --decompose)     GOT_DECOMPOSE=true ;;
     --no-decompose)  GOT_NO_DECOMPOSE=true ;;
-    --profile)       i=$((i+1)); PROFILE_NAME="${ARG_TOKENS[$i]}" ;;
-    --clarification) i=$((i+1)); CLARIFICATION_TEXT="${ARG_TOKENS[$i]}" ;;
+    --profile)
+      i=$((i+1)); PROFILE_NAME=""
+      while [ $i -lt ${#ARG_TOKENS[@]} ] && [[ ! "${ARG_TOKENS[$i]}" =~ $KNOWN_FLAG_RE ]]; do
+        PROFILE_NAME="${PROFILE_NAME:+$PROFILE_NAME }${ARG_TOKENS[$i]}"
+        i=$((i+1))
+      done
+      i=$((i-1)) # outer i+=1 advances past last consumed token
+      ;;
+    --clarification)
+      i=$((i+1)); CLARIFICATION_TEXT=""
+      while [ $i -lt ${#ARG_TOKENS[@]} ] && [[ ! "${ARG_TOKENS[$i]}" =~ $KNOWN_FLAG_RE ]]; do
+        CLARIFICATION_TEXT="${CLARIFICATION_TEXT:+$CLARIFICATION_TEXT }${ARG_TOKENS[$i]}"
+        i=$((i+1))
+      done
+      i=$((i-1))
+      ;;
     --*) ;;
     *) [ -z "$POSITIONAL" ] && POSITIONAL="$tok" ;;
   esac
@@ -105,31 +122,36 @@ Legacy flat `.agent-flow/state.json` → log `[WARN]` and continue with the new 
 
 ## Step 0b — Resume detection
 
-Follow `../../core/resume-detection.md` for resume detection logic. Inputs: `ISSUE_ID` (single) or
-`BATCH_RUN_ID="batch-{timestamp}"` (batch); `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`,
-`On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
+Follow `../../core/resume-detection.md` for resume detection logic. Inputs: `ISSUE_ID` (single) or `BATCH_RUN_ID="batch-{timestamp}"` (batch);
+`MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`, `On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
 
-If `RESUME_POINT == "FRESH"`, proceed with Step 1 below. Otherwise skip ahead per the BUG resume
-mapping in `../../core/resume-detection.md`. Batch-mode invokes per-issue resume inside the per-issue
-loop, so the outer batch run does not skip ahead.
+If `RESUME_POINT == "FRESH"`, proceed with Step 1 below. Otherwise skip ahead per the BUG resume mapping in `../../core/resume-detection.md`.
+Batch-mode invokes per-issue resume inside the per-issue loop, so the outer batch run does not skip ahead.
+
+**Webhook events beyond the base 5:** NEEDS_CLARIFICATION fires `pipeline-paused`; `../../core/resume-detection.md` Step 9 fires
+`pipeline-resumed` on resume (both gated on `Webhook_URL` + matching `On events` token).
 
 ## Mode flag semantics
 
-- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps, pauses only on NEEDS_CLARIFICATION.
+- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps including step 11 (publish) end-to-end unattended; pauses only on NEEDS_CLARIFICATION.
 - `--yolo`: zero gates, autonomous run to PR — auto-approve decomposition, auto-publish.
-- `--step-mode`: pause after each step for human review — mutually exclusive with `--yolo`.
+- `--step-mode`: pause after each step (including before step 11) for human review — mutually exclusive with `--yolo`; use this flag for a human publish-review gate.
 
 ## Configuration
 
-Read from `## Automation Config` in CLAUDE.md per `../../core/config-reader.md`. Required sections:
-Issue Tracker, Source Control, PR Rules, Build & Test, PR Description Template. Optional:
-Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees, Decomposition,
-Error Handling, Agent Overrides, Local Deployment, Browser Verification, Pipeline Profiles,
-Pause Limits, E2E Test. See `docs/reference/automation-config.md` for the full key contract.
+Read from `## Automation Config` in CLAUDE.md per `../../core/config-reader.md`. Required sections: Issue Tracker, Source Control,
+PR Rules, Build & Test, PR Description Template. Optional: Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees,
+Decomposition, Error Handling, Agent Overrides, Local Deployment, Browser Verification, Pipeline Profiles, Pause Limits, E2E Test.
+See `docs/reference/automation-config.md` for the full key contract.
 
-Pipeline profile parsing: follow `../../core/profile-parser.md`. Stage names eligible for skip:
-`triage`, `analyst-impact`, `test-engineer`, `test-engineer-e2e`, `browser-agent-reproduce`,
-`browser-agent-verify`. NEVER skip: `fixer`, `reviewer`, `publisher` (these stages CANNOT be skipped).
+Pipeline profile parsing: follow `../../core/profile-parser.md`. Stage names eligible for skip: `triage`, `analyst-impact`,
+`test-engineer`, `test-engineer-e2e`, `browser-agent-reproduce`, `browser-agent-verify`. NEVER skip: `fixer`, `reviewer`, `publisher`
+(these stages CANNOT be skipped).
+
+### Config Validity Gate
+
+Follow `skills/implement-feature/SKILL.md` Step 0b: Config Validity Gate identically (unfilled placeholder scan across
+`Issue Tracker`, `Source Control`, `PR Rules`, `Build & Test`, `PR Description Template` → BLOCK) before proceeding to Step 00 — canonical logic lives there.
 
 ## Preflight checks (advisory)
 
@@ -146,6 +168,9 @@ If `MODE = batch`:
 - Outer loop: query the tracker for N bugs via `Bug query` from Automation Config.
 - For each ticket: write per-issue `.agent-flow/{ISSUE-ID}/state.json`, then execute the
   dispatch table below per-issue.
+- "Parallel" means concurrent `Task()` dispatch only — per-issue `state.json` writes stay inside each ticket's own
+  directory (no cross-ticket sharing). The batch-level summary below IS shared, but this orchestrator is its sole
+  writer (sequential fold-in as each `Task()` returns, atomic tmp+rename) — no additional file-level locking needed.
 - Maintain a batch-level summary at `.agent-flow/batch-{timestamp}/state.json` with
   `pipeline_type: "bug_fix_batch"`, `processed[]`, `succeeded[]`, `blocked[]`.
 - On block: increment `block_count`. If `Max blocked per run` reached → skip remaining bugs.
@@ -201,60 +226,34 @@ agent prompt.
 Before each Task dispatch, apply Agent Overrides per `../../core/agent-override-injector.md` (.toml
 primary). Applies to both single and batch mode.
 
-**Step file override (planned v1.2):** replacing individual step files via `customization/steps/fix-bugs/{NN}-{name}.md` is not yet implemented. See TOML overlay documentation for current customization options.
+**Step file override (not yet implemented):** replacing individual step files via `customization/steps/fix-bugs/{NN}-{name}.md`
+is not currently supported by any shipped version. See TOML overlay documentation for current customization options.
 
 ## `--step-mode` prompt
 
-After each step completes (before dispatching the next), if `$GOT_STEP_MODE=true`:
-pause and display step result summary, present
-`[step-mode] Step {NN}/12 completed: {step-name}` and prompt
-`Continue / Skip remaining gates / Abort? [c/s/a]:` (re-prompt on empty input).
+After each step completes (before dispatching the next), if `$GOT_STEP_MODE=true`: pause and display step result summary, present `[step-mode] Step {NN}/12 completed: {step-name}` and prompt `Continue / Skip remaining gates / Abort? [c/s/a]:` (re-prompt on empty input).
 
-State machine:
-- `c` / `continue` → proceed to next step.
-- `s` / `skip`     → switch MODE to yolo for remaining steps; log
-  `[INFO] step-mode escape: switched to yolo for remaining steps`.
-- `a` / `abort`    → write `state.json` (`pause_reason=step_mode_abort`,
-  `last_completed_step`, `outcome=paused`, `paused_at=ISO8601`) then exit 0
-  (graceful pause — not an error exit).
+State machine: `c`/`continue` → proceed to next step. `s`/`skip` → switch MODE to yolo for remaining steps; log `[INFO] step-mode escape: switched to yolo for remaining steps`. `a`/`abort` → write `state.json` (`pause_reason=step_mode_abort`, `last_completed_step`, `outcome=paused`, `paused_at=ISO8601`) then exit 0 (graceful pause — not an error exit).
 
 ## Dry-run mode
 
-If `--dry-run` is active: run only Step 00 (without tracker writes), 01 (triage),
-and 02 (impact), then emit a dry-run report (severity, area, risk, affected files,
-complexity, AC count) and exit. No side effects, no PR, no state mutations to the tracker.
+If `--dry-run` is active: run only Step 00 (without tracker writes), 01 (triage), and 02 (impact), then emit a dry-run report (severity, area, risk, affected files, complexity, AC count) and exit. No side effects, no PR, no state mutations to the tracker.
 
 ## Block handler (step X)
 
-When any step blocks the pipeline (see `../../core/mcp-body-formatting.md` for the MCP comment-body formatting contract — applies to every tracker comment this pipeline posts):
-1. Follow `../../core/block-handler.md` for the block protocol (comment template, tracker write).
-2. Step 12's pipeline accumulator runs (`pipeline.total_tokens`, summary table).
-3. Set top-level `status = "blocked"`, write `block` object atomically to state.json.
-4. On block from fixer/reviewer/test-engineer: dispatch the rollback-agent per
-   `../../core/block-handler.md` rollback section (Task tool, haiku model, witness write
-   + EXPECTED_* variables — same dispatch contract as every step file).
-5. Step 12 fires `pipeline-completed` with `"outcome":"blocked"`, `"pr_url":null`.
-6. Batch mode: increment `block_count`; if `Max blocked per run` reached, skip remaining bugs.
+When any step blocks the pipeline (see `../../core/mcp-body-formatting.md` for the MCP comment-body formatting contract — applies to every tracker comment this pipeline posts): 1. Follow `../../core/block-handler.md` for the block protocol (comment template, tracker write). 2. Step 12's pipeline accumulator runs (`pipeline.total_tokens`, summary table). 3. Set top-level `status = "blocked"`, write `block` object atomically to state.json. 4. On block from fixer/reviewer/test-engineer: dispatch the rollback-agent per `../../core/block-handler.md` rollback section (Task tool, haiku model, witness write + EXPECTED_* variables — same dispatch contract as every step file). 5. Step 12 fires `pipeline-completed` with `"outcome":"blocked"`, `"pr_url":null`. 6. Batch mode: increment `block_count`; if `Max blocked per run` reached, skip remaining bugs.
 
 ## Summary (batch mode)
 
-After all bugs processed (batch only): emit a structured table
-(Bug ID / Summary / Status / PR / Block reason) plus
-`{N_fixed} fixed, {N_blocked} blocked, {N_dup} duplicates` and a token-usage estimate.
+After all bugs processed (batch only): emit a structured table (Bug ID / Summary / Status / PR / Block reason) plus `{N_fixed} fixed, {N_blocked} blocked, {N_dup} duplicates` and a token-usage estimate.
 
 ## Rules
 
-- Single mode: work in CWD — no worktrees.
-- Batch mode: worktree behavior follows the Worktrees config (parallel) or sequential CWD.
-- Publisher (step 11) is NOT called automatically in single mode (default) — the user decides;
-  `--yolo` auto-publishes.
-- Block Comment Template is passed to agents as context instructions.
-- Retry limits are passed to agents as context instructions.
-- Hooks fire before/after their respective agent steps, NOT inside the reviewer loop.
-- Custom agents are one-shot gates.
+- Single mode: work in CWD — no worktrees. Batch mode: worktree behavior follows the Worktrees config (parallel) or sequential CWD.
+- Publisher (step 11) runs automatically at the end of every non-paused, non-blocked run — true in default mode as well as `--yolo` (see "## Mode flag semantics"). To gate publish on a human decision, invoke with `--step-mode`.
+- Block Comment Template and Retry limits are passed to agents as context instructions.
+- Hooks fire before/after their respective agent steps, NOT inside the reviewer loop. Custom agents are one-shot gates.
 - Follow `../../core/agent-override-injector.md` for loading project-specific agent customizations.
 - On error → Block handler + inform the user.
 
-For step-level dispatch detail, pre/post-state writes, hook invocations, NEEDS_CLARIFICATION
-handling, decomposition orchestration, and webhook payloads, refer to the individual files
-listed in the Step Dispatch table above.
+For step-level dispatch detail, pre/post-state writes, hook invocations, NEEDS_CLARIFICATION handling, decomposition orchestration, and webhook payloads, refer to the individual files listed in the Step Dispatch table above.

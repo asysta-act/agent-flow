@@ -33,7 +33,7 @@ Before dispatch, check Agent Overrides: follow `../../../core/agent-override-inj
 If `{Agent Overrides path}/spec-analyst.toml` exists, append its rendered Markdown content to the agent's context as `## Project-Specific Instructions`.
 
 You MUST invoke Task(subagent_type='agent-flow:spec-analyst', model='sonnet'). DO NOT inline-execute.
-- Context: issue details from the issue tracker (wrapped in EXTERNAL INPUT markers per `../../../core/external-input-sanitizer.md`)
+- Context: issue ID and tracker config only. This skill does not pre-fetch or pass issue tracker content (title, description, comments, custom fields) in the Context block — spec-analyst performs its own MCP read directly (see `agents/spec-analyst.md` Process step 1), which is the point where external content first enters the agent's context. spec-analyst is responsible for self-applying `../../../core/external-input-sanitizer.md` to that content immediately after each MCP read.
 - Expected output: structured specification with acceptance criteria
 
 If spec-analyst blocks → proceed to step X (Block handler).

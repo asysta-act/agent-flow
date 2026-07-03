@@ -63,11 +63,14 @@ You are a [Role] specializing in [domain].
 ## Goal
 ## Expertise
 ## Process (numbered steps)
+## Output Contract (structured output schema the agent returns to the orchestrator)
+## Step Completion Invariants (fields the orchestrator MUST verify in state.json before advancing: `dispatched_at`, `dispatch_witness`, `tool_uses`, `status="completed"`)
 ## Constraints (NEVER rules, limits, failure handling)
 ```
 
 - The `description` field appears in Claude Code's agent picker — keep it concise
 - Process steps must be numbered and actionable
+- `Output Contract` and `Step Completion Invariants` are mandatory — see [CLAUDE.md](../../CLAUDE.md) for the full reliability contract
 - Constraints must start with NEVER or define hard limits
 - Read-only agents NEVER modify code; execution agents make changes
 - Plugin agents MUST NOT use `hooks`, `mcpServers`, or `permissionMode` keys in their YAML frontmatter — Claude Code platform ignores them for plugin-level agents (security). Hooks are skill-orchestrated, not agent-frontmatter.
@@ -724,7 +727,7 @@ The spec-writer creates the complete `spec/` folder that drives all downstream a
 | Type | Execution |
 | Pipeline(s) | Bug-fix, Feature (triggered on block) |
 | Inputs | Block context (agent name, step, reason, detail, recommendation), Automation Config |
-| Outputs | Rollback report (context type, base branch, rollback status, stash status, issue state) |
+| Outputs | Rollback report (context type, base branch, rollback status, stash status, untracked files removed) |
 | Constraints | Never force pushes. Never deletes remote branches. Skips rollback for read-only agent blocks (analyst, spec-analyst, architect), publisher blocks, and scaffolder blocks. Single pass, no retries. |
 
 The rollback-agent is triggered automatically by the block handler in pipeline skills. It does not run independently — it is always dispatched as part of the error handling flow.
@@ -737,9 +740,10 @@ The rollback-agent is triggered automatically by the block handler in pipeline s
 - **Base branch:** main
 - **Rollback:** completed
 - **Stash:** created (user changes preserved)
-- **Issue:** PROJ-123 → Blocked
-- **Comment:** posted
+- **Untracked files removed:** 2 (from `git clean -fdn` dry run)
 ```
+
+Posting the block comment and transitioning the issue state to Blocked are owned exclusively by the orchestrator's block handler (`core/block-handler.md`) — rollback-agent never touches the issue tracker.
 
 ---
 

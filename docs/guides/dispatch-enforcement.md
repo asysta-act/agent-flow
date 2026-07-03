@@ -154,8 +154,13 @@ Each invocation appends two groups of lines. The **presence audit** emits one
 ```
 2026-04-25T14:32:07Z triage OK
 2026-04-25T14:32:07Z code_analysis OK
+2026-04-25T14:32:07Z reproduce_browser OK
 2026-04-25T14:32:07Z fixer_reviewer OK
+2026-04-25T14:32:07Z smoke_check OK
 2026-04-25T14:32:07Z test OK
+2026-04-25T14:32:07Z e2e_test OK
+2026-04-25T14:32:07Z browser_verification OK
+2026-04-25T14:32:07Z acceptance_gate OK
 2026-04-25T14:32:07Z publisher OK
 ```
 

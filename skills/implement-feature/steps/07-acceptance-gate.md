@@ -37,7 +37,8 @@ If `{Agent Overrides path}/acceptance-gate.toml` exists, append its rendered Mar
 
 You MUST invoke Task(subagent_type='agent-flow:acceptance-gate', model='sonnet'). DO NOT inline-execute.
 Context: `Acceptance criteria: {AC from spec-analyst — full feature AC, not just per-subtask AC}.
-Changed files: {list of files modified by fixer}.`
+Changed files: {list of files modified by fixer}.
+Test report: {test-engineer output from step 06}.`
 
 If REQUEST_CHANGES → back to fixer for the LAST subtask (or single-pass) with feedback.
 If APPROVE → continue to step 08.

@@ -32,10 +32,10 @@ If not in a git repo → use CWD.
 
 1. Determine the target directory per ## Scope rules above
 2. Read `{target_dir}/CLAUDE.md`
-2. Look for `## Automation Config` section
-3. If `--fresh` in $ARGUMENTS → skip detection, go to Fresh mode (step 1)
-4. If `--update` in $ARGUMENTS and no config exists → error: "No Automation Config found. Run without --update to create one."
-5. Route based on detection:
+3. Look for `## Automation Config` section
+4. If `--fresh` in $ARGUMENTS → skip detection, go to Fresh mode (step 1)
+5. If `--update` in $ARGUMENTS and no config exists → error: "No Automation Config found. Run without --update to create one."
+6. Route based on detection:
 
 | State | Action |
 |-------|--------|
@@ -115,7 +115,7 @@ If not found → [WARN] "trackers.md not found — using built-in defaults for t
 Ask:
 - Remote hostname + owner/repo (e.g. `<your-gitea-host>/org/repo`)
 - Base branch (default: `main`)
-- Branch naming (default: `fix/{issue}-{short-description}`)
+- Branch naming (default: `fix/{issue-id}-{description}`) — `{issue-id}` and `{description}` are the only placeholders `/publish`'s prefix-extraction algorithm recognizes (see `docs/reference/automation-config.md` → Source Control); do not offer or accept other token spellings (e.g. `{issue}`, `{short-description}`)
 
 ### Step 4: PR Rules + PR Description Template
 
@@ -165,7 +165,7 @@ Generated key names: `Build command`, `Test command`, `Verify command`.
 Which optional sections do you want to configure?
 
   [1] standard (recommended) — Retry Limits, Error Handling, Pipeline Profiles, Feature Workflow
-  [2] full — all 14 optional sections
+  [2] full — all 18 optional sections
   [3] minimal — Retry Limits only
   [4] custom — choose from the list
 ```
@@ -191,6 +191,10 @@ Select sections to configure (comma-separated numbers):
   [12] Browser Verification — browser-based bug reproduction and fix verification
   [13] Module Docs — path to per-module documentation for agents
   [14] Local Deployment — start/stop local environment for testing
+  [15] Sprint Planning — sprint duration, capacity, and velocity for /sprint-plan and /create-backlog
+  [16] Agent Overrides — directory of per-agent TOML customization files
+  [17] Autopilot — unattended continuous processing settings for /autopilot
+  [18] Pause Limits — timeout before an unattended NEEDS_CLARIFICATION pause is auto-aborted
 ```
 
 **6c.** Processing order: Pipeline Profiles first (affects entire pipeline), then remaining in list order.
@@ -219,11 +223,15 @@ Select sections to configure (comma-separated numbers):
 - Notifications: Webhook URL, On events (all default: none)
 - Worktrees: Batch size (default: 3), Base path (default: `.worktrees/`), Cleanup (default: `auto`)
 - E2E Test: Framework, Command (all default: none)
-- Browser Verification: "Do you want to configure browser-based reproduction/verification? [y/N]" — if yes: Base URL (default: `http://localhost:3000`), Start command (default: none), Stop command (default: none), On events (default: `reproduce, verify` — must be `reproduce`, `verify`, or `reproduce, verify`), Timeout (default: `30`), Max pages (default: `5`)
+- Browser Verification: "Do you want to configure browser-based reproduction/verification? [y/N]" — if yes: Base URL (required, e.g. `http://localhost:3000`), Start command (default: none), Stop command (default: none), On events (default: `reproduce, verify` — must be `reproduce`, `verify`, or `reproduce, verify`), Timeout (default: `60`), Max pages (default: `5`), Screenshot storage (default: `.claude/screenshots`), Exploration (default: `disabled`), Exploration max clicks (default: `20`)
 - Decomposition: Max subtasks (default: 7), Fail strategy (default: `fail-fast`), Commit strategy (default: `squash`)
 - Metrics: Output (default: `stdout`), Period (default: `30 days`)
 - Module Docs: Path (default: none)
-- Local Deployment: "Do you want to configure local deployment? [y/N]" — if yes: Type (default: `docker`), Start command (default: `docker compose up -d`), Stop command (default: `docker compose down`), Health check URL (default: `http://localhost:3000/health`), Health check timeout (default: `60`), Ports (default: none)
+- Local Deployment: "Do you want to configure local deployment? [y/N]" — if yes: Type (default: `native`; other option: `docker`), Start command (default: none), Stop command (default: none), Health check URL (default: none), Health check timeout (default: `30`), Ports (default: none)
+- Sprint Planning: Sprint duration (default: `2 weeks`), Capacity unit (default: `story-points`), Team capacity (default: none), Velocity target (default: none), Sprint field (default: tracker-dependent — ask which custom field the tracker uses for sprints/iterations), Mode (default: `suggest`), Max issues (default: `20`), Epic template (default: none)
+- Agent Overrides: Path (default: `customization/`)
+- Autopilot: Max issues per run (default: `1`), Lock timeout (default: `120`), Log file (default: `.agent-flow/autopilot.log`), Bug limit (default: `0`), Feature limit (default: `0`), On error (default: `skip`), Dry run (default: `false`)
+- Pause Limits: Pause timeout (default: `30 days`)
 
 ### Step 7: Generate Automation Config
 

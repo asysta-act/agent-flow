@@ -79,7 +79,7 @@ If fixer output contains `## NEEDS_DECOMPOSITION`:
 2. If `decompose_mode = DISABLED` → Block handler (step X)
 3. If this bug has already been decomposed once → Block handler (step X)
 4. Run architect for decomposition, continue with subtask execution
-5. After subtask execution: skip to step 07-publish
+5. After subtask execution: skip to step 11 (publish)
 
 ## NEEDS_CLARIFICATION detection (fixer)
 

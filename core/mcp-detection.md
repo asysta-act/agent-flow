@@ -4,7 +4,7 @@
 
 Determine the expected MCP package and tool prefix for a given tracker or SC type, then verify accessibility and connectivity. Single source of truth for MCP detection logic — prevents duplication between commands that need MCP verification.
 
-Referenced by: `skills/scaffold/SKILL.md` (Step 0-MCP).
+Referenced by: `skills/scaffold/SKILL.md` (Step 0-MCP), `skills/check-setup/SKILL.md` (Block 3, Steps 9-10).
 
 ## Input Contract
 
@@ -86,4 +86,7 @@ Classify the error string in priority order (first match wins):
 
 Note: `ECONNREFUSED` is classified under `"timeout"` (not `"not_found"`) because the server address resolved but the connection was refused — the remediation is "verify the server is running and the port is correct", which aligns with timeout/unreachable guidance. `ENOTFOUND` and `EAI_AGAIN` are classified under `"not_found"` because these are DNS resolution failures — the hostname does not resolve.
 
-Pattern matching reuses the same string patterns as `skills/check-setup/SKILL.md` Step 9.
+This Classification Reference table is the canonical single source for these trigger-pattern lists.
+`skills/check-setup/SKILL.md` Steps 9-10 mirror the `"tls"` and `"auth"` rows above (adapted to also
+gate a curl confirmation probe) rather than the reverse — if a pattern is added or changed here,
+mirror the change into both copies in `skills/check-setup/SKILL.md`.

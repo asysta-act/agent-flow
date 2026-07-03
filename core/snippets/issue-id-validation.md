@@ -13,5 +13,9 @@ The canonical Bash conditional for validating an `$ISSUE_ID` value before it is 
 2. `! "$ISSUE_ID" =~ ^\.+$` — REJECT dot-only inputs (`.`, `..`, `...`). Without this guard, the regex would accept `..`, which produces `.agent-flow/../state.json` — path-traversal escapes the plugin state directory.
 
 ## Used by:
-- `skills/fix-bugs/SKILL.md:290` (citation marker `<!-- @snippet:issue-id-validation -->`)
+- `docs/reference/pipeline.md:41-46` — Entry `SKILL.md` responsibility #3 ("Issue-ID validation"), same accepted-charset + dot-only-rejection regex.
+- `core/agent-states.md:79` — NEEDS_CLARIFICATION webhook variable-provenance note (`${ISSUE_ID}` already validated per this snippet).
+- `skills/publish/SKILL.md:383` — Citations section cross-reference (Step 0d issue_id extraction / path-traversal defense).
+
+No file in this repo currently embeds a literal `<!-- @snippet:issue-id-validation -->` transclusion marker (unlike `webhook-curl`, `architecture-freshness`, `pipeline-completion`, and `metrics-json-schema`, which do); the sites above reference this snippet's regex in prose/citation form only. Verify with `grep -rn "issue-id-validation" .` before relying on this list — it is not enforced by a test scenario.
 

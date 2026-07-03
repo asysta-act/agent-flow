@@ -11,7 +11,7 @@ Publish current work: PR + (conditional) issue tracker state change. Read Automa
 
 `/publish` auto-detects the publishing **mode** from the current branch name and the Automation Config `Source Control → Branch naming` template. There are three success modes (`full-publish`, `pr-only-no-id`, `pr-only-404`) and one failure mode (`FAIL`). No flags. No new config keys. The "PR-only with valid tracker reference" use case is expressed by renaming the branch to one that does not match the configured `Branch naming` prefix (e.g., `chore/refactor-foo` instead of `fix/PROJ-123-foo`).
 
-> **Operator note (interactive-only):** `/publish is interactive-only` — it requires user confirmation flows in agent prose and may FAIL in environments without an MCP server configured (CI / cron). For headless / batch publishing, use `/agent-flow:autopilot`.
+> **Operator note (interactive-only):** `/publish` is interactive-only — it requires user confirmation flows in agent prose and may FAIL in environments without an MCP server configured (CI / cron). For headless / batch publishing, use `/agent-flow:autopilot`.
 
 ## Steps
 
@@ -25,13 +25,13 @@ This step runs BEFORE the MCP pre-flight. It determines whether the tracker is n
 branch_name=$(git branch --show-current)
 ```
 
-If `branch_name` is empty, the working tree is in a **detached HEAD** state. There is no active branch to push or to use as the PR source, so `/publish` cannot proceed. FAIL with a single-line INFO message and EXIT non-zero:
+If `branch_name` is empty, the working tree is in a **detached HEAD** state. There is no active branch to push or to use as the PR source, so `/publish` cannot proceed. FAIL with a single-line ERROR message and EXIT non-zero:
 
 ```
-[agent-flow][INFO] Cannot determine branch (detached HEAD). /publish requires an active branch.
+[agent-flow][ERROR] Cannot determine branch (detached HEAD). /publish requires an active branch.
 ```
 
-This is a pre-flight environment check — NOT a tracker-down failure — so it does NOT use the `[agent-flow] 🔴 Pipeline Block` template. No tracker comment is posted. No webhook event is fired. (Detached HEAD is treated as FAIL — exit non-zero — NOT as `pr-only-no-id`, because there is no branch to push or use as PR source.)
+`[ERROR]` (not `[INFO]`) is used deliberately: unlike the `[agent-flow][INFO]` lines in Steps 0b/0e below — which are non-fatal and let the pipeline continue in a PR-only mode — this condition is a hard, non-continuable stop. This is a pre-flight environment check — NOT a tracker-down failure — so it does NOT use the `[agent-flow] 🔴 Pipeline Block` template. No tracker comment is posted. No webhook event is fired. (Detached HEAD is treated as FAIL — exit non-zero — NOT as `pr-only-no-id`, because there is no branch to push or use as PR source.)
 
 **0b. Read `Source Control → Branch naming` from Automation Config.**
 
@@ -76,18 +76,18 @@ If `branch_name` does **NOT** start with `pre_prefix`:
 Otherwise, strip `pre_prefix` from the front of `branch_name` to form `residue`, then apply the canonical extraction regex against `residue`:
 
 ```
-^(#?[0-9]+|[A-Za-z][A-Za-z0-9_]*-[0-9]+)
+^(#?[0-9]+|[A-Za-z][A-Za-z0-9_.]*-[0-9]+)
 ```
 
 This regex anchors at the start of `residue` and matches **EITHER**:
 
 - `#?[0-9]+` — numeric, optionally `#`-prefixed (github / gitea / redmine shapes: `123`, `#42`)
-- `[A-Za-z][A-Za-z0-9_]*-[0-9]+` — alphanumeric project prefix + `-` + digits (youtrack / jira / linear shapes: `PROJ-123`, `ABC-456`, `ABC_DEF-789`)
+- `[A-Za-z][A-Za-z0-9_.]*-[0-9]+` — alphanumeric project prefix (letters, digits, underscore, optional internal dot) + `-` + digits (youtrack / jira / linear shapes: `PROJ-123`, `ABC-456`, `ABC_DEF-789`, and Jira dotted project keys like `PROJ.NAME-123` — the internal `.` is accepted here so the extraction regex's output space stays aligned with the accepted charset in `core/snippets/issue-id-validation.md`)
 
 Bash idiom:
 
 ```bash
-if [[ "$residue" =~ ^(#?[0-9]+|[A-Za-z][A-Za-z0-9_]*-[0-9]+) ]]; then
+if [[ "$residue" =~ ^(#?[0-9]+|[A-Za-z][A-Za-z0-9_.]*-[0-9]+) ]]; then
   issue_id="${BASH_REMATCH[1]}"
 else
   issue_id=""
@@ -102,9 +102,9 @@ The first match is the `issue_id`. Any trailing characters in `residue` (e.g. `-
 
 | Tracker | Issue ID shape | Example | Regex branch matched |
 |---------|----------------|---------|----------------------|
-| youtrack | uppercase prefix + `-` + digits | `PROJ-123` | `[A-Za-z][A-Za-z0-9_]*-[0-9]+` |
-| jira | uppercase prefix + `-` + digits | `ABC-456` | `[A-Za-z][A-Za-z0-9_]*-[0-9]+` |
-| linear | uppercase prefix + `-` + digits | `ENG-789` | `[A-Za-z][A-Za-z0-9_]*-[0-9]+` |
+| youtrack | uppercase prefix + `-` + digits | `PROJ-123` | `[A-Za-z][A-Za-z0-9_.]*-[0-9]+` |
+| jira | uppercase prefix (optionally dotted) + `-` + digits | `ABC-456` / `PROJ.NAME-123` | `[A-Za-z][A-Za-z0-9_.]*-[0-9]+` |
+| linear | uppercase prefix + `-` + digits | `ENG-789` | `[A-Za-z][A-Za-z0-9_.]*-[0-9]+` |
 | github | numeric (optionally `#`-prefixed) | `123` / `#42` | `#?[0-9]+` |
 | gitea | numeric (optionally `#`-prefixed) | `123` / `#42` | `#?[0-9]+` |
 | redmine | numeric (optionally `#`-prefixed) | `42` / `#42` | `#?[0-9]+` |
@@ -173,7 +173,7 @@ This step ONLY runs when `tracker_needed == true`. It verifies that `issue_id` a
 
 a. Read `tracker_type` from Automation Config (default: `youtrack`).
 
-b. Locate the single-issue fetch tool via prefix-scan per `../../core/mcp-detection.md:28-34` and `../../core/mcp-detection.md:36` ("Scan available tools for at least one tool matching the prefix"). **Do NOT hardcode tool names** — pick the `get_issue`-shaped tool from `mcp__{tracker_type}__*`.
+b. Locate the single-issue fetch tool via prefix-scan per `../../core/mcp-detection.md:28-34` and `../../core/mcp-detection.md:38` ("Scan available tools for at least one tool matching the prefix"). **Do NOT hardcode tool names** — pick the `get_issue`-shaped tool from `mcp__{tracker_type}__*`.
 
 c. Call the discovered tool with `issue_id`.
 
@@ -203,6 +203,28 @@ b. Check whether an open PR already exists for the current branch. If yes → ST
 
 Read `Type` from Automation Config → `Issue Tracker` (default: `youtrack`).
 
+### Step 4b — Pre-publish hook + custom agent (optional)
+
+`/publish` is the same publish step that fix-bugs and implement-feature run at the end of their
+pipelines, so it honors the same pre-publish gate they do — mirroring
+`skills/fix-bugs/steps/10-pre-publish.md` and the "Pre-publish hook + custom agent" section of
+`skills/implement-feature/steps/08-publish.md`.
+
+**Skip condition:** if neither `Hooks → Pre-publish` nor `Custom Agents → Pre-publish agent` is set
+in Automation Config, skip this step entirely and proceed to Step 5.
+
+a. **Pre-publish Bash hook.** If `Hooks → Pre-publish` is set: run the configured command via Bash
+   in the project root. Non-zero exit → emit the **Pre-publish gate FAIL tier** block (see Failure
+   UX templates below) with `Step: Pre-publish hook` and `Detail` = last 1000 chars of combined
+   stdout/stderr, then EXIT non-zero.
+
+b. **Pre-publish custom agent.** If `Custom Agents → Pre-publish agent` is set: read the agent
+   definition from the configured path and its frontmatter `model`. Before dispatch, check Agent
+   Overrides: follow `../../core/agent-override-injector.md`. Invoke
+   `Task(subagent_type=<custom-agent>, model=<model>)`. Output beginning with `BLOCK:` → emit the
+   **Pre-publish gate FAIL tier** block with `Step: Pre-publish custom agent` and EXIT non-zero.
+   Otherwise continue to Step 5.
+
 ### Step 5 — Dispatch publisher agent (haiku, Task)
 
 Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for publisher overrides.
@@ -216,29 +238,37 @@ mode = {mode}.
 issue_id = {issue_id or 'none'}.
 ```
 
-### Step 6 — Tracker state + comment (CONDITIONAL on mode)
+### Step 6 — Tracker state + comment (mutation OWNED by the publisher agent; described, not re-executed, here)
 
-- IF `mode == "full-publish"`:
-  - Issue tracker: set state per Automation Config (`Issue Tracker → State transitions → For Review`).
-  - Post a comment in the issue tracker with the PR link.
-- ELSE (mode in `{"pr-only-no-id", "pr-only-404"}`):
-  - Skip both. Log: `[agent-flow][INFO] PR-only mode ({mode}); tracker not updated.`
+This step does not perform a second tracker call. Per `agents/publisher.md` Process step 7 ("Update
+Issue Tracker"), the dispatched `publisher` agent from Step 5 is the **sole tracker-mutation point**
+for the publish flow, and that agent's contract explicitly forbids the dispatching skill from
+independently setting issue state or posting its own PR-link comment (doing so would duplicate the
+mutation and produce a double comment). The behavior below is what the publisher agent already did
+inside its own Step 5 dispatch — this section documents the outcome for orchestrator clarity only:
 
-### Step 7 — Webhook (UNCHANGED shape; `issue_id` empty in PR-only modes)
+- IF `mode == "full-publish"`: the publisher agent set the issue state per Automation Config
+  (`Issue Tracker → State transitions → For Review`) and posted a comment with the PR link.
+- ELSE (mode in `{"pr-only-no-id", "pr-only-404"}`): the publisher agent skipped both. This skill
+  logs (its own, non-mutating, local echo): `[agent-flow][INFO] PR-only mode ({mode}); tracker not updated.`
 
-If `Notifications → Webhook URL` exists and `pr-created` is in `On events`:
+### Step 7 — Post-publish hook, custom agent, and webhook
 
-```bash
-curl --proto "=http,https" --max-time 5 --retry 0 -X POST -H "Content-Type: application/json" \
-  -d '{"event":"pr-created","issue_id":"{issue}","pr_url":"{url}","timestamp":"{ISO8601}"}' \
-  "{Webhook URL}"
-```
+Follow `../../core/post-publish-hook.md` for `Hooks → Post-publish` command execution,
+`Custom Agents → Post-publish agent` dispatch, and the `pr-created` webhook. This is the same
+delegation `skills/fix-bugs/steps/11-publish.md` and `skills/implement-feature/steps/08-publish.md`
+use, so a standalone `/publish` run fires identical post-publish hooks/webhooks to the
+pipeline-embedded publish step.
 
-The `pr-created` event fires in **all non-FAIL modes**. The `issue_id` field is the empty string when `mode in {"pr-only-no-id", "pr-only-404"}` — this is the forward-compatible payload contract; consumers MUST parse leniently. Failure → warning only, must not stop publish.
+The `pr-created` webhook fires in **all non-FAIL modes**. The `issue_id` field is the empty string
+when `mode ∈ {"pr-only-no-id", "pr-only-404"}` — this is the forward-compatible payload contract;
+consumers MUST parse leniently. All three sub-actions (hook, custom agent, webhook) are advisory —
+per `../../core/post-publish-hook.md` Failure Handling, a failure in any of them logs a warning and never
+stops or reverts the publish (the PR already exists by this point).
 
 ### Step 8 — Publish Report (publisher agent owns the `Tracker:` row)
 
-The `publisher` agent emits the Publish Report. The agent's report MUST include a `Tracker:` row in **exactly one** of these three forms (defined and enforced in `agents/publisher.md` §82-87 — this skill prose references the contract but does not generate the report):
+The `publisher` agent emits the Publish Report. The agent's report MUST include a `Tracker:` row in **exactly one** of these three forms (defined and enforced in `agents/publisher.md` §96-110 — this skill prose references the contract but does not generate the report):
 
 - `Tracker: Updated → For Review` — emitted when `mode == "full-publish"`
 - `Tracker: Skipped — issue ID '{issue_id}' not found in {tracker_type}` — emitted when `mode == "pr-only-404"`
@@ -254,7 +284,7 @@ Display the result (PR URL + issue tracker state, per the publisher agent's Publ
 
 ### FAIL tier (`error_type ∈ {timeout, auth, tls, unknown}`)
 
-This template matches the `CLAUDE.md` "Block Comment Template" format. The `Skill:` field (not `Agent:`) is used for skill-level blocks. The format is machine-parseable by webhook consumers.
+This template matches the `CLAUDE.md` "Block Comment Template" format. The `Skill:` field (not `Agent:`) is used for skill-level blocks.
 
 ```
 [agent-flow] 🔴 Pipeline Block
@@ -274,7 +304,37 @@ Recommendation:
   4. Once the tracker is reachable, re-run `/agent-flow:publish`.
 ```
 
-After emitting this block, EXIT non-zero. (`/agent-flow:check-setup` is the diagnostic skill; `/agent-flow:setup-mcp` is the configuration wizard.)
+If `Notifications → Webhook URL` exists and `issue-blocked` is in `On events`, fire the
+`agent-flow-block` webhook using `../../core/block-handler.md` Step 6's `jq -nc --arg` structural
+construction (`event: "agent-flow-block"`, `agent: "publish"`, `issue_id`, `reason`, `timestamp`).
+This webhook call — not the comment text alone — is what makes the block machine-parseable by
+webhook consumers. No tracker Blocked-state transition and no rollback happen here: Step 2's
+failure means the tracker itself is unreachable (nothing to transition), and there is no
+fixer/reviewer git state to roll back. Advisory failure: log `[WARN] Webhook delivery failed` and
+continue to EXIT non-zero regardless.
+
+After emitting this block (and, if configured, the webhook above), EXIT non-zero. (`/agent-flow:check-setup` is the diagnostic skill; `/agent-flow:setup-mcp` is the configuration wizard.)
+
+### Pre-publish gate FAIL tier (`Hooks → Pre-publish` or `Custom Agents → Pre-publish agent` failure, Step 4b)
+
+Same Skill-level Block Comment Template shape as the FAIL tier above, with `Step` set to whichever
+sub-step failed:
+
+```
+[agent-flow] 🔴 Pipeline Block
+Skill: /agent-flow:publish
+Step: Pre-publish hook | Pre-publish custom agent
+Reason: The configured pre-publish gate failed; publish was stopped before any commit/push/PR call.
+Detail: {last 1000 chars of hook stdout+stderr, or the custom agent's BLOCK: reason}
+Recommendation: Fix the issue the hook/agent flagged, or unset Hooks → Pre-publish / Custom Agents →
+  Pre-publish agent in Automation Config if this gate should not apply to standalone /publish runs,
+  then re-run /agent-flow:publish.
+```
+
+If `Notifications → Webhook URL` exists and `issue-blocked` is in `On events`, fire the same
+`agent-flow-block` webhook described in the FAIL tier above. After emitting this block (and, if
+configured, the webhook), EXIT non-zero. No PR has been created and no tracker mutation has
+occurred yet at this point (Step 4b runs before Steps 5/6), so there is nothing to roll back.
 
 ### 404 WARN tier (`error_type == "not_found"`)
 
@@ -304,10 +364,13 @@ Single logical line. Pipeline continues with `mode = "pr-only-no-id"`. Skips MCP
 
 ### Detached HEAD FAIL tier (already emitted in Step 0a)
 
-Single logical line. Exits non-zero. NOT a Block Comment Template message — this is a pre-flight environment check, not a tracker-down failure. No tracker comment, no webhook event:
+Single logical line, tagged `[ERROR]` (not `[INFO]`) precisely so it reads as fatal and is visually
+distinct from the non-fatal `[agent-flow][INFO]` lines used elsewhere in this file (Steps 0b/0e,
+which log-and-continue). Exits non-zero. NOT a Block Comment Template message — this is a pre-flight
+environment check, not a tracker-down failure. No tracker comment, no webhook event:
 
 ```
-[agent-flow][INFO] Cannot determine branch (detached HEAD). /publish requires an active branch.
+[agent-flow][ERROR] Cannot determine branch (detached HEAD). /publish requires an active branch.
 ```
 
 ---
@@ -315,11 +378,13 @@ Single logical line. Exits non-zero. NOT a Block Comment Template message — th
 ## Citations
 
 - `../../core/mcp-detection.md:28-34` — tracker prefix table (no hardcoded tool names)
-- `../../core/mcp-detection.md:36` — "Scan available tools for at least one tool matching the prefix"
+- `../../core/mcp-detection.md:38` — "Scan available tools for at least one tool matching the prefix"
 - `../../core/mcp-detection.md:58-87` — error classification (5-bucket enum + Classification Reference table)
-- `skills/fix-bugs/SKILL.md` — issue-id regex `^[A-Za-z0-9#._-]+$` + dot-only rejection (the canonical extraction regex used here is a stricter superset)
+- `../../core/snippets/issue-id-validation.md` (used by `skills/fix-bugs/SKILL.md:290`) — accepted-charset regex `^[A-Za-z0-9#._-]+$` + dot-only rejection. The canonical extraction regex in Step 0d above is stricter — it requires one of two specific structural shapes rather than just an allowed charset — and every `issue_id` it can produce (including the dotted Jira form, e.g. `PROJ.NAME-123`) stays within this charset.
 - `docs/reference/automation-config.md` — Branch naming template (`fix/{issue-id}-{description}`)
-- `agents/publisher.md` §82-87 — Publish Report format (the `Tracker:` row contract)
+- `agents/publisher.md` §96-110 — Publish Report format (the `Tracker:` row contract)
+- `../../core/post-publish-hook.md` — Post-publish hook, custom agent, and `pr-created`/`issue-blocked` webhook contract (Step 7 and Failure UX templates above)
+- `../../core/block-handler.md` §Step 6 — `agent-flow-block` webhook `jq -nc --arg` structural payload construction (FAIL tier and Pre-publish gate FAIL tier above)
 
 ## Headless / batch publishing
 

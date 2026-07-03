@@ -17,7 +17,7 @@ Execute pipeline hooks and fire webhooks at stage boundaries.
    <!-- @snippet:webhook-curl -->
    ```bash
    curl --proto "=http,https" --max-time 5 --retry 0 -X POST -H "Content-Type: application/json" \
-     --data-binary @- "{Webhook URL}" <<EOF
+     --data-binary @- "${Webhook_URL}" <<EOF
    {"event":"pr-created","issue_id":"${issue_id}","pr_url":"${pr_url}","timestamp":"${ISO8601}"}
    EOF
    ```
@@ -115,7 +115,7 @@ interpolate directly. The `pr_url` field in `pipeline-completed` payloads SHOULD
 by the SCM tool before being written to state.json; implementers MUST NOT construct `pr_url` from
 raw user-controlled input. For agent-generated free-form prose fields (e.g., `reason` in
 `agent-flow-block` events), use `jq -n --arg` structural payload construction (see
-`core/block-handler.md` Step 5 for the canonical pattern) rather than interpolating variables into
+`core/block-handler.md` Step 6 for the canonical pattern) rather than interpolating variables into
 a quoted JSON literal.
 
 Example for `pipeline-started`:

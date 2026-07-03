@@ -18,9 +18,12 @@ Step by step: from a clean slate to a working pipeline.
 > run `python3 -m pip install tomli`. `/agent-flow:check-setup` verifies this and reports `[FAIL]` if a
 > `.toml` overlay exists but no parser is available. You can skip this entirely if you do not use TOML overlays.
 
-## 1. Gitea Access
+## 1. Plugin Repository Access
 
-The plugin is hosted on your Git server (e.g., `<your-git-host>`). You need SSH or HTTPS access.
+The plugin is hosted on your Git server (e.g., `<your-git-host>`). If it's a public repository, no
+authentication is required just to add the marketplace and install the plugin (see step 2). You only
+need direct Git access if you're cloning the plugin's own repository (e.g. to inspect the source,
+contribute, or install from a private fork/mirror):
 
 ### Option A: SSH (recommended)
 
@@ -28,7 +31,7 @@ The plugin is hosted on your Git server (e.g., `<your-git-host>`). You need SSH 
    ```bash
    ssh-keygen -t ed25519 -C "your@email.com"
    ```
-2. Add the public key to Gitea: **Settings → SSH/GPG Keys → Add Key**
+2. Add the public key to your Git host: **Settings → SSH/GPG Keys → Add Key**
 3. Configure `~/.ssh/config`:
    ```
    Host <your-git-host>
@@ -40,13 +43,15 @@ The plugin is hosted on your Git server (e.g., `<your-git-host>`). You need SSH 
 
 ### Option B: HTTPS
 
-1. Generate a Gitea Personal Access Token (see [tokens.md](tokens.md))
+1. Generate a Personal Access Token for your Git host (see [tokens.md](tokens.md))
 2. Verify: `git ls-remote https://<TOKEN>@<your-git-host>/<owner>/<repo>.git`
+
+> **This is about installing the plugin itself.** Your *consuming project* — the repo the pipeline operates on — can use a different issue tracker / source control backend (GitHub, Gitea, YouTrack, Jira, Linear, Redmine; see `### Issue Tracker` in `## Automation Config`) than whatever host the plugin itself is fetched from. The public agent-flow release supports GitHub as its own canonical hosting platform (per `CLAUDE.md`); Gitea and the other backends above remain supported as *consuming-project* Automation Config targets regardless of where you installed the plugin from — see the Gitea setup notes in [mcp-configuration.md](mcp-configuration.md) and [tokens.md](tokens.md) if that's your project's backend.
 
 ## 2. Plugin Installation
 
 ```bash
-claude plugin marketplace add <path-to-repo>  # e.g. C:/gitea_agent-flow
+claude plugin marketplace add <owner>/<repo>  # or a local path, e.g. C:/git_agent-flow
 claude plugin install agent-flow@agent-flow
 ```
 
@@ -97,12 +102,12 @@ The plugin writes runtime state files to `.agent-flow/` in your project root. Th
 
 The procedure described above is for Windows. Paths use `~/` notation (Git Bash / WSL).
 
-**gitea-mcp note:** The `/agent-flow:setup-mcp` skill automatically downloads and installs `gitea-mcp` from [gitea.com/gitea/gitea-mcp](https://gitea.com/gitea/gitea-mcp/releases). If the download fails, it falls back to `go install gitea.com/gitea/gitea-mcp@latest`. Ensure Go is installed (`go version`) as a fallback option. Install Go from [go.dev/dl](https://go.dev/dl/) if needed.
+**gitea-mcp note (only if your project's Issue Tracker / Source Control backend is Gitea):** The `/agent-flow:setup-mcp` skill automatically downloads and installs `gitea-mcp` from [gitea.com/gitea/gitea-mcp](https://gitea.com/gitea/gitea-mcp/releases). If the download fails, it falls back to `go install gitea.com/gitea/gitea-mcp@latest`. Ensure Go is installed (`go version`) as a fallback option. Install Go from [go.dev/dl](https://go.dev/dl/) if needed. If your project uses GitHub instead, `setup-mcp` configures the GitHub MCP server — see [mcp-configuration.md](mcp-configuration.md).
 
 ### Linux
 
 - SSH configuration is identical
-- Gitea MCP server: download the linux-amd64 archive `gitea-mcp-linux-amd64.tar.gz` from [gitea.com/gitea/gitea-mcp/releases](https://gitea.com/gitea/gitea-mcp/releases), extract with `tar xf`, save binary as `~/.claude/bin/gitea-mcp`, set `chmod +x`
+- If your project's backend is Gitea: download the linux-amd64 archive `gitea-mcp-linux-amd64.tar.gz` from [gitea.com/gitea/gitea-mcp/releases](https://gitea.com/gitea/gitea-mcp/releases), extract with `tar xf`, save binary as `~/.claude/bin/gitea-mcp`, set `chmod +x`
 - In `.mcp.json` use the Linux path to the binary
 - Details in [cross-platform.md](cross-platform.md)
 

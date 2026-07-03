@@ -113,7 +113,14 @@ PIPELINE_TYPE_RAW=$(grep -oE '"pipeline_type"[[:space:]]*:[[:space:]]*"[a-z_]+"'
                     | grep -oE '"[a-z_]+"$' | tr -d '"')
 UPDATED_AT=$(grep -oE '"updated_at"[[:space:]]*:[[:space:]]*"[^"]+"' "$STATE_FILE" \
              | grep -oE '"[^"]+"$' | tr -d '"')
+BLOCK_REASON=$(grep -oE '"reason"[[:space:]]*:[[:space:]]*"[^"]*"' "$STATE_FILE" \
+               | head -1 | grep -oE '"[^"]*"$' | tr -d '"')
 ```
+
+`BLOCK_REASON` is sourced from the `block.reason` field (per `state/schema.md` and
+`core/block-handler.md` Process step 5, the only object in state.json carrying a bare
+`"reason"` key) and is only meaningful when `$STATUS = "blocked"`; it is surfaced in the
+Step 9 prompt (see below).
 
 If `$STATUS` is empty (corrupt JSON or absent field), log
 `[WARN] state.json present but status field unreadable; treating as FRESH`, set
@@ -142,12 +149,12 @@ reached when `GOT_STEP_MODE=true`.
 
 | `$STATUS` | Default action | `--yolo` action |
 |-----------|---------------|-----------------|
-| `running` | Continue to Step 8 (staleness) → Step 9 (phase-scan) → Step 10 (prompt) | Auto-resume; log `[INFO] --yolo: auto-resuming from {stage}`; skip prompt |
+| `running` | Continue to Step 7 (staleness) → Step 8 (phase-scan) → Step 9 (prompt) | Auto-resume; log `[INFO] --yolo: auto-resuming from {stage}`; skip prompt |
 | `paused` | If CLARIFICATION_TEXT non-empty: write to `clarification.answer`, flip status, continue at asked-at-step. Else interactive prompt with question shown | If CLARIFICATION_TEXT non-empty: same as default. Else `[WARN] --yolo: pipeline paused awaiting clarification — provide --clarification "<answer>"` and exit 1 |
-| `completed` | Display PR URL; return `RESUME_POINT="PUBLISHED"`. Calling skill exits 0 | Archive `state.json` to `state.json.{run_id_old}`; set `RESUME_POINT="FRESH"` |
-| `blocked` | Show block reason; prompt `Retry from checkpoint? [Y/n/abort]` | `[WARN] --yolo: skipping blocked pipeline — needs human resolution. Re-invoke without --yolo to retry.` and exit 1 |
+| `completed` | Display PR URL; return `RESUME_POINT="PUBLISHED"`. Calling skill exits 0 | Archive `state.json` to `state.json.bak-{timestamp}` (same convention as `n=restart`, Step 9); set `RESUME_POINT="FRESH"` |
+| `blocked` | Continue to Step 7 (staleness) → Step 8 (phase-scan) → Step 9 (prompt, `Reason: ${BLOCK_REASON}` shown, `Retry from checkpoint? [Y/n/abort]` wording) | `[WARN] --yolo: skipping blocked pipeline — needs human resolution. Re-invoke without --yolo to retry.` and exit 1 |
 | `aborted_by_system` | Same as `running` | Auto-resume |
-| anything else | Treat as `running` (continue to Step 8) | Treat as `running` |
+| anything else | Treat as `running` (continue to Step 7) | Treat as `running` |
 
 ---
 
@@ -168,7 +175,7 @@ fi
 ```
 
 Threshold: 7 days = 604800 seconds. The warning is informational — it is surfaced inside
-the Step 10 prompt above the `[Y/n/abort]` line, but does NOT auto-dismiss the resume.
+the Step 9 prompt above the `[Y/n/abort]` line, but does NOT auto-dismiss the resume.
 Under `--yolo`, the warning is logged to stderr and the pipeline continues.
 
 Schema major-version comparison runs alongside staleness:
@@ -233,6 +240,12 @@ If not in `--yolo` mode AND `RESUME_POINT != FRESH`:
 ${STALENESS_WARN:-}
 Continue? [Y=resume / n=restart / abort]
 ```
+
+**Blocked-status variant:** when `$STATUS = "blocked"` (routed here per Step 6), replace the
+`Continue?` line with `Reason: ${BLOCK_REASON:-<unavailable>}` followed by
+`Retry from checkpoint? [Y/n/abort]`. The `Y`/`n`/`abort` semantics below are otherwise
+identical — only the prompt wording differs, reflecting that a blocked pipeline needs
+explicit operator acknowledgement of the block reason before retrying.
 
 - `Y` (default, also accepts empty input) → return current `RESUME_POINT`.
 - `n` → archive `state.json` to `.agent-flow/${ISSUE_ID}/state.json.bak-$(date -u +%s)`,
@@ -331,9 +344,14 @@ from this contract. A paused resume transitions through `running` before reachin
   FRESH with `[WARN]`).
 - NEVER write to state.json from this contract EXCEPT in the explicit cases:
   - `clarification.answer` write when CLARIFICATION_TEXT is provided AND `$STATUS = paused`.
-  - State archive on `n=restart` (move file to `state.json.bak-{timestamp}`).
-  - Status flip from `paused` → `running` and `clarification.asked_at_step.status` from
-    `awaiting_clarification` → `in_progress` after CLARIFICATION_TEXT is consumed.
+  - State archive on `n=restart` (Step 9) OR on `completed` status under `--yolo` (Step 6) —
+    both cases move the file to the same `state.json.bak-{timestamp}` filename convention;
+    this contract uses a single archive-naming pattern, never a second one.
+  - Status flip from `paused` → `running` on the top-level `status` field after
+    CLARIFICATION_TEXT is consumed. This contract never sets a phase's own `{stage}.status`
+    to `awaiting_clarification` — no pause-write site produces that value (the phase status
+    stays `in_progress`, as set at pre-dispatch), so no corresponding flip-back happens here
+    either; see `state/schema.md` Step Status Enum.
 - NEVER follow symlinks outside `.agent-flow/`. The path is constructed from validated
   ISSUE_ID; no `realpath` resolution that could escape the directory.
 - NEVER fire the `pipeline-completed` webhook from this contract: the

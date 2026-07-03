@@ -231,11 +231,11 @@ Required sections (Issue Tracker, Source Control, PR Rules, PR Description Templ
 
 ### Versioning Policy
 
-The config contract is versioned along with the plugin:
+The config contract is versioned along with the plugin. This table summarizes the three MAJOR triggers; see CLAUDE.md's canonical **Versioning Policy** section for the full, authoritative rule set (this table must stay in sync with it):
 
 | Level | Trigger | Impact |
 |-------|---------|--------|
-| MAJOR (X.0.0) | New required key, renamed section | Breaking — consumers must update config |
+| MAJOR (X.0.0) | Breaking change in Automation Config contract (new required key, renamed section) — OR breaking change in agent output format contract (new/modified structured output sections that Agent Overrides or external tooling may parse) — OR introduction of a mandatory new structured contract section in agent definition files that prior-version agents would fail validation against | Breaking — consumers must update config, agent overrides, or custom agent files |
 | MINOR (X.Y.0) | New optional section, new skill/agent | Non-breaking — existing configs work unchanged |
 | PATCH (X.Y.Z) | Behavior fix without contract change | Invisible — no config changes needed |
 

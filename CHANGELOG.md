@@ -2,16 +2,19 @@
 
 All notable changes to agent-flow will be documented in this file.
 
-## [2.0.0] — 2026-06-29
+## [2.0.0] — 2026-07-03
 
 > **MAJOR — breaking.** The dispatch witness moves from an orchestrator-written
-> `sha256` receipt to a **gate-signed HMAC keyed witness**. Four independent MAJOR
+> `sha256` receipt to a **gate-signed HMAC keyed witness**, and multiple agents'
+> Output Contracts gained new/changed structured fields. Five independent MAJOR
 > triggers: (1) the witness output contract changes (`sha256` 5-tuple → per-field
 > sub-hashed HMAC-SHA256 keyed tag recorded in a gate-owned ledger, never in
 > `state.json`); (2) the first **non-additive** `schema_version` bump (`1.0` → `2.0`);
 > (3) a **new blocking PreToolUse `Task` gate** (`hooks/validate-dispatch-pre.sh`)
-> that can deny a dispatch before it runs (Claude Code ≥ 2.1.90); and (4) the A2
-> mandatory `## Step Completion Invariants` agent-section rewording.
+> that can deny a dispatch before it runs (Claude Code ≥ 2.1.90); (4) the A2
+> mandatory `## Step Completion Invariants` agent-section rewording; and (5)
+> new/changed Output Contract fields on 8 of 17 agent definitions (see Changed
+> below).
 
 ### Added
 
@@ -84,6 +87,7 @@ All notable changes to agent-flow will be documented in this file.
   advisory raised when the hook was wired only at project (`.claude/settings.json`) or
   project-local (`.claude/settings.local.json`) scope (hooks COMBINE across scopes; none
   overrides another). Block 6 stays advisory and never changes the `FAIL` verdict.
+- **BREAKING: agent output contracts extended across 8 of 17 agent definitions** — a two-tier subagent audit (2 independent verifiers + a reconciling orchestrator per agent) found and closed structural output-contract gaps. `analyst` now emits a new `## Duplicate` signal (with `Original` issue-id) instead of silently closing duplicates with no machine-readable output — closing a gap where `skills/fix-bugs/steps/01-triage.md`'s existing DUPLICATE branch had no defined trigger. `architect` adds a `Tests needed` field to `## Architecture Design`. `browser-agent` adds `assertion_failures` to `reproduction-result.json` and a new `verify-replay-result.json` output artifact. `deployment-verifier` adds `restart_count`/`unstable`/`log_issues[]` to its `containers[]` schema. `reviewer` adds a conditional `Checklist coverage` field to `## Code Review`. `spec-reviewer` gains an entirely new `## Output Contract — Phase: --spec` section (Inputs/Outputs) for its previously-undocumented `--spec` mode. `spec-writer` adds `Revised sections` to `## Spec Writer Report`. `test-engineer` adds a conditional `Untestable seam` sub-block to `## Test Report`. Agent Overrides or external tooling parsing these agents' Output Contract sections should account for the new/changed fields.
 
 ### Fixed
 
@@ -96,6 +100,14 @@ All notable changes to agent-flow will be documented in this file.
   stage fields via the same `json.load` one-liner the hook uses, so a `{placeholder}`,
   quote, comma, or non-ASCII head is read byte-exact instead of being truncated by the
   old `sed -E` extraction.
+- **browser-agent: reproduction status blind to assertion-only failures** — `status` in `reproduction-result.json` was derived only from console errors / HTTP ≥400, never from the `{action:"expect",...}` DSL steps `analyst` already emits for this purpose. Most everyday UI bugs (wrong label, disabled-should-be-enabled button, missing element) throw or fail with no console/network signal, so they were systematically misclassified as `not_reproduced` and the fixer never saw evidence for them; assertion steps are now wrapped individually and feed `assertion_failures` into the status decision. Also fixed: the verify-phase replay silently overwrote the pre-fix `{issue-id}-before.png` and `reproduction-result.json` with post-fix data (now writes `verify-replay-result.json` / `{issue-id}-after.png` instead); `Max pages` was declared as config but never consumed by the process logic (now parametrized); the Playwright-install check could hang or trigger a network install on the exact "not installed" path it's supposed to degrade gracefully on.
+- **fixer: contradictory scope-limit escape hatch and unbounded correction loops** — the diff-limit constraint said "decompose or Block" for the same condition Process step 6's `NEEDS_DECOMPOSITION` escape hatch already owns, causing divergent outcomes across otherwise-identical dispatches. The GREEN-loop and test-fix loop were unbounded in text (only the build-fix loop had a stated retry cap); both now share the existing `Build retries` budget and revert+Block on non-convergence instead of iterating indefinitely. "NEVER modify public APIs without explicit approval" had no defined approval channel; it now points to the AC/spec or the CLARIFICATION HATCH.
+- **reviewer: hard "≥3 findings" floor incentivized padded/fabricated review comments** — replaced with a mandatory full-9-dimension checklist pass; a genuinely clean diff can now report zero issues without an escape-valve essay.
+- **spec-writer: hardcoded `spec` stage-name literal in Step Completion Invariants** — the `dispatched_at`/`stage_name` invariants checked against `spec`, but the canonical stage name in `core/post-publish-hook.md` is `spec_writer` — corrected, matching the equivalent fix already shipped for `spec-reviewer` (`spec_review` → `spec_reviewer`).
+- **analyst: internal contradictions in the triage phase** — the acceptance-criteria count rule ("2-5 items") had an undocumented "1-2 for trivial bugs" exception contradicting the Output Contract and CLAUDE.md's own Key Conventions; the NEEDS_CLARIFICATION hatch overlapped the Quality Gate's UNCLEAR path instead of being strictly downstream of it; UI-relatedness was flagged on a single keyword match (e.g. "field", "route" in non-UI prose), which could inject a fabricated browser-automation script into a real pipeline via `browser-agent`'s direct consumption of `reproduction_steps`; the impact phase's historical-comment MCP read was missing the sanitizer wrap required everywhere else external content is read.
+- **deployment-verifier: diagnostics-after-teardown ordering, Windows PID resolution, secret redaction** — Docker inspection now runs before any stop/cleanup command on an UNHEALTHY/START_FAILED verdict (previously `docker compose down` could destroy the containers before their logs/restart-count were captured); `netstat -ano` output on Windows now gets its PID resolved to a process name; secret redaction moved from an exact-token list to a class-based case-insensitive match (also covering mid-value connection-string credentials and Authorization headers).
+- **architect: ambiguous AND/OR decomposition-trigger sentence** — rewritten as an itemized list matching the equivalent rule already used in `core/decomposition-heuristics.md` and `skills/fix-bugs/steps/02-impact.md`; the "≥2 independent changes" trigger is now actually produced by a Process step (previously undefined anywhere).
+- **spec-analyst / spec-reviewer / test-engineer: assorted contract-consistency fixes** — `spec-analyst` gained the same sanitizer-wrap and external-content handling already required elsewhere, and its hardcoded ">5 independent outcomes" now references the configurable Decomposition ceiling (also fixed a false claim in `skills/implement-feature/steps/01-spec.md` about pre-wrapped sanitization). `spec-reviewer`'s read-budget exhaustion now records `UNVERIFIED (budget-limited)` instead of defaulting unchecked AC to MISSING (which could wrongly escalate a verdict to FAIL). `test-engineer`'s `--e2e` mode is now fully operationalized (framework-specific file conventions, correct test command, scoped flaky-test rule) — previously the mode was named but not implemented in Process.
 
 ### Migration
 
@@ -109,9 +121,10 @@ All notable changes to agent-flow will be documented in this file.
 - **Claude Code ≥ 2.1.90 required** for the PreToolUse block to take effect (issue
   #26923: `Task` exit-2 was a no-op before 2.1.90). On an older client the gate degrades
   to PostToolUse-advisory; `/check-setup` and the deny-canary surface this loudly.
-- **No new Automation Config section** — the strict toggle stays env-only, so the
-  optional-section count remains 18 and the doc-counts stay 17 agents / 17 skills /
-  17 core contracts.
+- **No new Automation Config section** — the strict toggle stays env-only, and the
+  agent output-contract audit changed content within existing sections rather than
+  adding sections, so the optional-section count remains 18 and the doc-counts stay
+  17 agents / 17 skills / 17 core contracts.
 
 ## [1.2.0] — 2026-06-24
 

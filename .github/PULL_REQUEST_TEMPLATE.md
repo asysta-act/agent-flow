@@ -23,7 +23,7 @@ Fixes #
 
 ## Test plan
 
-- [ ] `bash tests/harness/run-tests.sh` passes (264 scenarios)
+- [ ] `bash tests/harness/run-tests.sh` passes (full scenario suite)
 - [ ] New/modified scenario added for this change:
 - [ ] No {{VARIABLE}} placeholders left unfilled in skills or agents
 

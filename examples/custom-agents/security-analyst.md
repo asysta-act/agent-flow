@@ -40,6 +40,22 @@ OWASP Top 10, injection prevention, authentication/authorization flaws, XSS, CSR
    - Verdict: {PASS | BLOCK — {reason}}
    ```
 
+## Output Contract
+
+### Inputs
+
+| Section | Source | Required |
+|---------|--------|----------|
+| Changed files + diff | upstream fixer | yes |
+| Dependency manifest (package.json, requirements.txt, etc.) | project repo | no (falls back to source-only scan, noted as a limitation) |
+
+### Outputs
+
+| Section produced | When | Required fields |
+|------------------|------|-----------------|
+| `## Security Scan Report` | always | Findings table (#, Severity, Category, File:Line, Description, Remediation); Summary (Critical/High/Medium/Low counts; Verdict: PASS / BLOCK — {reason}) |
+| `[agent-flow] 🔴 Pipeline Block` | on BLOCK verdict (CRITICAL or HIGH finding) | Agent: security-analyst; Step: the configured integration point (post-fix or pre-publish); Reason; Detail; Recommendation |
+
 ## Step Completion Invariants
 
 Invariant fields checked: `dispatched_at`, `dispatch_witness`, `status`, `stage_name`, `agent_name`. Tokens: `EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`.

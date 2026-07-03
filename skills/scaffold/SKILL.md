@@ -3,7 +3,7 @@ name: scaffold
 description: Creates a new project from scratch; use 'add <component>' to extend an existing project
 allowed-tools: mcp__*, Bash, Read, Write, Edit, Glob, Grep, Task
 disable-model-invocation: true
-argument-hint: "{add <component> | <description>} [--template <path>] [--spec <path>] [--issue <ID>] [--no-implement] [--yolo] [--step-mode] [--infra tracker:<v>,sc:<v>] [--lang <v>] [--framework <v>] [--db <v>] [--ci <v>] [--brainstorm]"
+argument-hint: "{add <component> | resume [<ISSUE_ID>] | <description>} [--template <path>] [--spec <path>] [--issue <ID>] [--no-implement] [--yolo] [--step-mode] [--infra tracker:<v>,sc:<v>] [--lang <v>] [--framework <v>] [--db <v>] [--ci <v>] [--brainstorm] [--clarification \"<text>\"]"
 ---
 
 # Scaffold
@@ -12,11 +12,11 @@ Use the Read tool to load `skills/scaffold/data/guard-block.md` BEFORE any other
 in this file. The guard is load-bearing; it establishes the orchestrator role, blocks
 pre-dispatch deferrals, and contains the rationalization-red-flags STOP protocol.
 
-Input: `$ARGUMENTS` = either `add <component>` (subcommand mode) OR project description (natural language) + optional flags
+Input: `$ARGUMENTS` = one of: `add <component>` (subcommand mode), `resume [<ISSUE_ID>]` (recover a paused/in-progress run), or a project description (natural language) + optional flags
 
 ## Step 0 — Subcommand dispatch
 
-Read the first non-empty token of `$ARGUMENTS`. If it equals `add`, branch into the `add <component>` subcommand body (see `## Subcommand: add <component>` at the end of this file). Otherwise, fall through to the new-project flow (Flag Parsing section below).
+Read the first non-empty token of `$ARGUMENTS`. If it equals `add`, branch into the `add <component>` subcommand body (see `## Subcommand: add <component>` at the end of this file). If it equals `resume`, resolve the paused/in-progress run's `ISSUE_ID` (see Resume Dispatch below), then continue into the new-project flow's Flag Parsing / Mode Resolution / Resume Detection with that `ISSUE_ID` already set. Otherwise, fall through to the new-project flow (Flag Parsing section below).
 
 ```bash
 read -ra ARG_TOKENS <<< "$ARGUMENTS"
@@ -42,10 +42,44 @@ if [ "$FIRST_TOKEN" = "add" ]; then
   # The subcommand branch MUST exit after step 6 (Report) and MUST NOT fall through to the new-project flow.
 fi
 
-# Otherwise: existing new-project flow continues with Flag Parsing below.
+if [ "$FIRST_TOKEN" = "resume" ]; then
+  # Resume dispatch — recover ISSUE_ID for a paused/in-progress scaffold run, then fall
+  # through into the ordinary new-project flow (Flag Parsing / Mode Resolution / Resume
+  # Detection) with ISSUE_ID pre-set. This does NOT replace Resume Detection below — it
+  # only solves the "which run?" problem for a restarted session that has no ISSUE_ID
+  # in scope yet.
+  CANDIDATE="${ARG_TOKENS[1]:-}"
+  if [ -n "$CANDIDATE" ] && [[ "$CANDIDATE" != --* ]]; then
+    # Explicit ID given: /agent-flow:scaffold resume <ISSUE_ID> [flags...]
+    ISSUE_ID="$CANDIDATE"
+  else
+    # No explicit ID: Glob(".agent-flow/*/state.json"), keep entries whose "pipeline"
+    # field == "scaffold" and whose "status" is one of {paused, running, blocked}
+    # (aborted_by_system counts as resumable too — treat it like "running" per
+    # ../../core/resume-detection.md Step 6). The directory name of each match is a
+    # candidate ISSUE_ID.
+    #   0 candidates -> "[ERROR] No resumable scaffold run found under .agent-flow/.
+    #     Start a new run with /agent-flow:scaffold <description>." ; exit 1.
+    #   1 candidate  -> ISSUE_ID = that directory name; proceed.
+    #   >1 candidates -> list each as "{ISSUE_ID} — status={status}, updated {updated_at}"
+    #     then "[ERROR] Multiple resumable scaffold runs found. Re-invoke with
+    #     /agent-flow:scaffold resume <ISSUE_ID>." ; exit 1.
+    :
+  fi
+  # ISSUE_ID is now resolved and stable (see Resume Detection below — never regenerate it
+  # from a fresh timestamp). Remaining tokens (ARG_TOKENS[2:], or ARG_TOKENS[1:] if no
+  # explicit ID was consumed) are flags only — parse via Flag Parsing below exactly as in
+  # the new-project flow, but SKIP the "no project description" validation in Flag
+  # Validation (the description already exists in spec/ or state.json from the original
+  # run) and proceed straight through Mode Resolution into Resume Detection.
+fi
+
+# Otherwise (FIRST_TOKEN is neither "add" nor "resume"): existing new-project flow
+# continues with Flag Parsing below, and the remainder of $ARGUMENTS (minus flags) is the
+# project description.
 ```
 
-The `add` subcommand is a single-shot operation and does NOT use resume detection. The new-project flow does — see the resume detection invocation immediately after Flag Parsing / Mode Resolution below.
+The `add` subcommand is a single-shot operation and does NOT use resume detection. The `resume` token and the plain new-project flow both do — see the resume detection invocation immediately after Flag Parsing / Mode Resolution below.
 
 ## Flag Parsing
 
@@ -57,14 +91,15 @@ Parse `$ARGUMENTS` for these flags:
 | `--spec <path>` | `spec_path` | |
 | `--issue <ID>` | `issue_id` | |
 | `--no-implement` | `no_implement = true` | |
-| `--yolo` | `GOT_YOLO = true` | B6 mode flag |
-| `--step-mode` | `GOT_STEP_MODE = true` | B6 mode flag |
+| `--yolo` | `GOT_YOLO = true` | Mode flag — mutually exclusive with `--step-mode` (see Flag Validation) |
+| `--step-mode` | `GOT_STEP_MODE = true` | Mode flag — mutually exclusive with `--yolo` (see Flag Validation) |
 | `--lang <v>` | `preset_lang` | |
 | `--framework <v>` | `preset_framework` | |
 | `--db <v>` | `preset_db` | |
 | `--ci <v>` | `preset_ci` | |
 | `--brainstorm` | `brainstorm = true` | |
 | `--infra <v>` | `infra_preset` | See validation below |
+| `--clarification <text>` | `CLARIFICATION_TEXT` | Only meaningful on resume (see Resume Detection below); ignored on a fresh run |
 
 Remainder after removing flags = project description.
 
@@ -91,8 +126,8 @@ If `--infra` provided:
 If `--infra` provided AND tracker value is `later` AND `--issue` provided:
 → Error: "--issue requires tracker access. Use --infra tracker:ready,sc:{v} or remove --issue."
 
-If no project description AND no `--spec` AND no `--template` AND no `--issue` AND not `--no-implement`:
-→ Ask user for project description.
+If FIRST_TOKEN != `resume` AND no project description AND no `--spec` AND no `--template` AND no `--issue` AND not `--no-implement`:
+→ Ask user for project description. (Skipped entirely for `resume` — ISSUE_ID was already resolved in Step 0 and the description lives in the recovered run's `spec/` or `state.json`.)
 
 ## Mode Resolution
 
@@ -119,6 +154,15 @@ BOTH conditions: word count AND technical term presence. Two checkpoints are alw
 no Spec checkpoint, no Feature Plan checkpoint, no user prompts; all conditional gates skipped.
 Pipeline runs autonomously from description to final report with zero gates.
 
+### --step-mode behavior
+
+`--step-mode` applies the same brainstorm heuristic and the same two checkpoints (Spec Checkpoint,
+Feature Plan Checkpoint) as default mode, PLUS an additional pause-and-confirm prompt before every
+individual agent dispatch (spec-writer, spec-reviewer, scaffolder, architect, fixer, reviewer,
+test-engineer, backlog-creator, etc.) for fine-grained, step-by-step control. When a paused run is
+later resumed, `--step-mode` also forces the interactive resume prompt regardless of `$STATUS` (see
+`../../core/resume-detection.md` Step 5).
+
 ## Step Dispatch
 
 Read `steps/` sub-files. Execute in order:
@@ -142,12 +186,17 @@ If `no_implement = true`: execute legacy flow (scaffolder (with stack flags) →
 
 Each step receives: `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, all parsed flags and in-memory variables from prior steps.
 
-> **See also:** `/agent-flow:scaffold validate` (the `validate` subcommand) for read-only validation of an existing project (tool contract: `Bash, Read, Glob, Grep` only).
-
 ## Resume Detection
 
 Follow `../../core/resume-detection.md` for resume detection logic. Inputs:
-- ISSUE_ID — set to the scaffold run identifier (e.g. `scaffold-{timestamp}` derived from project description hash, or operator-supplied via state directory).
+- ISSUE_ID — a stable, timestamp-free slug for this scaffold run (e.g. a lowercased, hyphenated
+  truncation of the project description, or the operator-supplied `project_slug`). Computed ONCE on
+  the fresh (non-resume) invocation and persisted in `state.json`; every resume invocation MUST reuse
+  the persisted value rather than recompute it. `.agent-flow/${ISSUE_ID}/` is the resume directory key
+  — regenerating ISSUE_ID from a fresh timestamp on each invocation would produce a new, never-matching
+  directory and permanently orphan the paused run. Per `../../core/agent-states.md`, the timestamp
+  suffix belongs to RUN_ID only: `RUN_ID = {ISSUE_ID}_{YYYYMMDDTHHMMSSZ}`, computed once at pipeline
+  init alongside ISSUE_ID and reused (never regenerated) across resumes.
 - MODE=`single` (scaffold is always single-pipeline; no batch).
 - GOT_YOLO, GOT_STEP_MODE — from Mode Resolution section above.
 - Webhook_URL, On_events — from Automation Config Notifications section.
@@ -265,7 +314,6 @@ If `mcp_available: false`:
 ```
 MCP server unavailable. Options:
   1. Configure now — run: /agent-flow:setup-mcp --tracker-type <type> --tracker-instance <url> --sc-remote <owner/repo>
-     (Equivalent: /agent-flow:init --tracker-type <type>)
      Then restart this session and resume.
   2. Skip — continue without MCP (tracker and SC steps will be skipped).
 ```
@@ -287,17 +335,21 @@ Follow `../../core/mcp-preflight.md` for complete MCP pre-flight protocol.
 
 ## Orchestration
 
-### Step 0 — Mode Selection (Step 0: Mode Selection)
+### Step 0 — Mode Selection
 
-Present user with three run modes:
+Step 0: Mode Selection presents the user with the three run modes recognized by Mode Resolution
+above — there are exactly three `MODE` values (`default`, `step-mode`, `yolo`); no other mode exists:
 
-| Mode | Description |
-|------|-------------|
-| Interactive | Default: Spec Checkpoint after Step 02, Feature Plan Checkpoint after Step 04. Brainstorm offered for vague descriptions. |
-| YOLO with checkpoint | Skip brainstorm; show Spec Checkpoint and Feature Plan Checkpoint but no other pauses. |
-| Full YOLO | Fully autonomous: no brainstorm, no Spec checkpoint, no Feature Plan checkpoint, no user prompts. Pipeline runs to final report with zero gates. |
+| Mode | Flag | Description |
+|------|------|-------------|
+| Interactive (default) | none | Spec Checkpoint after Step 02, Feature Plan Checkpoint after Step 04. Brainstorm offered for vague descriptions per the heuristic in `### Default mode behavior`. |
+| Step Mode | `--step-mode` | Same checkpoints as Interactive, plus a pause before every individual agent dispatch for fine-grained, step-by-step control (see `../../core/resume-detection.md` Step 5 for the resume-time analog). |
+| Full YOLO | `--yolo` | Fully autonomous: no brainstorm, no Spec checkpoint, no Feature Plan checkpoint, no user prompts. Pipeline runs to final report with zero gates. |
 
-Apply MODE selection to `GOT_YOLO` / `GOT_STEP_MODE` logic from Mode Resolution section.
+_Naming note: "Step Mode" was formerly documented here as "YOLO with checkpoint" — a name that both confused it with `--yolo` and described a hybrid (skip brainstorm, checkpoints only, no per-step pauses) that no flag ever implemented. This row now matches the real `--step-mode` flag behavior instead._
+
+Apply the selected mode to `GOT_YOLO` / `GOT_STEP_MODE` per the Mode Resolution section — `MODE` has no
+value or flag beyond these three; do not introduce hybrid modes here.
 
 ---
 
@@ -370,7 +422,7 @@ NEEDS_CLARIFICATION — if spec-writer raises a question during spec phase:
   ```
 - On answer: resume with answer injected into next spec-writer prompt
 
-**Spec Checkpoint** (Interactive and YOLO-with-checkpoint modes): show spec summary, ask "Continue to scaffolding? [Y/n]".
+**Spec Checkpoint** (Interactive and Step Mode; skipped in Full YOLO): show spec summary, ask "Continue to scaffolding? [Y/n]".
 
 ---
 
@@ -395,14 +447,27 @@ Validate output (build + lint). Write state:
 
 ### Step 4e — Create Tracker Issues
 
-If `tracker_effective_status = ready`, create tracker issues from `spec/epics/*.md`.
-Optionally dispatch `backlog-creator` agent to organize stories into sprint-ready issues.
+See also `steps/03-scaffold.md` §03f ("03f. Create Tracker Issues (Step 4e logic)") for the same
+procedure phrased as a compact guard + dispatch summary — keep both in sync when editing either.
+
+**Guard:** skip entirely (no WARN — expected) if `tracker_effective_status != "ready"` OR
+`tracker_write_available == false` OR `spec/epics/` is empty.
+
+When not skipped, agent dispatch is MANDATORY (never inline-execute the extraction) and happens
+FIRST, before any issue is created: invoke `Task(subagent_type='agent-flow:backlog-creator',
+model='sonnet')` with the spec epics (or architect decomposition output) as input, producing
+structured issue cards that drive everything below.
+
+```
+Task(subagent_type='agent-flow:backlog-creator', description='Create tracker backlog from spec epics',
+     prompt='...spec/epics path, tracker_type, trackers_md_path, {trackers_md_path}...')
+```
 
 Read tracker defaults from `{trackers_md_path}` Instance & Project Defaults table.
 
-**Idempotency guard:** Before creating, check if issue already exists (search by title). Skip if found — use existing issue ID. (`Idempotency guard` prevents duplicate epic creation.)
+**Idempotency guard:** Before creating, check if issue already exists (search by title). Skip if found — use existing issue ID.
 
-For each epic file:
+For each epic file (epic and story boundaries per backlog-creator's structured cards):
 
 1. Create an epic-level issue using epic title and description.
 2. Split content on `---` delimiter to identify story sections. Parse story headings: `### Story N.M: <title>`.
@@ -416,13 +481,6 @@ For each epic file:
 5. Per-story failure: WARN + continue to next story.
 
 **Story back-reference format:** `STORY-ISSUE-ID` placeholder used in back-reference writeback comment.
-
-Optionally dispatch `backlog-creator` to organize stories into sprint-ready issues:
-
-```
-Task(subagent_type='agent-flow:backlog-creator', description='Create tracker backlog from spec epics',
-     prompt='...spec/epics path, tracker_type, trackers_md_path, {trackers_md_path}...')
-```
 
 **Accumulator pattern / Partial failure handling:** Collect epic failures. On any `WARN: Could not create tracker issue`, log and continue.
 
@@ -454,7 +512,7 @@ Task(subagent_type='agent-flow:architect', description='Create feature decomposi
 
 Decompose spec into subtasks. Each subtask maps to `maps_to: AC-{N}: {text}`.
 
-**Feature Plan Checkpoint** (Interactive and YOLO-with-checkpoint modes): show decomposition, ask "Begin feature implementation? [Y/n]".
+**Feature Plan Checkpoint** (Interactive and Step Mode; skipped in Full YOLO): show decomposition, ask "Begin feature implementation? [Y/n]".
 
 ---
 
@@ -519,37 +577,25 @@ Task(subagent_type='agent-flow:spec-reviewer', description='Verify implementatio
 
 ### Step 8: E2E Tests
 
-Run test-engineer E2E suite:
-
-```
-Task(subagent_type='agent-flow:test-engineer', description='Run E2E test suite',
-     prompt='...e2e framework, command, project dir...',
-     model='sonnet')
-```
+Authoritative procedure: `steps/06-test.md` "E2E Test" subsection. This section is a pointer only —
+do not duplicate that logic here. Summary: skip entirely if no `E2E Test` config section exists; run
+the deployment guard first if `Local Deployment` is configured (proceed only on `HEALTHY`/`SKIPPED`);
+agent dispatch is MANDATORY — `Task(subagent_type='agent-flow:test-engineer', model='sonnet')` with
+`--e2e`; on failure the fixer repairs and re-runs, and if E2E is still failing after that, report it
+as a `[WARN]` and continue (do NOT block — features are already committed).
 
 ---
 
 ### Step 8b: Close Tracker Issues
 
-If `tracker_effective_status = ready`, close all epic and story tracker issues.
+Authoritative procedure: `steps/07-spec-verify.md` §07c ("Close Tracker Issues") — keep both in sync
+when editing either. Agent dispatch is NOT required for this step (direct tracker calls only).
 
-Read `On start set` Done mapping from `{trackers_md_path}` State Transition Syntax table.
+**Guard:** check `tracker_effective_status` and `tracker_write_available` before any tracker calls; skip entirely if `tracker_effective_status != "ready"` OR `tracker_write_available == false` OR no back-reference comments (`<!-- {TrackerType}: ... -->`) found in `spec/epics/*.md`. If `State transitions` in Automation Config does not include a 'Done' mapping → `WARN: State transitions missing 'Done'. Skipping closure.`
 
-If state transitions config does not include a 'Done' mapping:
-→ [WARN] "State transitions config does not include a 'Done' mapping — issues left open."
+If the guard does not trigger: determine which epics are fully completed by checking each against the blocked features list from Step 05's block handler (an epic with any blocked subtask is NOT fully completed). For each fully-completed epic: transition the epic issue to Done, then close each story sub-issue individually for ALL tracker types (no cascade assumption) — verify every transition via `../../core/status-verification.md`; a story already in Done state counts as success. Epics with blocked subtasks are skipped and left open for manual triage. Per-issue failure: `WARN: Could not transition {issue_id} to Done: {error}`, continue.
 
-For each epic issue:
-- Check if any subtasks are in blocked features list. If blocked → skip with message `skipped (blocked subtasks)`.
-- Transition epic issue to Done state.
-- Close each story sub-issue individually for ALL tracker types (no cascade assumption).
-
-Per-issue failure WARN: `Could not transition issue {ID} to Done: {reason}`.
-
-Read back-reference comments from `spec/epics/*.md` to find issue IDs. Parse `<!-- {TrackerType}: {STORY-ISSUE-ID} -->` back-reference comments in spec/epics/*.md.
-
-Guard: check `tracker_effective_status` before attempting any tracker calls. If `tracker_effective_status != ready` — skip this step; no back-reference needed.
-
-Display: `Transitioned N issues to Done. M skipped (blocked subtasks).`
+Display: `Transitioned {N}/{M} epic issues and {S} story issues to Done. {skipped} epics skipped (blocked subtasks).`
 
 ---
 

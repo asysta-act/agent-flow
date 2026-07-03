@@ -39,6 +39,16 @@
 #   - AGENT_FLOW_LEDGER          : gate ledger path override
 #   - AGENT_FLOW_OVERRIDE_PATH   : overlay override dir for legacy V2 (default customization/)
 #
+# NOT A SECURITY CONTROL: this hook (a) is not auto-installed — operators
+# must opt in via ~/.claude/settings.json (see docs/guides/dispatch-enforcement.md)
+# — and (b) even when installed, PostToolUse fires after the tool already
+# ran, so it cannot block or undo anything. It does NOT technically enforce
+# any agent "NEVER" constraint (e.g. publisher's "NEVER push to main/development
+# directly") — those remain prompt-level instructions only. Operators who need
+# a real backstop against direct pushes or destructive actions MUST enable
+# server-side branch protection (required PR review + status checks) on the
+# repository; see SECURITY.md "Known Limitations" for full operator guidance.
+#
 # Security contracts:
 #   - STAGES are hardcoded; never derived from state.json field names.
 #   - state.json / ledger are parsed, never eval'd.

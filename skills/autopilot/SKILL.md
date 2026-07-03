@@ -8,7 +8,7 @@ argument-hint: "[--dry-run]"
 
 # Autopilot
 
-Headless dispatcher skill for unattended cron / batch / CI invocation. Reads `### Issue Tracker`, `### Feature Workflow` (optional) and `### Autopilot` (optional) from `## Automation Config`, classifies issues into bugs and features, enforces a portable `mkdir`-based lock, and dispatches `agent-flow:fix-bugs` or `agent-flow:implement-feature` per issue sequentially via the Skill tool.
+Headless dispatcher skill for unattended cron / batch / CI invocation. Reads `### Issue Tracker`, `### Feature Workflow` (optional) and `### Autopilot` (optional) from `## Automation Config`, classifies issues into bugs and features, enforces a portable `mkdir`-based lock, and dispatches `agent-flow:fix-bugs` or `agent-flow:implement-feature` per issue sequentially via a headless `claude -p` child-process invocation — NOT the Skill tool, which pipeline entry-point skills block via `disable-model-invocation: true` (see Step 6, item 2, for the full rationale).
 
 Invoke typically as:
 
@@ -41,6 +41,7 @@ This skill consumes the following sections:
 - **`### Issue Tracker`** (required): `Type`, `Bug query`, `State transitions`, `On start set`. The `Bug query` row is the required authoritative input; `Feature query` lives in `### Feature Workflow`.
 - **`### Feature Workflow`** (optional): `Feature query`, `On start set`. Absent section triggers a `[WARN]` and bug-only mode.
 - **`### Autopilot`** (optional): 7 keys below. Absent section = all keys use defaults. Autopilot still runs using `Bug query` from `### Issue Tracker`.
+- **`### Error Handling`** (optional; generic section shared with `fix-bugs` / `implement-feature`): Autopilot reads ONLY `Max blocked per run` from it, and enforces that value as a CROSS-ISSUE ceiling on the dispatch loop's running `block`-outcome count (see Step 6, item 5). This is DISTINCT from `fix-bugs`' own `Max blocked per run` enforcement inside its `--batch` mode (`skills/fix-bugs/SKILL.md`), which counts blocks WITHIN one child session — that counter never accumulates across issues under Autopilot, because Autopilot dispatches exactly one issue per child session (Step 6, item 2). Default `unlimited` means Autopilot never stops the loop on block count alone. The `On block` key (default `comment`) is NOT read by Autopilot — the block comment is already posted by the child skill before it exits.
 
 ### `### Autopilot` — 7 config keys
 
@@ -307,6 +308,32 @@ parse_pause_timeout() {
    - If the issue appears in BOTH queries → classify as `bug` (bug wins on overlap per roadmap rule; prevents double-dispatch).
 4. Produce an ordered dispatch list: bugs first (in tracker-returned order), then features (in tracker-returned order), all de-duplicated.
 
+### Step 5a: ISSUE_ID path-traversal validation
+
+Tracker content (including the issue ID itself) is operator-untrusted input (see
+`## Security Considerations` below). Before Step 6 constructs ANY filesystem path from a
+classified issue's ID — the `state_file` lookup in Step 6 item 1a, the `mkdir` and log
+redirections in Step 6 item 2 — validate every `ISSUE_ID` in the Step 5 dispatch list
+using the canonical path-traversal check from `../../core/resume-detection.md` Step 1
+(the single source of truth for this defense; reused verbatim, not reimplemented):
+
+```bash
+if [[ ! "${ISSUE_ID}" =~ ^[A-Za-z0-9._-]+$ || "${ISSUE_ID}" =~ ^\.+$ ]]; then
+  echo "[autopilot][ERROR] Invalid issue_id from tracker query: '${ISSUE_ID}' rejected (path-traversal defense — see ../../core/resume-detection.md Step 1). No filesystem path was constructed for this ID." >&2
+  outcome="error"
+  # Apply the Step 6 "outcome is error" policy (item 4) — On error: skip logs [WARN] and
+  # continues with the next issue; On error: stop breaks the dispatch loop and proceeds to
+  # Step 7. Either way, this ID is NEVER passed to mkdir, a state_file path, or `claude -p`.
+else
+  # ISSUE_ID is safe — proceed to Step 6 dispatch for this issue.
+  :
+fi
+```
+
+The character class forbids `/` and `\`; the second clause forbids dot-only strings
+(`.`, `..`, `...`). A rejected ID counts toward the run's `error` outcome bucket in the
+Step 7 summary exactly like any other per-issue dispatch error.
+
 ### Step 6: Per-issue dispatch
 
 For each classified issue in turn, SEQUENTIALLY (one at a time):
@@ -377,15 +404,21 @@ elif [ "$classification" = "feature" ]; then
 fi
 
 # Dispatch as isolated child claude session (plain-text bypass of disable-model-invocation).
+# --yolo is REQUIRED: no operator is present to answer ../../core/resume-detection.md's
+# interactive [Y/n/abort] prompt under unattended cron/CI invocation. Without it, a child
+# that finds an existing non-FRESH state.json (e.g. a "running" status left behind by a
+# prior crashed child for the same ISSUE_ID) would block forever on stdin. Under --yolo,
+# resume-detection.md Step 6's matrix auto-resumes "running"/"aborted_by_system" states
+# with no prompt, which is exactly the crash-containment behavior Autopilot needs here.
 # Child session writes state.json to .agent-flow/${ISSUE_ID}/state.json per standard pipeline.
-claude -p "Run ${TARGET_SKILL} ${ISSUE_ID}" \
+claude -p "Run ${TARGET_SKILL} ${ISSUE_ID} --yolo" \
   --dangerously-skip-permissions \
   > ".agent-flow/${ISSUE_ID}/dispatch-stdout.log" \
   2> ".agent-flow/${ISSUE_ID}/dispatch-stderr.log"
 child_exit=$?
 ```
 
-Rationale: per-issue child-session isolation also provides crash containment (a crashed child cannot poison the parent autopilot session) and mirrors the cron-invocation pattern exactly. Token cost: ~2-5k per child-session startup — acceptable given the isolation benefits. Re-evaluate restoring Skill-tool dispatch if Anthropic ships a selective-invocation whitelist primitive.
+Rationale: per-issue child-session isolation also provides crash containment (a crashed child cannot poison the parent autopilot session) and mirrors the cron-invocation pattern exactly. `--yolo` on the dispatch is what makes that containment actually reachable — see the inline comment above. A `paused` outcome (child hit `NEEDS_CLARIFICATION` under `--yolo` with no `--clarification` answer available) still surfaces as an `error`-shaped non-zero `child_exit` per `../../core/resume-detection.md` Step 6's `--yolo` column ONLY when RESUMING a pre-existing paused state; Step 1a above already filters those out before dispatch, so in practice a `paused` outcome here means the pipeline paused freshly during THIS run (`child_exit == 0`, see item 3 below). Token cost: ~2-5k per child-session startup — acceptable given the isolation benefits. Re-evaluate restoring Skill-tool dispatch if Anthropic ships a selective-invocation whitelist primitive.
 
 3. Capture per-issue outcome from `child_exit` and the child's `state.json`:
 
@@ -412,7 +445,12 @@ Classification:
 4. If outcome is `error`:
    - If `On error: stop` → log `[autopilot][ERROR] Dispatch returned error for {ISSUE-ID}. On error=stop — breaking dispatch loop.`, DO NOT dispatch remaining issues, proceed to Step 7 (the EXIT trap will release the lock; exit code non-zero).
    - If `On error: skip` (default) → log `[autopilot][WARN] Dispatch returned error for {ISSUE-ID}: {error message}. Continuing with next issue.`, proceed to the next issue.
-5. If outcome is `block` → log `[autopilot][INFO] Issue {ISSUE-ID} blocked by child skill. Continuing with next issue.`, proceed to the next issue. A per-issue `block` is not a per-issue `error`.
+5. If outcome is `block`:
+   - Increment the run's `n_block` counter (the same counter reported in the Step 7 summary).
+   - Log `[autopilot][INFO] Issue {ISSUE-ID} blocked by child skill. Continuing with next issue.`
+   - If `### Error Handling.Max blocked per run` is configured to a finite value (not `unlimited`, the default) AND `n_block` has now reached it: log `[autopilot][WARN] Max blocked per run ({N}) reached after issue {ISSUE-ID}. Halting dispatch loop; remaining issues are left undispatched for the next run.`, DO NOT dispatch remaining issues, proceed to Step 7 (the Step 2 EXIT trap still releases the lock; exit code non-zero — same early-exit shape as `On error: stop`).
+   - Otherwise proceed to the next issue.
+   A per-issue `block` is not a per-issue `error` — the `Max blocked per run` ceiling is independent of, and checked in addition to, the `On error` policy.
 5a. If outcome is `paused` → log `[autopilot][INFO] Issue {ISSUE-ID} paused awaiting clarification. Continuing with next issue.`, proceed to the next issue. A per-issue `paused` is not a per-issue `error`; Step 1a on the next autopilot run will enforce `Pause Limits`.
 6. If outcome is `success` → log `[autopilot][INFO] Issue {ISSUE-ID} completed ({pipeline}). Duration={D}s.`, proceed to the next issue.
 
@@ -420,7 +458,7 @@ Classification:
 
 ### Step 7: Final summary
 
-After all issues are processed (or after an `On error: stop` break):
+After all issues are processed (or after an `On error: stop` break, or after a `Max blocked per run` break — see Step 6 item 5):
 
 1. Emit a markdown summary table to stdout:
 
@@ -432,24 +470,25 @@ After all issues are processed (or after an `On error: stop` break):
    | PROJ-42  | bug     | success  | 412s     | 198,200 |
    | PROJ-43  | bug     | block    | 58s      | 31,400  |
    | PROJ-57  | feature | success  | 903s     | 401,500 |
+   | PROJ-61  | bug     | paused   | 71s      | 22,900  |
    | ...      | ...     | ...      | ...      | ...     |
 
-   **Totals:** {N_bugs} bugs, {N_features} features, {N_success} success, {N_block} blocked, {N_error} errored. Wall-clock: {total_duration}s. Tokens (measured when available): {total_tokens}.
+   **Totals:** {N_bugs} bugs, {N_features} features, {N_success} success, {N_block} blocked, {N_paused} paused, {N_error} errored. Wall-clock: {total_duration}s. Tokens (measured when available): {total_tokens}.
    ```
 
-   `Tokens` column is read from the per-issue `state.json.pipeline.total_tokens` after each child dispatch completes. If absent (child exited without writing a completed pipeline accumulator), the column reads `—`.
+   `Tokens` column is read from the per-issue `state.json.pipeline.total_tokens` after each child dispatch completes. If absent (child exited without writing a completed pipeline accumulator), the column reads `—`. The `paused` outcome row (see Step 6 item 3) is counted separately from `block` — it is NOT a failure; the next Autopilot run's Step 1a will re-evaluate it against `Pause Limits`.
 2. Append the run summary to `$LOG_FILE` (the `Log file` config key, default `.agent-flow/autopilot.log`). One line per Autopilot invocation in the format:
    ```
-   {ISO8601}|{run_id}|{issues_processed}|{n_success}|{n_block}|{n_error}|{total_tokens}|{total_duration_ms}
+   {ISO8601}|{run_id}|{issues_processed}|{n_success}|{n_block}|{n_paused}|{n_error}|{total_tokens}|{total_duration_ms}
    ```
-   Where `run_id` is the Autopilot invocation ID (`autopilot-{YYYYMMDDTHHMMSSZ}`), `issues_processed` is the count of issues dispatched, and `total_tokens` is the sum of per-issue `state.json.pipeline.total_tokens` (or `0` when not available). On write failure: log `[autopilot][WARN] Log file not writable: {error}` and continue — log failure never blocks the exit path.
+   Where `run_id` is the Autopilot invocation ID (`autopilot-{YYYYMMDDTHHMMSSZ}`), `issues_processed` is the count of issues dispatched, `n_paused` is the count of `paused` outcomes (Step 6 item 3), and `total_tokens` is the sum of per-issue `state.json.pipeline.total_tokens` (or `0` when not available). On write failure: log `[autopilot][WARN] Log file not writable: {error}` and continue — log failure never blocks the exit path.
 3. Lock release is AUTOMATIC via the trap registered in Step 2 (EXIT handler). Operators MUST NOT manually `rm -rf` the lock directory from inside this skill.
 4. Exit codes:
-   - `0` — all issues dispatched (some may have `block` or recoverable `error` outcomes; `On error: skip`).
+   - `0` — all issues dispatched (some may have `block`, `paused`, or recoverable `error` outcomes; `On error: skip`).
    - `1` — preflight config validation failed (Step 0 — missing Bug query in Issue Tracker).
    - `2` — lock held by another run (fresh or stale-recovery failure).
    - `3` — MCP unreachable at Step 0 (no lock was acquired).
-   - non-zero (other) — dispatch loop broke early due to `On error: stop`.
+   - non-zero (other) — dispatch loop broke early due to `On error: stop` OR `Error Handling.Max blocked per run` reached (Step 6 item 5).
 
 ## Exit Code Matrix
 
@@ -459,7 +498,7 @@ After all issues are processed (or after an `On error: stop` break):
 | 1    | Preflight failure (missing Bug query in Issue Tracker) | No | No |
 | 2    | Lock held by another run | No | No |
 | 3    | MCP ping failed — tracker unreachable | No | No |
-| >0 (other) | Dispatch loop broke due to `On error: stop` | Yes (released) | Per-issue up to the erroring dispatch |
+| >0 (other) | Dispatch loop broke early due to `On error: stop` OR `Max blocked per run` reached | Yes (released) | Per-issue up to the breaking dispatch |
 
 Operators configuring cron SHOULD capture exit codes: cron `MAILTO` + `set -o pipefail` + appending `|| echo "[autopilot] exit=$?" >> /var/log/autopilot.log` is the recommended minimum harvest pattern.
 
@@ -505,6 +544,7 @@ Dry-run is safe to schedule in parallel with a live Autopilot run because it tou
 - Consider wrapping the invocation in a container or chroot to limit blast radius to the project tree.
 - **Audit `Bug query` and `Feature query`** — issue content (title, description, comments) is fed to opus-powered fixer agents that then run bash commands and write files. A poisoned issue in the tracker can influence agent behavior under `--dangerously-skip-permissions`.
 - Restrict network egress from the Autopilot host if the tracker is internal; this limits exfiltration risk from compromised issue content.
+- **Issue IDs are also tracker-sourced and untrusted** — the same poisoned-tracker threat model applies to the ID field, not just title/description/comments. Step 5a rejects any classified `ISSUE_ID` that fails the canonical `^[A-Za-z0-9._-]+$` check from `../../core/resume-detection.md` Step 1 BEFORE it is used to build `.agent-flow/${ISSUE_ID}/...` paths, closing the path-traversal vector a crafted issue ID (e.g. `../../etc`) would otherwise open.
 
 SSRF defenses for the `Webhook URL` config key (e.g., blocking `file://`/`gopher://` schemes) are deferred to a future release. See `docs/reference/config.md` Notifications section for current operator-trust guidance.
 
@@ -516,5 +556,7 @@ SSRF defenses for the `Webhook URL` config key (e.g., blocking `file://`/`gopher
 - NEVER write state.json at the Autopilot layer — per-issue state is owned by child skills.
 - NEVER remove another process's lock directory — the trap verifies `pid == $$` before `rm -rf`.
 - NEVER silently ignore a missing `### Feature Workflow` section — always emit `[WARN]` before falling back to bug-only mode.
+- NEVER construct a `.agent-flow/${ISSUE_ID}/...` path (state file, `mkdir`, dispatch logs) for an `ISSUE_ID` that has not passed the Step 5a path-traversal check.
+- NEVER dispatch a child skill without `--yolo` — an unattended cron/CI invocation has no operator to answer `../../core/resume-detection.md`'s interactive prompt.
 - ALWAYS use the EXACT log prefixes: `[autopilot][INFO]`, `[autopilot][WARN]`, `[autopilot][ERROR]`, `[STOP]` (for MCP unreachable at Step 0).
 - ALWAYS reference `docs/guides/autopilot.md#single-host-operation` in the cross-host INFO line (Step 3) and in error recovery guidance.

@@ -40,6 +40,22 @@ SQL DDL, database schema design, migration strategies (expand-contract), zero-do
    {PASS | WARN — {reason} | BLOCK — {reason}}
    ```
 
+## Output Contract
+
+### Inputs
+
+| Section | Source | Required |
+|---------|--------|----------|
+| Changed files + diff | upstream fixer | yes |
+| Migration files (SQL files, ORM migration files) | project repository | yes |
+
+### Outputs
+
+| Section produced | When | Required fields |
+|------------------|------|-----------------|
+| `## Migration Review Report` | always | Migrations table (File, Operations, Risk, Reversible, Notes); Issues (severity-tagged descriptions); Verdict: PASS / WARN / BLOCK |
+| `[agent-flow] 🔴 Pipeline Block` | on BLOCK verdict (destructive operation without backup/rollback migration) | Agent: migration-reviewer; Step: the configured integration point (post-fix or pre-publish); Reason; Detail; Recommendation |
+
 ## Step Completion Invariants
 
 Invariant fields checked: `dispatched_at`, `dispatch_witness`, `status`, `stage_name`, `agent_name`. Tokens: `EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`.

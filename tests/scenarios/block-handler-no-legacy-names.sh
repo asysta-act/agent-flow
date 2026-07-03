@@ -1,5 +1,8 @@
 #!/bin/bash
-# Covers: core/block-handler.md line 22 does not reference legacy names triage-analyst or code-analyst
+# Covers: core/block-handler.md's rollback-exemption sentence ("Do NOT rollback on block
+# from `analyst`...") does not reference legacy names triage-analyst or code-analyst.
+# Anchored to the sentence's own substring (not a hardcoded line number) so an unrelated
+# edit elsewhere in the file cannot silently defeat this check.
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -15,23 +18,28 @@ fi
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
 
-LINE22=$(sed -n '22p' "$FILE")
+TARGET_LINE=$(grep -F 'Do NOT rollback on block from' "$FILE" || true)
 
-# Line 22 must still reference analyst (canonical name)
-if contains "$LINE22" "analyst"; then
-  echo "PASS: line 22 references analyst (canonical)"
-else
-  fail "line 22 does not reference analyst at all: $LINE22"
+if [ -z "$TARGET_LINE" ]; then
+  echo "FAIL: no line found containing 'Do NOT rollback on block from' in core/block-handler.md"
+  exit 1
 fi
 
-# v7 names must not appear in line 22
-if matches_re "$LINE22" 'triage-analyst|code-analyst'; then
-  fail "line 22 still contains v7 name (triage-analyst or code-analyst): $LINE22"
+# Target line must still reference analyst (canonical name)
+if contains "$TARGET_LINE" "analyst"; then
+  echo "PASS: rollback-exemption line references analyst (canonical)"
 else
-  echo "PASS: line 22 does not contain v7 names"
+  fail "rollback-exemption line does not reference analyst at all: $TARGET_LINE"
+fi
+
+# v7 names must not appear in the target line
+if matches_re "$TARGET_LINE" 'triage-analyst|code-analyst'; then
+  fail "rollback-exemption line still contains v7 name (triage-analyst or code-analyst): $TARGET_LINE"
+else
+  echo "PASS: rollback-exemption line does not contain v7 names"
 fi
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: block-handler.md line 22 uses canonical names only"
+  echo "PASS: block-handler.md rollback-exemption line uses canonical names only"
 fi
 exit "$FAIL"

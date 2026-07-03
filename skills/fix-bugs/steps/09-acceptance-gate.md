@@ -9,7 +9,7 @@ Run this step ONLY when **either** of the following is true:
 - Bug has ≥ 3 acceptance criteria (from triage output), OR
 - Bug complexity ≥ M (from triage output: complexity is `M` or `L`)
 
-If condition is not met → skip to step 07, log `[SKIP] acceptance-gate (AC={count}, complexity={cx})`.
+If condition is not met → skip to step 10 (pre-publish hook), log `[SKIP] acceptance-gate (AC={count}, complexity={cx})`.
 
 In `--yolo` mode: skip this step entirely (no acceptance-gate prompt regardless of AC count or complexity).
 

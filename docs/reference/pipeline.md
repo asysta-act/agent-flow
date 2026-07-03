@@ -177,9 +177,9 @@ produce a hard `[ERROR]` with exit code 2, not silently resolve to `MODE=yolo`.
 
 | Mode | fix-bugs | implement-feature | scaffold |
 |------|-----------------------|-------------------|---------|
-| `default` | Autonomous to PR; NEEDS_CLARIFICATION pauses | Spec Checkpoint (step 01), Decomposition Approval (step 03), PR confirmation (step 07) | 2 checkpoints (spec + feature plan); brainstorm if description is vague |
+| `default` | Autonomous to PR; NEEDS_CLARIFICATION pauses | Spec Checkpoint (step 01), Decomposition Approval (step 03), PR confirmation (step 08) | 2 checkpoints (spec + feature plan); brainstorm if description is vague |
 | `--yolo` | Zero gates, zero prompts; fully autonomous to PR | Zero checkpoints; auto-approve decomposition, spec, PR | Zero gates, no brainstorm; fully autonomous to final report |
-| `--step-mode` | Per-step `[c/s/a]` prompt after each of 7 steps | Per-step `[c/s/a]` prompt after each of 7 steps | Per-step `[c/s/a]` prompt after each of 8 steps |
+| `--step-mode` | Per-step `[c/s/a]` prompt after each of 12 steps | Per-step `[c/s/a]` prompt after each of 8 steps | Per-step `[c/s/a]` prompt after each of 8 steps |
 
 Flags are mutually exclusive across all three pipelines (exit code 2 on conflict).
 
@@ -245,7 +245,7 @@ Skip stages: 03-reproduce, 06-acceptance-gate
 
 ## Per-pipeline step reference
 
-### fix-bugs (7 steps)
+### fix-bugs (12 steps)
 
 Entry: `skills/fix-bugs/SKILL.md`  
 Steps directory: `skills/fix-bugs/steps/`  
@@ -257,13 +257,18 @@ Override directory: `customization/steps/fix-bugs/` *(planned for v1.2 — not a
 |-----------|-----------|-----------------|-------------|
 | `01-triage.md` | triage | `analyst --phase triage` | Skippable via profile |
 | `02-impact.md` | analyst-impact | `analyst --phase impact` | Skippable via profile |
-| `03-reproduce.md` | browser-agent-reproduce | `browser-agent --phase reproduce` | Conditional (Browser Verification config required) |
+| `03-reproduce.md` | browser-agent-reproduce | `browser-agent --phase reproduce` | Conditional (Browser Verification config required); skippable via profile |
 | `04-fixer-reviewer-loop.md` | fixer / reviewer | `fixer`, `reviewer` | NOT skippable |
-| `05-test.md` | test-engineer | `test-engineer` (+ `--e2e` if configured) | E2E sub-step skippable |
-| `09-acceptance-gate.md` | acceptance-gate | `acceptance-gate` | Conditional (AC ≥ 3 OR complexity ≥ M) |
-| `07-publish.md` | publisher | `publisher` | NOT skippable |
+| `05-smoke.md` | smoke | — (build + test via Bash) | No |
+| `06-test.md` | test-engineer | `test-engineer` | No |
+| `07-e2e.md` | test-engineer-e2e | `test-engineer --e2e=true` | Conditional (E2E Test config required); skippable via profile |
+| `08-browser-verify.md` | browser-agent-verify | `browser-agent --phase verify` | Conditional (Browser Verification config required); skippable via profile |
+| `09-acceptance-gate.md` | acceptance-gate | `acceptance-gate` | Conditional (AC ≥ 3 OR complexity ≥ M); skippable via profile |
+| `10-pre-publish.md` | pre-publish | Pre-publish hook + custom agent | Conditional (only if configured) |
+| `11-publish.md` | publisher | `publisher` | NOT skippable |
+| `12-result.md` | result | — (summary + dispatch-audit surfacing) | No |
 
-### implement-feature (7 steps)
+### implement-feature (8 steps)
 
 Entry: `skills/implement-feature/SKILL.md`  
 Steps directory: `skills/implement-feature/steps/`  
@@ -273,13 +278,14 @@ Override directory: `customization/steps/implement-feature/` *(planned for v1.2 
 
 | Step file | Stage name | Agent dispatched | Conditional? |
 |-----------|-----------|-----------------|-------------|
-| `01-spec.md` | spec / analyst | `spec-analyst`, `analyst --phase impact` | Spec checkpoint in default mode |
+| `01-spec.md` | spec-analyst | `spec-analyst` | Spec checkpoint in default mode |
 | `02-architect.md` | architect | `architect` | No |
-| `03-decomposition.md` | decomposition | Internal decision logic | Depends on `--decompose` flag |
+| `03-decomposition.md` | decomposition | Internal decision logic | Depends on decomposition trigger |
 | `04-fixer-reviewer-loop.md` | fixer / reviewer | `fixer`, `reviewer` | NOT skippable |
-| `05-test.md` | test-engineer | `test-engineer` (+ `--e2e` if configured) | E2E sub-step skippable |
-| `09-acceptance-gate.md` | acceptance-gate | `acceptance-gate` | Always in decomposition; skipped in single-pass |
-| `07-publish.md` | publisher | `publisher` | NOT skippable |
+| `05-smoke.md` | smoke | — (build + test via Bash) | No |
+| `06-test.md` | test-engineer | `test-engineer` | No |
+| `07-acceptance-gate.md` | acceptance-gate | `acceptance-gate` | Always in decomposition; skipped in single-pass |
+| `08-publish.md` | publisher | `publisher` | NOT skippable |
 
 ### scaffold (8 steps)
 
@@ -392,5 +398,11 @@ Example `### Hooks` config block:
 ```
 
 Hook failure is **blocking** by default (non-zero exit blocks the pipeline). For advisory-only
-hooks, prefix with `|| true`. See `docs/reference/pipelines.md` for full hook semantics and
-`core/post-publish-hook.md` for webhook delivery details.
+hooks, prefix with `|| true`.
+
+**Exception — Post-publish is warning-only by design.** By the time Post-publish fires, the PR
+already exists, so there is nothing left to roll back. A non-zero exit from the `Post-publish`
+hook (or a BLOCK from the `Post-publish agent`) logs `[WARN] Post-publish hook failed: {error}`
+and the pipeline continues to completion — it never blocks or rolls back. See
+`docs/reference/pipelines.md` for full hook semantics and `core/post-publish-hook.md` for the
+authoritative Post-publish failure-handling and webhook delivery contract.

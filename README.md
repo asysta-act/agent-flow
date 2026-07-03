@@ -1,6 +1,6 @@
 # agent-flow
 
-> **v2.0.0** — Keyed (HMAC-signed) dispatch witness; MAJOR breaking release (see CHANGELOG). [View on GitHub](https://github.com/asysta-act/agent-flow)
+> **v2.0.0** — MAJOR breaking release: keyed (HMAC-signed) dispatch witness + extended agent output contracts. See [CHANGELOG.md](CHANGELOG.md) for release history. [View on GitHub](https://github.com/asysta-act/agent-flow)
 
 A Claude Code plugin that automates the full development lifecycle — from bug triage through fix, review, test, and publish. 17 specialized AI agents, 17 orchestration skills, 17 core contracts, zero third-party PACKAGE dependencies (requires bash + Python 3, stdlib only).
 
@@ -207,7 +207,7 @@ Projects using this plugin need `## Automation Config` in their CLAUDE.md. Use `
 | PR Description Template | Template for PR body |
 | Build & Test | Build and test commands |
 
-**18 optional config sections** cover retry limits, module docs, hooks, custom agents, notifications, worktrees, E2E testing, browser verification, local deployment, sprint planning, error handling, feature workflow, decomposition, pipeline profiles, metrics, agent overrides, and pause limits.
+**18 optional config sections** cover retry limits, module docs, hooks, custom agents, notifications, worktrees, E2E testing, browser verification, local deployment, sprint planning, error handling, feature workflow, decomposition, pipeline profiles, metrics, agent overrides, autopilot, and pause limits.
 
 Minimal example:
 
