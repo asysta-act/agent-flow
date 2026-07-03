@@ -81,7 +81,7 @@ After resume detection (when `RESUME_POINT == "FRESH"`):
 
 ## Step dispatch
 
-Use the Read tool to load each step file below in order. Each step file specifies the subagent to dispatch, the prompt template, the pre-dispatch atomic state.json write (`dispatched_at`, `dispatch_witness`, `agent_name`, `stage_name`, `status="in_progress"` per `core/lib/stage-invariant.sh`), and the post-dispatch state finalization. Step files own ALL dispatch logic; this controller only sequences and merges output.
+Use the Read tool to load each step file below in order. Each step file specifies the subagent to dispatch, the prompt template, the pre-dispatch overlay resolution (Agent Override Injector → `overlay_source` + rendered block), the pre-dispatch atomic state.json write (`dispatched_at`, `agent_name`, `stage_name`, `prompt_head_128`, `overlay_source`, `overlay_digest`, `dispatch_witness`, `status="in_progress"` per `core/lib/stage-invariant.sh`), and the post-dispatch state finalization. The overlay is resolved BEFORE the witness so the receipt binds the overlay actually applied. Step files own ALL dispatch logic; this controller only sequences and merges output.
 
 | # | Step file | Stage (state.json) | Subagent | Model |
 |---|-----------|--------------------|----------|-------|
@@ -94,7 +94,7 @@ Use the Read tool to load each step file below in order. Each step file specifie
 | 07 | `skills/implement-feature/steps/07-acceptance-gate.md` | `acceptance_gate` | `acceptance-gate` (conditional) | sonnet |
 | 08 | `skills/implement-feature/steps/08-publish.md` | `publisher` | `publisher` + terminal dispatch-audit surface | haiku |
 
-Use the Read tool to load `skills/implement-feature/steps/01-spec.md` and execute it before step 02; repeat for each row of the table in order. Each step file's pre-dispatch write block consumes the canonical stage name listed in column 3 (binds to `core/lib/stage-invariant.sh::compute_dispatch_witness`).
+Use the Read tool to load `skills/implement-feature/steps/01-spec.md` and execute it before step 02; repeat for each row of the table in order. Each step file's pre-dispatch write block consumes the canonical stage name listed in column 3 (binds to the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness STAGE SUBAGENT_TYPE MODEL PROMPT_HEAD_128 OVERLAY_SOURCE OVERLAY_DIGEST`, with `overlay_digest` produced by `compute_overlay_digest`).
 
 Optional and conditional stages (`smoke_check` step 05, `acceptance_gate` step 07, `e2e_test` inside step 06) MUST write an explicit `status = "skipped"` to `state.json` when their config-gate evaluates negatively — never leave the stage at `pending` (alarm-fatigue protection: the terminal report in step 08 distinguishes WITNESS_MISSING on an OPTIONAL stage as `EXPECTED_OPTIONAL_NOT_RUN`, not an anomaly).
 

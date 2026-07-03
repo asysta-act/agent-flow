@@ -1,6 +1,13 @@
 # Ensure consistent LF line endings across all platforms
 * text=auto eol=lf
 
+# Hashed-input byte-identity pins (dispatch witness): these inputs are
+# sha256/HMAC-hashed by the witness pipeline and the test fixtures, so their
+# byte content MUST be identical on Windows MSYS2 and the Linux CI runner.
+tests/fixtures/** text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+
 # Binary files
 *.png binary
 *.jpg binary

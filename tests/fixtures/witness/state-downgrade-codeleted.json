@@ -1,0 +1,33 @@
+{
+  "_comment": "FIXTURE (downgrade ii, f-c570b4, REQ-025/REQ-047): progressed keyed v2.0 run with BOTH dispatch.key AND dispatch-ledger.jsonl deleted to fake an 'empty ledger / first intercept'. The zero-completed-stages predicate STILL fails (the completed stage cannot be truncated away), so the gate returns WITNESS_UNVERIFIABLE + DENY (exit 2) -- NOT a silent bootstrap re-sign -- and MUST NOT regenerate the key.",
+  "schema_version": "2.0",
+  "fixture_kind": "downgrade_codeleted_unverifiable",
+  "stages": {
+    "triage": {
+      "dispatched_at": "2026-04-19T00:00:00Z",
+      "subagent_type": "agent-flow:analyst",
+      "agent_name": "agent-flow:analyst",
+      "model": "sonnet",
+      "stage_name": "triage",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "cccc3333cccc3333cccc3333cccc3333",
+      "dispatch_seq": 1,
+      "status": "completed"
+    },
+    "fixer_reviewer": {
+      "dispatched_at": "2026-04-19T00:05:00Z",
+      "subagent_type": "agent-flow:fixer",
+      "agent_name": "agent-flow:fixer",
+      "model": "opus",
+      "stage_name": "fixer_reviewer",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "dddd4444dddd4444dddd4444dddd4444",
+      "dispatch_seq": 2,
+      "status": "in_progress"
+    }
+  }
+}

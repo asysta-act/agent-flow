@@ -2,6 +2,117 @@
 
 All notable changes to agent-flow will be documented in this file.
 
+## [2.0.0] — 2026-06-29
+
+> **MAJOR — breaking.** The dispatch witness moves from an orchestrator-written
+> `sha256` receipt to a **gate-signed HMAC keyed witness**. Four independent MAJOR
+> triggers: (1) the witness output contract changes (`sha256` 5-tuple → per-field
+> sub-hashed HMAC-SHA256 keyed tag recorded in a gate-owned ledger, never in
+> `state.json`); (2) the first **non-additive** `schema_version` bump (`1.0` → `2.0`);
+> (3) a **new blocking PreToolUse `Task` gate** (`hooks/validate-dispatch-pre.sh`)
+> that can deny a dispatch before it runs (Claude Code ≥ 2.1.90); and (4) the A2
+> mandatory `## Step Completion Invariants` agent-section rewording.
+
+### Added
+
+- **Gate-as-signer dispatch witness (PreToolUse `Task` gate).** A new
+  `hooks/validate-dispatch-pre.sh` is the sole holder of the per-run key
+  (`.agent-flow/{RUN-ID}/dispatch.key`, 64-hex, `0600`, atomic `O_EXCL`) and the only
+  component that computes and records a signed witness. It resolves the in-flight
+  dispatch from a top-level marker (`.agent-flow/pending-dispatch.json`, never
+  `glob[-1]`), applies match-or-pass-through (a `Task` it did not mark passes through
+  — parallel/non-agent-flow dispatch is never blocked), observes-and-signs
+  `head128(tool_input.prompt)` as ground truth, compares the deterministically
+  reproducible CLAIM fields, signs an HMAC-SHA256 tag into a gate-owned ledger
+  (`.agent-flow/{RUN-ID}/dispatch-ledger.jsonl`), and ALLOWs — or emits a deny
+  envelope + `exit 2` (the true block).
+- **Per-run key lifecycle + forge-resistant bootstrap.** The gate generates the key
+  once on a genuine first intercept (key absent AND zero completed stages in
+  `state.json` AND empty/absent ledger); a key absent on a progressed run is
+  `WITNESS_UNVERIFIABLE`/DENY, never a silent re-sign.
+- **Fourth verdict `WITNESS_UNVERIFIABLE`** distinguishing "cannot check" (key lost,
+  no ledger entry, stale/replayed marker) from "proven inconsistent"
+  (`WITNESS_MISMATCH`).
+- **New CLAIM/marker fields** in `state.json` / the marker: `claim_nonce`,
+  `dispatch_seq`, `override_path`, and top-level `schema_version "2.0"`.
+- **`/check-setup` probes** — Python stdlib (`import sys,hmac,hashlib,secrets`), the
+  TOML overlay parser, `claude --version` ≥ 2.1.90, and a once-per-machine deny-canary
+  handshake (reserved sentinel `agent-flow:__deny_canary__`).
+- **`.gitattributes` LF pins** (`tests/fixtures/** text eol=lf`, `*.toml`, `*.json`) so
+  hashed byte-identity holds on MSYS2 and Linux CI.
+- **Shared dispatch-hook detection helper (`core/lib/detect-dispatch-hooks.sh`).** Scans
+  the full Claude Code settings tree — user (`~/.claude/settings.json`), project
+  (`.claude/settings.json`), and project-local (`.claude/settings.local.json`) — for both
+  the PreToolUse `Task` gate (`validate-dispatch-pre.sh`, the blocking component) and the
+  PostToolUse audit (`validate-dispatch.sh`), reporting the scope(s) where each is wired,
+  whether the gate matcher is `Task`, and whether any scope sets `disableAllHooks`.
+  Managed/OS-level settings are not inspected (advisory gap, not reported as not-wired).
+- **`/fix-bugs` advisory dispatch-enforcement preflight** — `fix-bugs` now logs whether the
+  blocking PreToolUse `Task` gate is wired across the settings tree before dispatch.
+  Advisory only — it never blocks the run.
+
+### Changed
+
+- **`overlay_digest` redefined** as the `sha256` of the **RAW, LF-normalized `.toml`
+  file bytes** at `override_path/<short>.toml` (no longer the rendered Markdown block).
+  The gate reads the bytes once and signs the same held bytes; a forged
+  `override_path` escaping the allowlist, an absent `.toml`, or a one-byte body edit is
+  a `WITNESS_MISMATCH`/DENY.
+- **`prompt_head_128` is no longer an orchestrator-committed/compared CLAIM field** —
+  the gate observes the post-expansion dispatched head and signs it as ground truth
+  (this removes the round-1 prompt-head false-DENY by construction).
+- **PostToolUse audit (`hooks/validate-dispatch.sh`) re-verifies the gate signature**
+  and is acknowledged everywhere as a second layer that cannot block (it runs after the
+  tool). "Fails the dispatch" language now refers only to the PreToolUse gate.
+- **Python is the single keyed authority** — the keyed HMAC compute/verify lives only
+  in `hooks/lib/witness_core.py`; the bash `core/lib/stage-invariant.sh` keyed path is
+  demoted to a parity-pinned self-test.
+- **Honest threat model** rewritten in `state/schema.md`: keying buys detection of
+  out-of-key tampering and a real pre-dispatch block, but does NOT prove the subagent
+  ran and does not stop a deliberately malicious same-OS-user process. The audit log is
+  labeled "best-effort append-only audit log".
+- **Env vars** continue the clean-break `AGENT_FLOW_` prefix
+  (`AGENT_FLOW_STRICT_DISPATCH`, `AGENT_FLOW_DISPATCH_KEY_FILE`, `AGENT_FLOW_LEDGER`,
+  `AGENT_FLOW_MARKER_TTL`, `AGENT_FLOW_OVERRIDE_PATH`, `AGENT_FLOW_STATE_JSON`,
+  `AGENT_FLOW_AUDIT_LOG`).
+- **`## Step Completion Invariants`** wording updated in lockstep across the agent and
+  `examples/custom-agents/*` definitions; `agents/acceptance-gate.md`'s self-check now
+  reads the gate-owned ledger instead of recomputing via the demoted bash path.
+- **`/check-setup` Block 6 now scans the full settings tree** (user + project +
+  project-local) via the new `core/lib/detect-dispatch-hooks.sh` and detects BOTH the
+  PreToolUse `Task` gate and the PostToolUse audit — fixing a false "hook not configured"
+  advisory raised when the hook was wired only at project (`.claude/settings.json`) or
+  project-local (`.claude/settings.local.json`) scope (hooks COMBINE across scopes; none
+  overrides another). Block 6 stays advisory and never changes the `FAIL` verdict.
+
+### Fixed
+
+- **Cross-platform LF output in the dispatch hooks** — the audit-log and ledger writers
+  in `hooks/validate-dispatch.sh` and `hooks/validate-dispatch-pre.sh` now open their
+  append/write targets with explicit `newline="\n"`, so audit-log and ledger lines are
+  LF on every platform (Windows MSYS2 text-mode previously emitted CRLF, breaking
+  per-line `^…$` assertions and byte-identical cross-platform output).
+- **`__read_stage_field` truncation (A1)** — `core/lib/stage-invariant.sh` now reads
+  stage fields via the same `json.load` one-liner the hook uses, so a `{placeholder}`,
+  quote, comma, or non-ASCII head is read byte-exact instead of being truncated by the
+  old `sed -E` extraction.
+
+### Migration
+
+- **Strict by default, env-only toggle.** Dispatch enforcement remains strict by
+  default. To roll back: **Lever 1** — set `AGENT_FLOW_STRICT_DISPATCH: "0"` in the
+  `env` block of `.claude/settings.json` (the persistent lever) and/or drop a top-level
+  `.agent-flow/STRICT_DISPATCH_OFF` flag file (the reliable in-run lever, checked before
+  any marker/run resolution); **Lever 2** — remove the PreToolUse `Task` matcher from
+  `settings.json`. A bare `export AGENT_FLOW_STRICT_DISPATCH=0` in a project file does
+  NOT reach the Claude-Code-spawned hook.
+- **Claude Code ≥ 2.1.90 required** for the PreToolUse block to take effect (issue
+  #26923: `Task` exit-2 was a no-op before 2.1.90). On an older client the gate degrades
+  to PostToolUse-advisory; `/check-setup` and the deny-canary surface this loudly.
+- **No new Automation Config section** — the strict toggle stays env-only, so the
+  optional-section count remains 18 and the doc-counts stay 17 agents / 17 skills /
+  17 core contracts.
+
 ## [1.2.0] — 2026-06-24
 
 ### Added

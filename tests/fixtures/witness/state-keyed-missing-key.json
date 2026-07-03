@@ -1,0 +1,33 @@
+{
+  "_comment": "FIXTURE (anchor, REQ-025): keyed v2.0 run with >=1 COMPLETED stage and NO sibling dispatch.key. Fails the bootstrap predicate (non-zero completed stages), so the gate DENYs and the audit reports WITNESS_UNVERIFIABLE (exit 2 under strict). The key is never regenerated on a progressed run.",
+  "schema_version": "2.0",
+  "fixture_kind": "keyed_missing_key_unverifiable",
+  "stages": {
+    "triage": {
+      "dispatched_at": "2026-04-18T15:00:00Z",
+      "subagent_type": "agent-flow:analyst",
+      "agent_name": "agent-flow:analyst",
+      "model": "sonnet",
+      "stage_name": "triage",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "11111111111111111111111111111111",
+      "dispatch_seq": 1,
+      "status": "completed"
+    },
+    "fixer_reviewer": {
+      "dispatched_at": "2026-04-18T15:05:00Z",
+      "subagent_type": "agent-flow:fixer",
+      "agent_name": "agent-flow:fixer",
+      "model": "opus",
+      "stage_name": "fixer_reviewer",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "22222222222222222222222222222222",
+      "dispatch_seq": 2,
+      "status": "in_progress"
+    }
+  }
+}

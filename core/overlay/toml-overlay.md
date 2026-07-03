@@ -269,6 +269,23 @@ not once per pipeline run or per overlay key).
 **Log destination**: `.agent-flow/pipeline.log` (append mode; same file as other pipeline log
 entries; see `core/state-manager.md` for log rotation policy).
 
+### Overlay binding into the dispatch witness
+
+The resolved overlay is now bound into the per-stage `dispatch_witness`, which is
+`sha256("<subagent_type>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")`. The
+`overlay_digest` is the sha256 of the rendered overlay Markdown block when `overlay_source=toml`,
+or the literal `none` / `md_rejected` for those branches. Because the overlay provenance and
+digest are witness inputs, dropping a `.toml` overlay flips `overlay_source` `toml→none` and
+`overlay_digest→none`, changing the witness — so the omission is detectable.
+
+The dispatch hook (`hooks/validate-dispatch.sh` via
+`core/lib/stage-invariant.sh::check_dispatch_witness`) verifies in two layers: **V1** recomputes
+the witness from the stored fields and compares it to `dispatch_witness`; **V2** checks overlay
+presence — if `customization/{agent}.toml` exists on disk but the stage recorded
+`overlay_source != toml`, that is a `WITNESS_MISMATCH` (the dropped-overlay case). Verification is
+**strict by default**: `AGENT_FLOW_STRICT_DISPATCH` is strict unless explicitly set to `"0"`, and a
+true mismatch exits the hook with code 2, failing the dispatch.
+
 ### Layer architecture note (Layer 2 vs. Layer 3)
 
 The "Halt agent dispatch (non-zero exit)" language in the Validation section above refers to

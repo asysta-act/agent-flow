@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCENARIOS_DIR="$SCRIPT_DIR/../scenarios"
 
 # Prevent recursive invocation — harness-pass.sh detects this and exits 77 (SKIP)
-export CEOS_HARNESS_RECURSIVE=1
+export AGENT_FLOW_HARNESS_RECURSIVE=1
 
 # Parallelism: default 4, override via HARNESS_JOBS env var or nproc
 JOBS="${HARNESS_JOBS:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"

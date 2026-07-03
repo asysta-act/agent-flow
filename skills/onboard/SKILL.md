@@ -211,6 +211,10 @@ Select sections to configure (comma-separated numbers):
 - Retry Limits: Fixer iterations (default: 5), Test attempts (default: 3), Build retries (default: 3), Spec iterations (default: 5), Root cause iterations (default: 3)
 - Error Handling: On block (default: `comment`), Max blocked per run (default: `unlimited`)
 - Hooks: Pre-fix, Post-fix, Pre-publish, Post-publish (all default: none)
+  - Note: these are the **pipeline integration-point** hooks. Separately, an
+    optional **dispatch-enforcement** PostToolUse audit hook
+    (`hooks/validate-dispatch.sh`) can be installed manually — it is opt-in and
+    not configured by this wizard. See `docs/guides/dispatch-enforcement.md`.
 - Custom Agents: Post-fix agent, Pre-publish agent (all default: none)
 - Notifications: Webhook URL, On events (all default: none)
 - Worktrees: Batch size (default: 3), Base path (default: `.worktrees/`), Cleanup (default: `auto`)

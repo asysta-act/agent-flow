@@ -72,8 +72,11 @@ For each WITNESS_MISSING entry in `.agent-flow/dispatch-audit.log` for this run:
 | In `optional` list AND stage's config-gating evaluated to "on" | **ANOMALY** | Render as anomaly block. |
 | NOT in allow-list (hook STAGES superset entries — e.g., implement-feature-only stages bleeding in) | SUPPRESSED | Do NOT render. Not part of this pipeline's expected dispatch set. |
 
-For WITNESS_MISMATCH entries: always render as ANOMALY (witness present but malformed → likely
-state.json corruption or orchestrator bug).
+For WITNESS_MISMATCH entries: always render as ANOMALY. The witness now binds the resolved overlay
+(`overlay_source` + `overlay_digest`), so a mismatch means either witness-field tampering/corruption
+(hook V1 recompute failed) OR a dropped overlay — a `.toml` overlay present on disk but
+`overlay_source != toml` (hook V2 overlay-presence check). Both are now enforced by the PostToolUse
+hook; continue to surface them here in the terminal report.
 
 For WITNESS_OK entries: never render (no action needed).
 

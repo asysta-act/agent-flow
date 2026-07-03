@@ -1,76 +1,116 @@
 {
-  "_comment": "FIXTURE: refresh when prompt template changes. acceptance_gate has MALFORMED dispatch_witness (not 64-char lowercase hex - here a short string 'abc'). check_dispatch_witness MUST return WITNESS_MISMATCH / exit 2 for acceptance_gate.",
+  "_comment": "FIXTURE (INTENTIONAL MISMATCH): refresh when witness inputs change. acceptance_gate carries a MALFORMED dispatch_witness (the literal 'abc' — not 64-char lowercase hex), so check_dispatch_witness MUST return WITNESS_MISMATCH / exit 2 for acceptance_gate. This is a deliberate negative fixture; do NOT 'fix' its witness. Every other stage carries all six valid inputs and returns WITNESS_OK / exit 0.",
   "schema_version": "1.0",
   "fixture_kind": "witness_mismatch_malformed",
   "stages": {
     "triage": {
       "dispatched_at": "2026-05-12T10:00:00Z",
-      "dispatch_witness": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456",
       "agent_name": "agent-flow:analyst",
+      "model": "sonnet",
       "stage_name": "triage",
+      "prompt_head_128": "PROMPT_HEAD_triage",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "88cabb90fcc68748fbf5a83eec6561a9099eb9140e402f378c509e7cd9ce70a0",
       "status": "in_progress"
     },
     "code_analysis": {
       "dispatched_at": "2026-05-12T10:01:00Z",
-      "dispatch_witness": "b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef12345601",
       "agent_name": "agent-flow:analyst",
+      "model": "sonnet",
       "stage_name": "code_analysis",
+      "prompt_head_128": "PROMPT_HEAD_code_analysis",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "c6895dfdd2a630724e70635f5130c45d0b6822973d85098aad0a40de87774d8b",
       "status": "in_progress"
     },
     "reproduce_browser": {
       "dispatched_at": "2026-05-12T10:02:00Z",
-      "dispatch_witness": "c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234560102",
       "agent_name": "agent-flow:browser-agent",
+      "model": "sonnet",
       "stage_name": "reproduce_browser",
+      "prompt_head_128": "PROMPT_HEAD_reproduce_browser",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "387605363df1753fc1f7e59b7ec673191d97eac43a2bc7eebf923ff6f48a0d85",
       "status": "in_progress"
     },
     "fixer_reviewer": {
       "dispatched_at": "2026-05-12T10:03:00Z",
-      "dispatch_witness": "d4e5f6789012345678901234567890abcdef1234567890abcdef123456010203",
       "agent_name": "agent-flow:fixer",
+      "model": "opus",
       "stage_name": "fixer_reviewer",
+      "prompt_head_128": "PROMPT_HEAD_fixer_reviewer",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "f0f26a355fecf56c41ff96db31f0427aa37f788398b0783496790403792e99cc",
       "status": "in_progress"
     },
     "smoke_check": {
       "dispatched_at": "2026-05-12T10:04:00Z",
-      "dispatch_witness": "e5f6789012345678901234567890abcdef1234567890abcdef12345601020304",
       "agent_name": "agent-flow:test-engineer",
+      "model": "sonnet",
       "stage_name": "smoke_check",
+      "prompt_head_128": "PROMPT_HEAD_smoke_check",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "4ecc3dc393672629835cd17fd6e84e66e1e7fc97eb9e008be48878f05a46c049",
       "status": "in_progress"
     },
     "test": {
       "dispatched_at": "2026-05-12T10:05:00Z",
-      "dispatch_witness": "f6789012345678901234567890abcdef1234567890abcdef1234560102030405",
       "agent_name": "agent-flow:test-engineer",
+      "model": "sonnet",
       "stage_name": "test",
+      "prompt_head_128": "PROMPT_HEAD_test",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "2860e31dfeb58fd0797ccb221ed14a64f743357f62f6ce12a796f5428d210a01",
       "status": "in_progress"
     },
     "e2e_test": {
       "dispatched_at": "2026-05-12T10:06:00Z",
-      "dispatch_witness": "0789abcdef0123456789012345678901234567890abcdef123456789abcdef01",
       "agent_name": "agent-flow:test-engineer",
+      "model": "sonnet",
       "stage_name": "e2e_test",
+      "prompt_head_128": "PROMPT_HEAD_e2e_test",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "e0450f7017969ef5303c93fc9018d6eb6d291c9c0b3c834e929c696fb720b2d0",
       "status": "in_progress"
     },
     "browser_verification": {
       "dispatched_at": "2026-05-12T10:07:00Z",
-      "dispatch_witness": "1789abcdef0123456789012345678901234567890abcdef123456789abcdef02",
       "agent_name": "agent-flow:browser-agent",
+      "model": "sonnet",
       "stage_name": "browser_verification",
+      "prompt_head_128": "PROMPT_HEAD_browser_verification",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "57b9602cee76809209a8406b72b26f3e6ea48e44433d82e6bcc321d26445bc9f",
       "status": "in_progress"
     },
     "acceptance_gate": {
       "dispatched_at": "2026-05-12T10:08:00Z",
-      "dispatch_witness": "abc",
       "agent_name": "agent-flow:acceptance-gate",
+      "model": "opus",
       "stage_name": "acceptance_gate",
+      "prompt_head_128": "PROMPT_HEAD_acceptance_gate",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "abc",
       "status": "in_progress"
     },
     "publisher": {
       "dispatched_at": "2026-05-12T10:09:00Z",
-      "dispatch_witness": "3789abcdef0123456789012345678901234567890abcdef123456789abcdef04",
       "agent_name": "agent-flow:publisher",
+      "model": "sonnet",
       "stage_name": "publisher",
+      "prompt_head_128": "PROMPT_HEAD_publisher",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "dispatch_witness": "14e1e37f701da6d69582d842ca7c641f86d65b42803967d4cda51e14b9545225",
       "status": "in_progress"
     }
   }

@@ -412,6 +412,26 @@ and not once per overlay key.
 **Log destination:** `.agent-flow/pipeline.log` (append mode; same file as other
 pipeline log entries; rotation per `core/state-manager.md`).
 
+### How the overlay interacts with the dispatch witness
+
+The resolved overlay is bound into the per-stage `dispatch_witness` recorded in `state.json`:
+
+```
+dispatch_witness = sha256("<subagent_type>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+```
+
+`overlay_digest` is the sha256 of the rendered overlay block when `overlay_source=toml`, or the
+literal `none` / `md_rejected` otherwise. Because the overlay is a witness input, removing a
+`.toml` overlay flips `overlay_source` `toml→none` and `overlay_digest→none`, which changes the
+witness — so a silently-dropped overlay is detectable.
+
+The dispatch hook verifies the witness in two layers: **V1** recomputes it from the stored stage
+fields and compares; **V2** flags a mismatch when `customization/{agent}.toml` exists on disk but
+the stage recorded `overlay_source != toml`. Verification is **strict by default** —
+`AGENT_FLOW_STRICT_DISPATCH` is strict unless explicitly `"0"`, and a true mismatch fails the
+dispatch. In practice this means a `.toml` overlay you place under `customization/` is expected to
+be applied and recorded on every dispatch for that agent.
+
 ---
 
 ## 8. Backwards Compatibility

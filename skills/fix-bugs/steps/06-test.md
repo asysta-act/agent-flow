@@ -17,14 +17,15 @@ Before dispatching, atomically write per-stage pre-dispatch fields to
 - `test.agent_name`      = `"agent-flow:test-engineer"`
 - `test.stage_name`      = `"test"`
 - `test.dispatched_at`   = current ISO-8601 UTC timestamp
-- `test.dispatch_witness` = sha256("agent-flow:test-engineer|sonnet|<prompt_head_128>")
-  (compute via `core/lib/stage-invariant.sh::compute_dispatch_witness`; prompt_head_128 is the
-   first 128 UTF-8-safe bytes of the un-expanded prompt template — BEFORE Tier-1 variable
-   injection of EXPECTED_AGENT_NAME / EXPECTED_STAGE_NAME / Max test attempts.)
+- `test.prompt_head_128` = first 128 UTF-8-safe bytes of the un-expanded prompt template (BEFORE Tier-1 variable injection of EXPECTED_AGENT_NAME / EXPECTED_STAGE_NAME / Max test attempts)
+- `test.overlay_source`  = `toml` | `none` | `md_rejected` (from the Agent Override Injector — resolve it FIRST, see "Agent Override injection" below)
+- `test.overlay_digest`  = sha256 hex of the rendered overlay block (`toml`), else literal `none` / `md_rejected` (via `compute_overlay_digest`)
+- `test.dispatch_witness` = sha256("agent-flow:test-engineer|sonnet|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  (compute via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness test agent-flow:test-engineer sonnet <prompt_head_128> <overlay_source> <overlay_digest>`; the overlay is resolved BEFORE the witness)
 - `test.tokens_used`     = 0, `test.duration_ms` = 0, `test.tool_uses` = 0
 
-Follow atomic write protocol from `../../../core/state-manager.md`. All 8 fields written in a single
-atomic replace.
+Follow atomic write protocol from `../../../core/state-manager.md`. All fields written in a single
+atomic replace. Then append the rendered overlay block to the prompt and dispatch.
 
 ## Agent Override injection
 

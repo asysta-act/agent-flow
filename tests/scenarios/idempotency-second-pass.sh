@@ -17,7 +17,7 @@
 # ===========================================================================
 set -euo pipefail
 
-REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT="${AGENT_FLOW_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 PASS_COUNT=0
 FAIL_COUNT=0

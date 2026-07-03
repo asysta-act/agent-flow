@@ -16,7 +16,7 @@
 # ===========================================================================
 set -euo pipefail
 
-REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT="${AGENT_FLOW_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 GUARD_FILES=(
   "$REPO_ROOT/skills/fix-bugs/data/guard-block.md"

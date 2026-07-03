@@ -71,7 +71,7 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 1. `dispatched_at` — Field is present and non-empty for stage `acceptance_gate` (EXPECTED_STAGE_NAME=`acceptance_gate`). The orchestrator wrote this pre-dispatch.
 
-2. `dispatch_witness` — Field is present, exactly 64 hex characters, and matches the sha256 of `{subagent_type}|{model}|{prompt_head_128}` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function.
+2. `dispatch_witness` — Under the gate-as-signer model the signed witness is NO LONGER a `state.json` field: the PreToolUse gate is the sole key holder and records the keyed HMAC tag in the gate-owned ledger `.agent-flow/{RUN-ID}/dispatch-ledger.jsonl`, keyed by `(run_id, stage, claim_nonce)`. Verify the dispatch by READING that ledger (read-only — do NOT recompute the witness via the demoted bash path, and do NOT expect a `dispatch_witness` field in `state.json`): confirm a `WITNESS_OK` ledger entry exists for this run's `(run_id, stage)` (or accept `WITNESS_MISSING` semantics for a legitimately skipped stage). On a genuine legacy v1.0 run (no per-run `dispatch.key` and no ledger file) this falls back to the legacy path / simply passes — a missing ledger on a v1.0 run is EXPECTED and is NOT a Block.
 
 3. `status` — Field equals `"in_progress"` for this stage. The orchestrator wrote this pre-dispatch (status flips to `"completed"` only AFTER you return, so observing `"in_progress"` proves the normal dispatch flow ran).
 

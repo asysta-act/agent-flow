@@ -13,12 +13,15 @@ Before dispatching, atomically write per-stage pre-dispatch fields to
 - `publisher.agent_name`      = `"agent-flow:publisher"`
 - `publisher.stage_name`      = `"publisher"`
 - `publisher.dispatched_at`   = current ISO-8601 UTC timestamp
-- `publisher.dispatch_witness` = sha256("agent-flow:publisher|haiku|<prompt_head_128>")
-  (compute via `core/lib/stage-invariant.sh::compute_dispatch_witness`)
+- `publisher.prompt_head_128` = first 128 UTF-8-safe bytes of the un-expanded prompt template
+- `publisher.overlay_source`  = `toml` | `none` | `md_rejected` (from the Agent Override Injector — resolve it FIRST, see "Agent Override injection" below)
+- `publisher.overlay_digest`  = sha256 hex of the rendered overlay block (`toml`), else literal `none` / `md_rejected` (via `compute_overlay_digest`)
+- `publisher.dispatch_witness` = sha256("agent-flow:publisher|haiku|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  (compute via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness publisher agent-flow:publisher haiku <prompt_head_128> <overlay_source> <overlay_digest>`; the overlay is resolved BEFORE the witness)
 - `publisher.tokens_used` = 0, `publisher.duration_ms` = 0, `publisher.tool_uses` = 0
 
 Follow atomic write protocol from `../../../core/state-manager.md`. All fields written in a single atomic
-replace.
+replace. Then append the rendered overlay block to the prompt and dispatch.
 
 ## Agent Override injection
 
