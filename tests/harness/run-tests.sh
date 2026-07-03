@@ -8,6 +8,17 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCENARIOS_DIR="$SCRIPT_DIR/../scenarios"
 
+# Self-check: discovery below uses `find "$SCENARIOS_DIR" -maxdepth 1 -name "*.sh"`,
+# which silently skips any scenario script placed in a subdirectory. Fail fast so a
+# stray subdirectory never again goes unexecuted without anyone noticing.
+STRAY_SCENARIOS=$(find "$SCENARIOS_DIR" -mindepth 2 -name "*.sh")
+if [ -n "$STRAY_SCENARIOS" ]; then
+  echo "ERROR: scenario script(s) found below tests/scenarios/ top level — these would be silently skipped by the maxdepth 1 discovery sweep:"
+  echo "$STRAY_SCENARIOS"
+  echo "Move them into tests/scenarios/ directly (renaming to avoid collisions) or delete if superseded."
+  exit 1
+fi
+
 # Prevent recursive invocation — harness-pass.sh detects this and exits 77 (SKIP)
 export CEOS_HARNESS_RECURSIVE=1
 

@@ -38,6 +38,22 @@ Coding standards enforcement, naming conventions, documentation requirements, re
    - Verdict: {PASS | WARN — {N} warnings | BLOCK — {N} critical violations}
    ```
 
+## Output Contract
+
+### Inputs
+
+| Section | Source | Required |
+|---------|--------|----------|
+| Changed files + diff | upstream fixer | yes |
+| Coding standards / style guide | project CLAUDE.md or linked doc | no (falls back to language-default conventions, noted as a limitation) |
+
+### Outputs
+
+| Section produced | When | Required fields |
+|------------------|------|-----------------|
+| `## Compliance Report` | always | Findings table (#, Rule, File:Line, Description, Severity); Summary (Violations by severity: Critical/Warning/Info; Verdict: PASS / WARN / BLOCK) |
+| `[agent-flow] 🔴 Pipeline Block` | on BLOCK verdict (critical violations) | Agent: compliance-checker; Step: the configured integration point (post-fix or pre-publish); Reason; Detail; Recommendation |
+
 ## Step Completion Invariants
 
 Invariant fields checked: `dispatched_at`, `dispatch_witness`, `status`, `stage_name`, `agent_name`. Tokens: `EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`.

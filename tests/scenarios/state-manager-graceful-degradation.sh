@@ -2,7 +2,7 @@
 # Test: State-manager graceful degradation for missing/malformed plugin.json
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }
@@ -15,8 +15,8 @@ if [ ! -f "$STATE_MGR" ]; then
 fi
 
 # Step 2a contains graceful degradation clause covering unreadable/malformed/lacks cases
-if ! grep '2a\.' "$STATE_MGR" | grep -q 'unreadable, malformed, or lacks'; then
-  fail "core/state-manager.md Step 2a missing graceful degradation clause (expected: 'unreadable, malformed, or lacks')"
+if ! grep '2a\.' "$STATE_MGR" | grep -q 'unreadable, contains malformed JSON, or lacks'; then
+  fail "core/state-manager.md Step 2a missing graceful degradation clause (expected: 'unreadable, contains malformed JSON, or lacks')"
 fi
 
 # Degradation sets plugin_version to null

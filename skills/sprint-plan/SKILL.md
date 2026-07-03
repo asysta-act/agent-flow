@@ -66,7 +66,7 @@ Follow `../../core/mcp-preflight.md`. Before any pipeline operation, verify MCP 
 - Check that at least one `mcp__*` tool matching the tracker type is accessible
 - If not accessible → STOP with: "Cannot connect to your {Type} issue tracker. Is the {Type} integration configured? Run `/agent-flow:check-setup` for diagnostics."
 
-**Tracker write-capability probe** (for Gate 1 display only — `core/mcp-preflight.md` only verifies READ connectivity above; it has no concept of write fallback and does not produce this value):
+**Tracker write-capability probe** (for Gate 1 display only — `../../core/mcp-preflight.md` only verifies READ connectivity above; it has no concept of write fallback and does not produce this value):
 - `MCP` — the Tier 1 MCP write tool for this tracker (see Step 5 "Tier 1: MCP sprint assignment" table) is accessible
 - `Bash` — the MCP write tool is unavailable, but the Tier 2 auth environment variable for this tracker (see Step 5 "Tier 2: Bash + REST fallback" table) is set
 - `Skip` — neither is available

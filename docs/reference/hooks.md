@@ -77,7 +77,8 @@ stdout decision control output, but this remains non-blocking at the tool level.
 The hook checks exactly these stages (hardcoded, never discovered dynamically):
 
 ```
-triage  code_analysis  fixer_reviewer  test  publisher
+triage  code_analysis  reproduce_browser  fixer_reviewer  smoke_check
+test  e2e_test  browser_verification  acceptance_gate  publisher
 ```
 
 ---
@@ -108,8 +109,13 @@ Example:
 ```
 2026-04-25T14:32:07Z triage OK
 2026-04-25T14:32:07Z code_analysis OK
+2026-04-25T14:32:07Z reproduce_browser OK
 2026-04-25T14:32:07Z fixer_reviewer MISSING
+2026-04-25T14:32:07Z smoke_check OK
 2026-04-25T14:32:07Z test OK
+2026-04-25T14:32:07Z e2e_test OK
+2026-04-25T14:32:07Z browser_verification OK
+2026-04-25T14:32:07Z acceptance_gate OK
 2026-04-25T14:32:07Z publisher OK
 ```
 

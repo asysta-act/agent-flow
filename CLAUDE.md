@@ -21,6 +21,7 @@ No build system, no dependencies. Manual test suite in `tests/`. This is a pure 
 - `examples/` — Config templates, custom agent examples, MCP config examples
 - `checklists/` — Pipeline phase checklists (review, test, publish)
 - `tests/` — Test harness with scenarios and CI workflow
+- `hooks/` — Operator opt-in Claude Code hooks (`validate-dispatch.sh`, PostToolUse dispatch-witness audit); not auto-registered via `plugin.json`, see `docs/guides/dispatch-enforcement.md`
 - `.agent-flow/` — Per-run pipeline state files (state.json, pipeline.log, browser artifacts)
 - `state/` — State schema documentation
 - `core/` — 17 shared pipeline pattern contracts
@@ -102,7 +103,7 @@ You are a [Role] specializing in [domain].
 ## Constraints (NEVER rules, limits, failure handling)
 ```
 
-> **Reliability contract:** `## Step Completion Invariants` is a mandatory structured section in every `agents/*.md`. Custom agents that lack it will fail the harness scenario `tests/scenarios/step-completion-invariants-completeness.sh`. See `core/lib/stage-invariant.sh` for the runtime helper functions (`compute_dispatch_witness`, `check_dispatch_witness`, `emit_witness_audit`).
+> **Reliability contract:** `## Step Completion Invariants` is a mandatory structured section in every `agents/*.md`. Custom agents that lack it will fail the harness scenario `tests/scenarios/step-completion-invariants-completeness.sh`. See `core/lib/stage-invariant.sh` for the runtime helper functions (`compute_dispatch_witness`, `check_dispatch_witness`, `emit_witness_audit`). The operator opt-in `hooks/validate-dispatch.sh` (see `docs/guides/dispatch-enforcement.md`) provides a complementary, advisory-only PostToolUse audit of the same `dispatched_at` witness data — it is not auto-installed and never blocks (exit 0 always).
 
 ### Model Selection
 
@@ -151,7 +152,7 @@ Projects using this plugin must have `## Automation Config` in their CLAUDE.md w
 | Module Docs | Path | (none) |
 | Hooks | Pre-fix, Post-fix, Pre-publish, Post-publish | (none) |
 | Custom Agents | Post-fix agent, Pre-publish agent | (none) |
-| Notifications | Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`) | (none) |
+| Notifications | Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, `pipeline-resumed`) | (none) |
 | Worktrees | Batch size, Base path, Cleanup | (none) |
 | E2E Test | Framework, Command | (none) |
 | Browser Verification | Base URL, Start command, Stop command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks | (none) |
@@ -188,7 +189,7 @@ Optional. Keys: Post-fix agent, Pre-publish agent. Default (none).
 
 ### Notifications
 
-Optional. Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`). Default (none).
+Optional. Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, `pipeline-resumed`). Default (none).
 
 ### Worktrees
 
@@ -260,7 +261,7 @@ Valid range: min 1 hour, max 365 days. Invalid values fall back to the default (
 
 ## Webhook Payloads
 
-Webhook payloads are forward-compatible — additive fields may be added in future MINOR versions without a schema version bump. Consumers MUST use lenient JSON parsing (ignore unknown fields). Existing payload fields (`pr-created`, `agent-flow-block`) are never renamed or removed. The events `pipeline-started`, `step-completed`, and `pipeline-completed` are supported. Webhook delivery failure is advisory — `[WARN] Webhook delivery failed` is logged and the pipeline continues.
+Webhook payloads are forward-compatible — additive fields may be added in future MINOR versions without a schema version bump. Consumers MUST use lenient JSON parsing (ignore unknown fields). Existing payload fields (`pr-created`, `agent-flow-block`) are never renamed or removed. The events `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, and `pipeline-resumed` are supported. Webhook delivery failure is advisory — `[WARN] Webhook delivery failed` is logged and the pipeline continues.
 
 **Operator trust required**: The `Webhook URL` value is dispatched via `curl` without scheme or host validation. Operators are responsible for configuring trusted URLs pointing to internal observability endpoints. SSRF defenses (e.g., restricting `file://`/`gopher://` schemes) are deferred to a future release. Per spec design §3.6.
 

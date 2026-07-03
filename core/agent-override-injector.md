@@ -110,7 +110,7 @@ non-empty, render it to the following Markdown layout:
 ...
 ```
 
-**Render rules (per design.md Section 2):**
+**Render rules:**
 
 1. Heading is fixed: `## Project-Specific Instructions` — exact case, no trailing punctuation.
 2. Source comment is mandatory: exactly one HTML

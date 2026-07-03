@@ -56,9 +56,13 @@ if ! grep -q 'Configure now\|configure now' "$SCAFFOLD_SKILL"; then
   fail "scaffold SKILL.md Step 0-MCP missing 'Configure now' option"
 fi
 
-# 8. Scaffold Step 0-MCP displays init command with flags
-if ! grep -q 'init.*\-\-tracker-type' "$SCAFFOLD_SKILL"; then
-  fail "scaffold SKILL.md Step 0-MCP missing init command with --tracker-type flag"
+# 8. Scaffold Step 0-MCP displays the setup-mcp command with flags.
+# NOTE: this used to check for a stale "/agent-flow:init" alias line, which
+# was a broken reference (no such command exists — the skill is
+# /agent-flow:setup-mcp) removed by the audit remediation pass. Check for
+# the real, currently-shipped command instead.
+if ! grep -q 'setup-mcp.*\-\-tracker-type' "$SCAFFOLD_SKILL"; then
+  fail "scaffold SKILL.md Step 0-MCP missing setup-mcp command with --tracker-type flag"
 fi
 
 # 9. Scaffold Step 0-MCP mentions checkpoint/STOP after init

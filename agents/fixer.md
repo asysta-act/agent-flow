@@ -122,7 +122,7 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 1. `dispatched_at` — Field is present and non-empty for stage `fixer_reviewer`. The orchestrator wrote this pre-dispatch.
 
-2. `dispatch_witness` — Field is present, exactly 64 hex characters, and matches the sha256 of `{subagent_type}|{model}|{prompt_head_128}` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function.
+2. `dispatch_witness` — Field is present and matches the shape `^[0-9a-f]{64}$` (64 lowercase hex characters). Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function, which checks presence and hex-shape only — it does NOT recompute or cryptographically compare against the sha256 of `{subagent_type}|{model}|{prompt_head_128}` (that value is produced once, pre-dispatch, by `compute_dispatch_witness` in the same file; nothing re-derives or verifies it against the dispatch tuple after the fact).
 
 3. `status` — Field equals `"in_progress"` for this stage. The orchestrator wrote this pre-dispatch (status flips to `"completed"` only AFTER you return, so observing `"in_progress"` proves the normal dispatch flow ran).
 
@@ -142,7 +142,7 @@ This invariant check is the agent-side half of the 3-layer defense; pairs with `
 
 - NEEDS_DECOMPOSITION may be signaled at most ONCE per ticket. If the decomposed subtasks also exceed limits, Block.
 - NEVER signal NEEDS_DECOMPOSITION to avoid a hard problem — only when scope genuinely exceeds limits.
-- NEVER use any variation of the string `NEEDS_DECOMPOSITION` when signaling decomposition need — the exact string is required (not "NEEDS DECOMPOSITION", "needs_decomposition", "decomposition needed", or other forms).
+- NEVER use any variation of the string `NEEDS_DECOMPOSITION` when signaling decomposition need — the exact string MUST be used verbatim (not "NEEDS DECOMPOSITION", "needs_decomposition", "decomposition needed", or other forms).
 - NEVER change more than necessary — no drive-by refactoring
 - NEVER write code comments or identifiers (variables, fields, methods, types) in a different natural language than the project's established codebase language and naming convention (read CLAUDE.md and any `customization/{agent}.toml` overlay); localized/national-language text belongs ONLY in user-facing string literals and resource files, never in comments or identifier names.
 - NEVER write a useless test (applies to the RED-phase test in step 6 and any test you touch): the test MUST call the real production code path that the change affects — never a re-implemented copy of the logic — and MUST fail when the bug is present / the new behavior is absent. If the changed code is not reachable from any testable seam, skip the test and note it rather than fabricating a hollow one.

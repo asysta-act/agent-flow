@@ -305,7 +305,7 @@ Recommendation:
 ```
 
 If `Notifications → Webhook URL` exists and `issue-blocked` is in `On events`, fire the
-`agent-flow-block` webhook using `../../core/block-handler.md` Step 5's `jq -nc --arg` structural
+`agent-flow-block` webhook using `../../core/block-handler.md` Step 6's `jq -nc --arg` structural
 construction (`event: "agent-flow-block"`, `agent: "publish"`, `issue_id`, `reason`, `timestamp`).
 This webhook call — not the comment text alone — is what makes the block machine-parseable by
 webhook consumers. No tracker Blocked-state transition and no rollback happen here: Step 2's
@@ -384,7 +384,7 @@ environment check, not a tracker-down failure. No tracker comment, no webhook ev
 - `docs/reference/automation-config.md` — Branch naming template (`fix/{issue-id}-{description}`)
 - `agents/publisher.md` §96-110 — Publish Report format (the `Tracker:` row contract)
 - `../../core/post-publish-hook.md` — Post-publish hook, custom agent, and `pr-created`/`issue-blocked` webhook contract (Step 7 and Failure UX templates above)
-- `../../core/block-handler.md` §Step 5 — `agent-flow-block` webhook `jq -nc --arg` structural payload construction (FAIL tier and Pre-publish gate FAIL tier above)
+- `../../core/block-handler.md` §Step 6 — `agent-flow-block` webhook `jq -nc --arg` structural payload construction (FAIL tier and Pre-publish gate FAIL tier above)
 
 ## Headless / batch publishing
 

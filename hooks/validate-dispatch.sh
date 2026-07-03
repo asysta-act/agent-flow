@@ -9,6 +9,16 @@
 # EXIT: always 0 (advisory-only; PostToolUse cannot block tool execution).
 # LOG:  .agent-flow/dispatch-audit.log (append-only, plain text).
 #
+# NOT A SECURITY CONTROL: this hook (a) is not auto-installed — operators
+# must opt in via ~/.claude/settings.json (see docs/guides/dispatch-enforcement.md)
+# — and (b) even when installed, PostToolUse fires after the tool already
+# ran, so it cannot block or undo anything. It does NOT technically enforce
+# any agent "NEVER" constraint (e.g. publisher's "NEVER push to main/development
+# directly") — those remain prompt-level instructions only. Operators who need
+# a real backstop against direct pushes or destructive actions MUST enable
+# server-side branch protection (required PR review + status checks) on the
+# repository; see SECURITY.md "Known Limitations" for full operator guidance.
+#
 # Security contracts:
 #   - STAGES are hardcoded; never derived from state.json field names
 #   - All jq calls redirect stderr to /dev/null

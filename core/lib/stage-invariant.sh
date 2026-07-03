@@ -2,9 +2,15 @@
 # core/lib/stage-invariant.sh
 # Runtime dispatch invariant helpers.
 #
-# Sourced by hooks/validate-dispatch.sh. Skills do NOT source this file
-# directly; thin-controller prose instructs the orchestrator what to write
-# to state.json (witness, agent_name, stage_name) before each Task() call.
+# Two real consumers:
+#   1. Skill step files (skills/*/steps/*.md) source this file DIRECTLY on
+#      the write side, calling compute_dispatch_witness() to derive the
+#      witness hash the orchestrator writes to state.json (dispatch_witness,
+#      agent_name, stage_name) before each Task() call. This runs on every
+#      real pipeline execution, independent of whether the hook below fires.
+#   2. hooks/validate-dispatch.sh sources this file on the read side, calling
+#      check_dispatch_witness() + emit_witness_audit() (PostToolUse, advisory
+#      only) to audit witnesses already written to state.json.
 #
 # POSIX-compatible. Tested on Windows Git-Bash, macOS BSD-grep, Linux GNU-grep.
 # jq-free per fix-bugs convention.

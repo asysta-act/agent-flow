@@ -197,7 +197,7 @@ claude -p "Run /agent-flow:autopilot" --dangerously-skip-permissions
 
 **Input source flags** (`--spec`, `--template`, `--issue`) are mutually exclusive. Tech stack flags (`--lang`, `--framework`, `--db`, `--ci`) are compatible with all input sources.
 
-**What it does:** Scaffolds a new project end-to-end. In **default mode**, spec-writer generates a project specification (with optional brainstorm phase when description is vague), a spec-reviewer quality gate runs, scaffolder generates the skeleton with auto-configured CLAUDE.md, and the feature pipeline (architect → fixer/reviewer/test-engineer) implements all features from the spec. Two human confirmation checkpoints: after spec and after scaffold. With **`--yolo`**, all confirmation gates are skipped and the pipeline runs autonomously. With **`--step-mode`**, execution pauses after every step for manual review before continuing. After git init, the scaffold pushes to the declared remote (Step 4d) and creates tracker issues from spec epics (Step 4e) when infrastructure is ready. The `--issue` flag auto-detects tracker availability. With `--no-implement`, falls back to skeleton-only behavior: scaffolder (with stack flags) → skeleton → push (if SC ready).
+**What it does:** Scaffolds a new project end-to-end. In **default mode**, spec-writer generates a project specification (with optional brainstorm phase when description is vague), a spec-reviewer quality gate runs, scaffolder generates the skeleton with auto-configured CLAUDE.md, and the feature pipeline (architect → fixer/reviewer/test-engineer) implements all features from the spec. Two human confirmation checkpoints: after spec and after the feature plan (architect/decomposition). With **`--yolo`**, all confirmation gates are skipped and the pipeline runs autonomously. With **`--step-mode`**, execution pauses after every step for manual review before continuing. After git init, the scaffold pushes to the declared remote (Step 4d) and creates tracker issues from spec epics (Step 4e) when infrastructure is ready. The `--issue` flag auto-detects tracker availability. With `--no-implement`, falls back to skeleton-only behavior: scaffolder (with stack flags) → skeleton → push (if SC ready).
 
 **Example:**
 
@@ -217,7 +217,7 @@ claude -p "Run /agent-flow:autopilot" --dangerously-skip-permissions
 
 ### /publish
 
-> Creates a PR and updates issue tracker states.
+> Creates a PR and, only in full-publish mode, updates issue tracker state.
 
 **Syntax:**
 
@@ -225,7 +225,18 @@ claude -p "Run /agent-flow:autopilot" --dangerously-skip-permissions
 /agent-flow:publish
 ```
 
-**What it does:** Dispatches the publisher agent to create a PR with the full template, apply labels, and update the issue tracker state according to State transitions in Automation Config. This is the same publishing step that runs at the end of fix-bugs and implement-feature, but available as a standalone skill.
+**What it does:** Auto-detects the publish **mode** from the current branch name against `Source Control → Branch naming` in Automation Config, then dispatches the `publisher` agent to create a PR with the full template and apply labels. There are three success modes and one failure mode:
+
+| Mode | When | Tracker updated? |
+|------|------|-------------------|
+| `full-publish` | Branch encodes an issue ID that exists in the tracker | Yes — state set per `State transitions`, PR-link comment posted |
+| `pr-only-no-id` | No `Branch naming` configured, or the branch doesn't match the pattern | No |
+| `pr-only-404` | Branch encodes an issue ID, but the tracker returns not-found for it | No (PR is still created; a WARN is logged) |
+| `FAIL` | Tracker unreachable (auth/TLS/timeout/unknown error), or detached HEAD | No PR is created; exits non-zero |
+
+The issue tracker is only written to in `full-publish` mode — the other two success modes create the PR alone, with no tracker state change or comment. This is the same publish step (including its optional Pre-publish/Post-publish hooks and custom agents) that runs at the end of fix-bugs and implement-feature, exposed as a standalone skill.
+
+`/publish` is interactive-only — it requires the confirmation flows built into the dispatched agent's prose and may FAIL in headless environments (CI/cron) with no MCP server configured. For headless/batch publishing use [/autopilot](#autopilot) instead.
 
 **Example:**
 
@@ -233,7 +244,7 @@ claude -p "Run /agent-flow:autopilot" --dangerously-skip-permissions
 /agent-flow:publish
 ```
 
-**Related skills:** [/fix-bugs](#fix-bugs)
+**Related skills:** [/fix-bugs](#fix-bugs), [/autopilot](#autopilot)
 
 ---
 
@@ -246,15 +257,20 @@ claude -p "Run /agent-flow:autopilot" --dangerously-skip-permissions
 **Syntax:**
 
 ```
-/agent-flow:onboard
+/agent-flow:onboard [--fresh] [--update]
 ```
 
-**What it does:** Launches an interactive wizard that asks about your project setup: issue tracker type, instance URL, project key, source control remote, build/test commands, and more. Generates a complete Automation Config block that can be added to your project's CLAUDE.md. Supports all 6 tracker types (YouTrack, GitHub, Jira, Linear, Gitea, Redmine).
+**Flags:**
+- `--fresh` — Force fresh mode: skip existing-config detection and start the wizard from scratch
+- `--update` — Force update mode: walk through the existing config and change only what you select. Errors if no `## Automation Config` section exists yet
+
+**What it does:** Launches an interactive wizard that asks about your project setup: issue tracker type, instance URL, project key, source control remote, build/test commands, and more. Generates a complete Automation Config block that can be added to your project's CLAUDE.md. Supports all 6 tracker types (YouTrack, GitHub, Jira, Linear, Gitea, Redmine). With no flags, it auto-detects whether a config already exists and routes to fresh or update mode accordingly.
 
 **Example:**
 
 ```
 /agent-flow:onboard
+/agent-flow:onboard --update
 ```
 
 **Related skills:** [/setup-mcp](#setup-mcp), [/check-setup](#check-setup)
@@ -459,7 +475,7 @@ TOML overlay syntax and the 3-tier merge contract are documented in `core/overla
 
 **Flags:**
 - `--all` — Plan all sprints (release plan), not just the next one
-- `--apply` — After planning, dispatch /implement-feature per selected issue
+- `--apply` — After planning, dispatch /fix-bugs (for bug-type issues) or /implement-feature (for feature-type issues) per selected issue
 - `--dry-run` — Display plan without tracker writes
 - `--limit <N>` — Override max issues to consider (default: 20)
 - `--yolo` — Auto-approve Gates 1 and 3 (Gate 2 always blocks)
@@ -497,7 +513,7 @@ TOML overlay syntax and the 3-tier merge contract are documented in `core/overla
 /agent-flow:version-check
 ```
 
-**What it does:** Works from any directory. Reads the installed plugin version from `~/.claude/plugins/installed_plugins.json` and compares it with the latest version tag on the remote repository. Reports whether an update is available. When run from the plugin's own repo directory, also compares the repo version with the installed version. Provides clear reinstall instructions when versions are stale.
+**What it does:** Works from any directory. Reads the installed plugin version from `~/.claude/plugins/installed_plugins.json` and compares it with the latest version tag on the remote repository. Reports whether an update is available. When run from the plugin's own repo directory, also compares the repo version with the installed version — and, if the repo is behind remote, runs `git pull` to update it, then, if the repo is ahead of the installed plugin, runs `claude plugin marketplace update` and `claude plugin update` to sync the installed plugin cache. These two steps mutate local state (the repo working tree and the plugin cache); they only trigger when run from inside the plugin's own repo. Provides clear reinstall instructions when versions are stale.
 
 **Example:**
 
@@ -519,7 +535,7 @@ TOML overlay syntax and the 3-tier merge contract are documented in `core/overla
 /agent-flow:changelog
 ```
 
-**What it does:** Scans merged pull requests since the last git tag, categorizes changes (Fixed, Improved, Added, Changed), and generates a CHANGELOG.md entry for the current version. Uses PR titles and descriptions to produce meaningful changelog entries.
+**What it does:** Scans commits since the last git tag (merged PRs via source control MCP, or the linear commit history as a fallback for squash/fast-forward merge workflows), categorizes each entry by its Conventional Commits prefix into Keep a Changelog sections (Added, Fixed, Changed), and generates a CHANGELOG.md entry for a version confirmed with the user. Uses PR titles — falling back to the raw commit subject when a PR cannot be resolved — to produce changelog entries.
 
 **Example:**
 

@@ -98,11 +98,11 @@ readiness, so check it separately from the required-key table in Step 3:
 
 ### Block 3: Connectivity
 
-> **Pattern source:** `core/mcp-detection.md`'s Classification Reference table is the canonical
+> **Pattern source:** `../../core/mcp-detection.md`'s Classification Reference table is the canonical
 > single source for the TLS/auth/not-found/timeout trigger-pattern lists used across the plugin.
 > The TLS and auth pattern lists in Steps 9 and 10 below mirror that table's `"tls"` and `"auth"`
 > rows (adapted here to also gate the curl confirmation probe). If a pattern is added or changed,
-> update `core/mcp-detection.md` first and mirror the change into both copies below.
+> update `../../core/mcp-detection.md` first and mirror the change into both copies below.
 
 9. Run the Bug query from Automation Config via MCP (limit 1 result):
    - Success → [OK] with the number of bugs found

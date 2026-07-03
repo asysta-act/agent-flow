@@ -12,7 +12,7 @@
 The dispatch enforcement hook validates that each agent-flow pipeline stage
 populated a `dispatched_at` timestamp in `state.json` before handing off to
 its subagent via the Task tool. It audits whether the 3-layer dispatch enforcement
-architecture (Layer 1: imperative, Layer 2: hook, Layer 4: scenario gate) is
+architecture (Layer 1: imperative, Layer 2: hook, Layer 3: scenario gate) is
 working end-to-end.
 
 Concretely, the hook:
@@ -20,8 +20,9 @@ Concretely, the hook:
 1. Fires on every PostToolUse event (after any tool completes).
 2. Locates the current pipeline's `state.json` under `.agent-flow/`.
 3. Checks each stage in the hardcoded `STAGES` whitelist
-   (`triage`, `code_analysis`, `fixer_reviewer`, `test`, `publisher`)
-   for presence of `dispatched_at`.
+   (`triage`, `code_analysis`, `reproduce_browser`, `fixer_reviewer`,
+   `smoke_check`, `test`, `e2e_test`, `browser_verification`,
+   `acceptance_gate`, `publisher`) for presence of `dispatched_at`.
 4. Appends one audit-log line per stage to `.agent-flow/dispatch-audit.log`.
 5. Always exits 0 — **advisory-only, never blocking**.
 
@@ -78,8 +79,13 @@ A passing audit run produces lines like:
 ```
 2026-04-25T14:32:07Z triage OK
 2026-04-25T14:32:07Z code_analysis OK
+2026-04-25T14:32:07Z reproduce_browser OK
 2026-04-25T14:32:07Z fixer_reviewer OK
+2026-04-25T14:32:07Z smoke_check OK
 2026-04-25T14:32:07Z test OK
+2026-04-25T14:32:07Z e2e_test OK
+2026-04-25T14:32:07Z browser_verification OK
+2026-04-25T14:32:07Z acceptance_gate OK
 2026-04-25T14:32:07Z publisher OK
 ```
 

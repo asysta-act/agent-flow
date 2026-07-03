@@ -319,7 +319,7 @@ using the canonical path-traversal check from `../../core/resume-detection.md` S
 
 ```bash
 if [[ ! "${ISSUE_ID}" =~ ^[A-Za-z0-9._-]+$ || "${ISSUE_ID}" =~ ^\.+$ ]]; then
-  echo "[autopilot][ERROR] Invalid issue_id from tracker query: '${ISSUE_ID}' rejected (path-traversal defense — see core/resume-detection.md Step 1). No filesystem path was constructed for this ID." >&2
+  echo "[autopilot][ERROR] Invalid issue_id from tracker query: '${ISSUE_ID}' rejected (path-traversal defense — see ../../core/resume-detection.md Step 1). No filesystem path was constructed for this ID." >&2
   outcome="error"
   # Apply the Step 6 "outcome is error" policy (item 4) — On error: skip logs [WARN] and
   # continues with the next issue; On error: stop breaks the dispatch loop and proceeds to
@@ -404,7 +404,7 @@ elif [ "$classification" = "feature" ]; then
 fi
 
 # Dispatch as isolated child claude session (plain-text bypass of disable-model-invocation).
-# --yolo is REQUIRED: no operator is present to answer core/resume-detection.md's
+# --yolo is REQUIRED: no operator is present to answer ../../core/resume-detection.md's
 # interactive [Y/n/abort] prompt under unattended cron/CI invocation. Without it, a child
 # that finds an existing non-FRESH state.json (e.g. a "running" status left behind by a
 # prior crashed child for the same ISSUE_ID) would block forever on stdin. Under --yolo,
@@ -418,7 +418,7 @@ claude -p "Run ${TARGET_SKILL} ${ISSUE_ID} --yolo" \
 child_exit=$?
 ```
 
-Rationale: per-issue child-session isolation also provides crash containment (a crashed child cannot poison the parent autopilot session) and mirrors the cron-invocation pattern exactly. `--yolo` on the dispatch is what makes that containment actually reachable — see the inline comment above. A `paused` outcome (child hit `NEEDS_CLARIFICATION` under `--yolo` with no `--clarification` answer available) still surfaces as an `error`-shaped non-zero `child_exit` per `core/resume-detection.md` Step 6's `--yolo` column ONLY when RESUMING a pre-existing paused state; Step 1a above already filters those out before dispatch, so in practice a `paused` outcome here means the pipeline paused freshly during THIS run (`child_exit == 0`, see item 3 below). Token cost: ~2-5k per child-session startup — acceptable given the isolation benefits. Re-evaluate restoring Skill-tool dispatch if Anthropic ships a selective-invocation whitelist primitive.
+Rationale: per-issue child-session isolation also provides crash containment (a crashed child cannot poison the parent autopilot session) and mirrors the cron-invocation pattern exactly. `--yolo` on the dispatch is what makes that containment actually reachable — see the inline comment above. A `paused` outcome (child hit `NEEDS_CLARIFICATION` under `--yolo` with no `--clarification` answer available) still surfaces as an `error`-shaped non-zero `child_exit` per `../../core/resume-detection.md` Step 6's `--yolo` column ONLY when RESUMING a pre-existing paused state; Step 1a above already filters those out before dispatch, so in practice a `paused` outcome here means the pipeline paused freshly during THIS run (`child_exit == 0`, see item 3 below). Token cost: ~2-5k per child-session startup — acceptable given the isolation benefits. Re-evaluate restoring Skill-tool dispatch if Anthropic ships a selective-invocation whitelist primitive.
 
 3. Capture per-issue outcome from `child_exit` and the child's `state.json`:
 
@@ -544,7 +544,7 @@ Dry-run is safe to schedule in parallel with a live Autopilot run because it tou
 - Consider wrapping the invocation in a container or chroot to limit blast radius to the project tree.
 - **Audit `Bug query` and `Feature query`** — issue content (title, description, comments) is fed to opus-powered fixer agents that then run bash commands and write files. A poisoned issue in the tracker can influence agent behavior under `--dangerously-skip-permissions`.
 - Restrict network egress from the Autopilot host if the tracker is internal; this limits exfiltration risk from compromised issue content.
-- **Issue IDs are also tracker-sourced and untrusted** — the same poisoned-tracker threat model applies to the ID field, not just title/description/comments. Step 5a rejects any classified `ISSUE_ID` that fails the canonical `^[A-Za-z0-9._-]+$` check from `core/resume-detection.md` Step 1 BEFORE it is used to build `.agent-flow/${ISSUE_ID}/...` paths, closing the path-traversal vector a crafted issue ID (e.g. `../../etc`) would otherwise open.
+- **Issue IDs are also tracker-sourced and untrusted** — the same poisoned-tracker threat model applies to the ID field, not just title/description/comments. Step 5a rejects any classified `ISSUE_ID` that fails the canonical `^[A-Za-z0-9._-]+$` check from `../../core/resume-detection.md` Step 1 BEFORE it is used to build `.agent-flow/${ISSUE_ID}/...` paths, closing the path-traversal vector a crafted issue ID (e.g. `../../etc`) would otherwise open.
 
 SSRF defenses for the `Webhook URL` config key (e.g., blocking `file://`/`gopher://` schemes) are deferred to a future release. See `docs/reference/config.md` Notifications section for current operator-trust guidance.
 
@@ -557,6 +557,6 @@ SSRF defenses for the `Webhook URL` config key (e.g., blocking `file://`/`gopher
 - NEVER remove another process's lock directory — the trap verifies `pid == $$` before `rm -rf`.
 - NEVER silently ignore a missing `### Feature Workflow` section — always emit `[WARN]` before falling back to bug-only mode.
 - NEVER construct a `.agent-flow/${ISSUE_ID}/...` path (state file, `mkdir`, dispatch logs) for an `ISSUE_ID` that has not passed the Step 5a path-traversal check.
-- NEVER dispatch a child skill without `--yolo` — an unattended cron/CI invocation has no operator to answer `core/resume-detection.md`'s interactive prompt.
+- NEVER dispatch a child skill without `--yolo` — an unattended cron/CI invocation has no operator to answer `../../core/resume-detection.md`'s interactive prompt.
 - ALWAYS use the EXACT log prefixes: `[autopilot][INFO]`, `[autopilot][WARN]`, `[autopilot][ERROR]`, `[STOP]` (for MCP unreachable at Step 0).
 - ALWAYS reference `docs/guides/autopilot.md#single-host-operation` in the cross-host INFO line (Step 3) and in error recovery guidance.

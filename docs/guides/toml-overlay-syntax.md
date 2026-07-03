@@ -380,6 +380,10 @@ If **both** files exist for the same agent (`customization/{agent}.md` AND `cust
 - The `.toml` file takes **precedence** (primary format)
 - The `.md` file is **ignored**
 - Emits: `[WARN] Legacy .md overlay ignored; .toml takes precedence`
+- Provenance: `overlay_source=toml`
+
+If **only** `customization/{agent}.md` exists (no `.toml` companion), the legacy `.md`-only
+path is **unsupported** — see Section 8 for the exact behavior (`overlay_source=md_rejected`).
 
 ---
 
@@ -389,13 +393,13 @@ On every agent dispatch the plugin writes one record to `.agent-flow/pipeline.lo
 
 **Format:**
 ```
-agent={name} overlay_source={toml|md|none} overlay_path={path}
+agent={name} overlay_source={toml|none|md_rejected} overlay_path={path}
 ```
 
 | Field | Description |
 |-------|-------------|
 | `agent` | Agent name (e.g., `reviewer`) |
-| `overlay_source` | `toml` — TOML overlay applied; `md` — legacy .md overlay applied; `none` — no overlay |
+| `overlay_source` | `toml` — TOML overlay applied; `none` — no overlay file exists (or overlay resolution failed and the injector absorbed it — bare prompt used either way); `md_rejected` — a legacy `.md`-only overlay exists but is unsupported, its content is dropped (see Section 8) |
 | `overlay_path` | Absolute or relative path to the overlay file; `(none)` for `overlay_source=none` |
 
 **Three mandatory branches (each occurring exactly once per dispatch):**
@@ -403,7 +407,7 @@ agent={name} overlay_source={toml|md|none} overlay_path={path}
 | Scenario | Log line |
 |----------|----------|
 | `.toml` overlay used | `agent=reviewer overlay_source=toml overlay_path=customization/reviewer.toml` |
-| `.md` legacy overlay used | `agent=reviewer overlay_source=md overlay_path=customization/reviewer.md` |
+| `.md`-only overlay present (unsupported — dropped) | `agent=reviewer overlay_source=md_rejected overlay_path=customization/reviewer.md` |
 | No overlay | `agent=reviewer overlay_source=none overlay_path=(none)` |
 
 The provenance record is written **exactly once per dispatch** — not once per pipeline run
@@ -416,32 +420,53 @@ pipeline log entries; rotation per `core/state-manager.md`).
 
 ## 8. Backwards Compatibility
 
-### Legacy `.md` Overlay Support
+### Legacy `.md` Overlay Support — Removed
 
-Legacy `customization/{agent}.md` files are still parsed as raw append text:
+Legacy `customization/{agent}.md`-only overlays (no `.toml` companion) are **no longer applied**.
+This is not a future deprecation — the `.md`-only execution path has already been removed from
+the reference implementation (`skills/setup-agents/lib/toml-merge.sh`); `resolve_overlay()` only
+ever resolves to `.toml` or `none` in that layer.
 
-- Each use emits a `[WARN]` log: `[WARN] Legacy .md overlay format; migrate to .toml`
-- The pipeline does **not** abort due to a legacy `.md` overlay — warnings are advisory
-- To convert manually: create a `customization/{agent}.toml` file with `[[process_additions]]` blocks (see Section 4 for examples)
+**What actually happens when only `.md` exists (no `.toml` companion):**
+
+1. Before any overlay resolution runs, `core/agent-override-injector.md` (Step 2) detects the
+   `.md`-only case and short-circuits.
+2. It emits `[ERROR] Legacy .md overlay format is not supported; manual conversion required —
+   see docs/guides/toml-overlay-syntax.md for TOML overlay format examples.` to stderr.
+3. Provenance is logged as `overlay_source=md_rejected` (see Section 7) — this is the ONLY
+   code path that emits `md_rejected`.
+4. The `.md` file's content is **dropped** — it is never parsed, never appended to the agent
+   prompt, and has no effect on dispatch.
+5. **The pipeline does NOT abort.** Dispatch continues immediately with the bare (un-overlaid)
+   agent prompt — the Layer 3 guarantee in `core/agent-override-injector.md` is "NEVER block
+   the pipeline on overlay failure."
+
+In short: a `.md`-only overlay is a **silent drop from the prompt's perspective** (no overlay
+content reaches the agent, and dispatch proceeds exactly as if `customization/` were empty) but
+**not silent in the logs** — the `[ERROR]` line and the `overlay_source=md_rejected` provenance
+record make the drop auditable via `.agent-flow/pipeline.log` and `/agent-flow:check-setup`.
 
 **Coexistence rules:**
 
-| File state | Behavior |
-|------------|----------|
-| `.toml` only | Uses `.toml` (primary path) |
-| `.md` only | Uses `.md` with WARN (legacy path) |
-| Both `.toml` and `.md` | Uses `.toml`, ignores `.md`, emits WARN |
-| Neither | Provenance log `overlay_source=none`, no prompt modification |
+| File state | Behavior | `overlay_source` |
+|------------|----------|-------------------|
+| `.toml` only | Uses `.toml` (primary path) | `toml` |
+| `.md` only | **Not applied** — content dropped; `[ERROR]` logged; dispatch continues with the bare prompt | `md_rejected` |
+| Both `.toml` and `.md` | Uses `.toml`, ignores `.md`, emits `[WARN] Legacy .md overlay ignored; .toml takes precedence` | `toml` |
+| Neither | No overlay; no prompt modification | `none` |
 
-**Legacy `.md`-only projects:** A project that only has `customization/{agent}.md` files —
-without any `.toml` files — works without any migration. The plugin detects the `.md`-only overlay
-path and applies the legacy append-text behavior, emitting a deprecation `[WARN]` per dispatch.
+**Legacy `.md`-only projects:** a project that only has `customization/{agent}.md` files —
+without any `.toml` files — is running with **no overlay applied at all**, regardless of what
+the `.md` file contains. This is NOT a working legacy path; it requires migration to be
+effective. See Section 9 for the manual conversion steps.
 
 ### `.md` Overlay Removal
 
-`customization/{agent}.md` legacy overlay support may be removed in a future major version.
-Projects still using `.md` overlays after that point will encounter a validation error at dispatch.
-Migrate to TOML using the examples in Section 4.
+`customization/{agent}.md`-only legacy overlay support **has already been removed** (present
+tense, not a future major-version plan). Any project still relying solely on `.md` overlays must
+migrate to TOML using the examples in Section 4 — until migration is complete, those overlays
+are silently non-functional (dropped, with `overlay_source=md_rejected` in the provenance log)
+rather than raising a hard dispatch-time error.
 
 ---
 
@@ -461,7 +486,7 @@ To convert existing `customization/*.md` overlay files to TOML format, follow th
 Quick reference — full schema applicable to any of the 17 agents:
 
 ```toml
-# customization/{agent}.toml — full schema (applicable to any of 18 agents)
+# customization/{agent}.toml — full schema (applicable to any of 17 agents)
 
 # --- Tier 1: Scalar overrides ---
 model = "sonnet"      # one of: opus | sonnet | haiku

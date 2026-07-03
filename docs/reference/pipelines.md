@@ -49,8 +49,13 @@ flowchart TD
     TEST_RETRY -->|NO| BLOCK_TE[Block + Rollback]
 
     E2E -->|YES| E2E_TEST[E2E Test<br/>test-engineer --e2e]
-    E2E -->|NO| PRE_PUBLISH
-    E2E_TEST --> PRE_PUBLISH
+    E2E -->|NO| ACCEPT_CHECK{Acceptance Gate<br/>needed?}
+    E2E_TEST --> ACCEPT_CHECK
+
+    ACCEPT_CHECK -->|"AC>=3 or cx>=M"| ACCEPT_GATE[Acceptance Gate<br/>acceptance-gate]
+    ACCEPT_CHECK -->|NO| PRE_PUBLISH
+    ACCEPT_GATE -->|APPROVE| PRE_PUBLISH
+    ACCEPT_GATE -->|REQUEST_CHANGES| FIXER
 
     PRE_PUBLISH[Pre-publish Hook<br/>+ Custom Agent] --> PUBLISHER[Publish<br/>publisher]
     PUBLISHER --> POST_PUBLISH[Post-publish Hook<br/>+ Webhook]
@@ -82,6 +87,7 @@ flowchart TD
 | Review | reviewer | opus | **No** | Fixer iterations (default: 5) | Loops with fixer |
 | Test | test-engineer | sonnet | Yes | Test attempts (default: 3) | Follows project test conventions |
 | E2E Test | test-engineer --e2e | sonnet | Yes | 3 attempts | Requires E2E Test config or profile |
+| Acceptance Gate | acceptance-gate | sonnet | Conditional | Fixer iterations (default: 5) | Runs when AC ≥ 3 or complexity ≥ M; always skipped in `--yolo` mode; REQUEST_CHANGES returns to fixer |
 | Pre-publish Hook | (user-defined) | N/A | N/A | None | Failure triggers block handler |
 | Pre-publish Agent | (custom agent) | (per agent) | N/A | None | One-shot gate |
 | Publish | publisher | haiku | **No** | None | Creates PR, updates issue tracker |
@@ -149,8 +155,10 @@ flowchart TD
         REVIEWER_S -->|REQUEST_CHANGES| FIXER_S
         TEST_S --> E2E_S{E2E?}
         E2E_S -->|YES| E2E_TEST_S[E2E Test]
-        E2E_S -->|NO| COMMIT_S[Commit Subtask]
-        E2E_TEST_S --> COMMIT_S
+        E2E_S -->|NO| ACCEPT_GATE_S[Acceptance Gate<br/>acceptance-gate]
+        E2E_TEST_S --> ACCEPT_GATE_S
+        ACCEPT_GATE_S -->|APPROVE| COMMIT_S[Commit Subtask]
+        ACCEPT_GATE_S -->|REQUEST_CHANGES| FIXER_S
     end
 
     SUBTASK_LOOP --> INTEGRATION[Integration Test]
@@ -160,7 +168,11 @@ flowchart TD
     SQUASH_CMD --> PRE_PUB
 
     SINGLE --> PRE_FIX_SINGLE[Pre-fix Hook] --> FIXER_SINGLE[Fix] --> POST_FIX_SINGLE[Post-fix Hook]
-    POST_FIX_SINGLE --> REVIEWER_SINGLE{Review} --> TEST_SINGLE[Test] --> PRE_PUB
+    POST_FIX_SINGLE --> REVIEWER_SINGLE{Review} --> TEST_SINGLE[Test] --> ACCEPT_CHECK_SINGLE{AC >= 3?}
+    ACCEPT_CHECK_SINGLE -->|YES| ACCEPT_GATE_SINGLE[Acceptance Gate<br/>acceptance-gate]
+    ACCEPT_CHECK_SINGLE -->|NO| PRE_PUB
+    ACCEPT_GATE_SINGLE -->|APPROVE| PRE_PUB
+    ACCEPT_GATE_SINGLE -->|REQUEST_CHANGES| FIXER_SINGLE
 
     PRE_PUB[Pre-publish Hook<br/>+ Custom Agent] --> SHOW[Show Result + Confirm]
     SHOW -->|PUBLISH| PUBLISHER[Publish<br/>publisher]
@@ -187,6 +199,7 @@ flowchart TD
 | Fix (per subtask) | fixer | opus | **No** | Build retries (default: 3) | Each subtask scoped to 100-line diff |
 | Review (per subtask) | reviewer | opus | **No** | Fixer iterations (default: 5) | Loops with fixer per subtask |
 | Test (per subtask) | test-engineer | sonnet | Yes | Test attempts (default: 3) | Runs per subtask |
+| Acceptance Gate | acceptance-gate | sonnet | Conditional | Fixer iterations (default: 5) | Decomposition: always runs per subtask (no threshold); single-pass: runs when AC ≥ 3, else skipped; REQUEST_CHANGES returns to fixer |
 | Integration Test | (skill) | N/A | No | 3 attempts | Full test suite after all subtasks |
 | Publish | publisher | haiku | **No** | None | Creates PR, updates issue tracker |
 

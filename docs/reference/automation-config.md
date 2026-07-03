@@ -243,6 +243,8 @@ See [Custom Agents Guide](../guides/custom-agents.md) for details on writing cus
 
 Webhook configuration for pipeline events.
 
+**Operator trust required**: The `Webhook URL` value is dispatched via `curl` without scheme or host validation beyond `--proto "=http,https"`. Operators are responsible for configuring trusted URLs pointing to internal observability endpoints. See [CLAUDE.md](../../CLAUDE.md) Webhook Payloads section and [config.md](config.md#notifications) for the full SSRF/DoS caveat.
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | Webhook URL | (none) | HTTP endpoint for event notifications |
@@ -285,7 +287,7 @@ Optional. Enables browser-based bug reproduction (before fixer) and verification
 
 **Example:**
 ```markdown
-## Browser Verification
+### Browser Verification
 
 | Key | Value |
 |-----|-------|
@@ -330,7 +332,7 @@ Optional. Configures local deployment health checks. The `deployment-verifier` a
 
 **Example:**
 ```markdown
-## Local Deployment
+### Local Deployment
 
 | Key | Value |
 |-----|-------|

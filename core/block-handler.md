@@ -18,7 +18,7 @@ Handle pipeline blocks: rollback git state, set issue state, post block comment,
 
 ## Process
 
-1. **Rollback:** If the blocking agent is `fixer`, `reviewer`, or `test-engineer`, or the blocking step is `smoke-check` → dispatch `agent-flow:rollback-agent` (Task tool, model: haiku). Context: `Agent: {agent_name}. Step: {step_name}. Reason: {reason}. Detail: {detail}. Recommendation: {recommendation}. Execution context: CWD (no worktree).`
+1. **Rollback:** If the blocking agent is `fixer`, `reviewer`, or `test-engineer`, or the blocking step is `smoke-check` → dispatch `agent-flow:rollback-agent` (Task tool, model: haiku). Context: `Agent: {agent_name}. Step: {step_name}. Reason: {reason}. Detail: {detail}. Recommendation: {recommendation}.` Execution context (worktree vs. CWD) is NOT passed here — rollback-agent re-derives it itself via `git worktree list` (see `agents/rollback-agent.md` Process step 2), since single-issue runs execute in CWD but batch runs may execute in a worktree per `Worktrees` config (`skills/fix-bugs/SKILL.md` Worktree / batch processing).
    Do NOT rollback on block from `analyst` — no git changes to revert.
 2. **Set issue state:** Transition the issue to the Blocked state (from config → State transitions → Blocked) via the issue tracker MCP server.
    After the status-set MCP call, follow `core/status-verification.md` to verify the transition succeeded.
@@ -38,10 +38,11 @@ Handle pipeline blocks: rollback git state, set issue state, post block comment,
    Where `detail_truncated_sanitized` is constructed as follows before posting to the issue tracker:
    1. Apply `sanitize_block_reason()` (from `core/post-publish-hook.md` Section 5) to redact credentials from the detail string.
    2. Truncate to 100 chars: if the sanitized string exceeds 100 characters, trim to 97 characters and append `...`.
-   3. The full unsanitized `detail` value is stored in `state.json` (local read only) — see Step 6 below. The issue tracker comment ONLY receives the truncated + sanitized version.
+   3. The full unsanitized `detail` value is stored in `state.json` (local read only) — see Step 5 below. The issue tracker comment ONLY receives the truncated + sanitized version.
 
    Follow `core/mcp-body-formatting.md` when constructing the comment string.
-5. **Fire webhook** if config → Notifications → Webhook URL exists and `issue-blocked` is in On events:
+5. **Update state.json:** set top-level `status` to `"blocked"`, write `block` object with `{agent_name, step_name, reason, detail, recommendation}`. Follow atomic write protocol from `core/state-manager.md`.
+6. **Fire webhook** if config → Notifications → Webhook URL exists and `issue-blocked` is in On events. Fire this AFTER the state.json write in Step 5 completes — consistent with the State-Commit Ordering invariant in `core/post-publish-hook.md` (Section 4), the webhook stream is a projection of committed state, not an in-flight view. If the Step 5 write fails, skip this step (the webhook is suppressed, not fired):
    ```bash
    # Build the entire JSON payload structurally via jq — each variable is passed as --arg so jq
    # performs all string escaping. No inline interpolation into a quoted JSON literal.
@@ -72,7 +73,6 @@ Handle pipeline blocks: rollback git state, set issue state, post block comment,
    become the two-character escape `\n` inside the JSON string. The heredoc body is therefore a
    single logical line of JSON. The heredoc terminator `EOF` can never appear as a standalone line
    inside the body.
-6. **Update state.json:** set top-level `status` to `"blocked"`, write `block` object with `{agent_name, step_name, reason, detail, recommendation}`. Follow atomic write protocol from `core/state-manager.md`.
 
 ## Output Contract
 

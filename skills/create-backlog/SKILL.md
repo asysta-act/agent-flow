@@ -386,10 +386,10 @@ For each epic in `created_issues` (i.e., every epic successfully created in Step
      State Object) has no `decomposition.subtasks[]` structure, so the dual-store state.json fallback tier
      does not apply here; rely on the YAML-first idempotency tier only. On each successful creation,
      increment `backlog.subtasks_created` in this run's `state.json` instead (see step 5 below).
-   This inherits `core/tracker-subtask-creator.md`'s per-tracker MCP dispatch table, the Jira
+   This inherits `../../core/tracker-subtask-creator.md`'s per-tracker MCP dispatch table, the Jira
    nested-sub-task guard, the GitHub/Gitea decomposition checklist, and its idempotency check —
    NON-BLOCKING on individual subtask failures, same as Step 4. `subtasks_created += {success_count
-   returned by core/tracker-subtask-creator.md for this epic}`.
+   returned by ../../core/tracker-subtask-creator.md for this epic}`.
 
 5. Update `state.json`: increment `backlog.subtasks_created` by the count of sub-issues successfully
    created for this epic in sub-step 4 above (atomic write per epic, immediately after sub-step 4 completes

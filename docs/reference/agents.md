@@ -63,11 +63,14 @@ You are a [Role] specializing in [domain].
 ## Goal
 ## Expertise
 ## Process (numbered steps)
+## Output Contract (structured output schema the agent returns to the orchestrator)
+## Step Completion Invariants (fields the orchestrator MUST verify in state.json before advancing: `dispatched_at`, `dispatch_witness`, `tool_uses`, `status="completed"`)
 ## Constraints (NEVER rules, limits, failure handling)
 ```
 
 - The `description` field appears in Claude Code's agent picker — keep it concise
 - Process steps must be numbered and actionable
+- `Output Contract` and `Step Completion Invariants` are mandatory — see [CLAUDE.md](../../CLAUDE.md) for the full reliability contract
 - Constraints must start with NEVER or define hard limits
 - Read-only agents NEVER modify code; execution agents make changes
 - Plugin agents MUST NOT use `hooks`, `mcpServers`, or `permissionMode` keys in their YAML frontmatter — Claude Code platform ignores them for plugin-level agents (security). Hooks are skill-orchestrated, not agent-frontmatter.

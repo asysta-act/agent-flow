@@ -2,7 +2,7 @@
 # Test: config-reader.md Decomposition entry contains create_tracker_subtasks key
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }

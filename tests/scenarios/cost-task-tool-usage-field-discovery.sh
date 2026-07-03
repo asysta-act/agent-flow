@@ -8,9 +8,13 @@ set -euo pipefail
 #              the field matches the known allowlist: {total_tokens, input_tokens+output_tokens,
 #              tokens_estimated}.
 #
-# IMPORTANT: This test performs a STRUCTURAL stub (no live Claude CLI call in CI).
-# It simulates the discovery by reading the spec-mandated field name from Phase 7 implementation.
-# When running with a live Claude CLI (CLAUDE_LIVE_TEST=1), it performs the actual Task dispatch.
+# IMPORTANT: This test performs a STRUCTURAL check only (no live Claude CLI call, ever).
+# It discovers the field by parsing the `tokens_used = result.usage.<field>` assignment
+# that Phase 7's state-manager.md implementation declares, then validates that field
+# against the known allowlist. This shell-based harness has no runtime capable of
+# invoking the Task tool, so CLAUDE_LIVE_TEST=1 is honored only as a request to SKIP
+# (exit 77) rather than fabricate a result — genuine live-field verification, if ever
+# needed, belongs in a scheduled job outside the main harness.
 #
 # The structured summary line DISCOVERED_FIELD={name} is the mechanical signal for Phase 7.
 
@@ -35,26 +39,33 @@ ALLOWLIST=(total_tokens "input_tokens+output_tokens" tokens_estimated)
 STUB_FIELD=""
 STATE_MGR="core/state-manager.md"
 if [ -f "$STATE_MGR" ]; then
-  for candidate in total_tokens tokens_estimated "input_tokens"; do
-    if grep -qF "$candidate" "$STATE_MGR"; then
-      STUB_FIELD="$candidate"
-      break
-    fi
-  done
+  # Extract the field actually DECLARED on the `tokens_used = result.usage.<field>`
+  # assignment line (the implementation's real choice) instead of testing whether any
+  # allowlist candidate string is present anywhere in the file. A presence-anywhere
+  # match is tautological here: state-manager.md spells out the full allowlist in prose
+  # right next to the assignment, so every candidate substring is always present
+  # regardless of which field was actually chosen — this used to make the check
+  # unconditionally pass and "discover" nothing.
+  ASSIGNED_LINE="$(grep -E 'tokens_used[[:space:]]*=[[:space:]]*result\.usage\.[A-Za-z_]+' "$STATE_MGR" | head -1)"
+  STUB_FIELD="$(printf '%s\n' "$ASSIGNED_LINE" | grep -oE 'result\.usage\.[A-Za-z_]+' | head -1 | sed 's/^result\.usage\.//')"
 fi
 
-# If Phase 7 hasn't implemented yet, use sentinel
+# If Phase 7 hasn't documented a concrete tokens_used assignment yet, use sentinel
 if [ -z "$STUB_FIELD" ]; then
   if [ "${CLAUDE_LIVE_TEST:-0}" = "1" ]; then
-    # Live path: actual Claude Task dispatch would go here
-    # For now emit UNKNOWN to signal Phase 7 to run discovery
+    # Live Task-tool dispatch is NOT implemented by this shell-based harness — there is
+    # no runtime here capable of invoking the Task tool and reading a real response, so
+    # CLAUDE_LIVE_TEST=1 can never do more than the structural stub above. Skip instead
+    # of fabricating a FAIL: real live-field verification belongs in a scheduled job
+    # outside the main harness (see COST-R12 discussion), not a permanently-failing
+    # branch in this script.
     echo "DISCOVERED_FIELD=<UNKNOWN>" >&2
-    echo "FAIL: CLAUDE_LIVE_TEST=1 but live dispatch not available in this harness" >&2
-    exit 1
+    echo "[SKIP] CLAUDE_LIVE_TEST=1 requested but live Task dispatch is not implemented in this harness" >&2
+    exit 77
   else
     # Pre-Phase 7: emit ABSENT signal (correct TDD red-phase behavior)
     echo "DISCOVERED_FIELD=<ABSENT>"
-    echo "FAIL: state-manager.md not found or does not document usage field — Phase 7 implementation required" >&2
+    echo "FAIL: state-manager.md not found or does not document a tokens_used = result.usage.<field> assignment — Phase 7 implementation required" >&2
     exit 1
   fi
 fi

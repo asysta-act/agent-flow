@@ -9,7 +9,7 @@ rule = "Verification by manual smoke check; do NOT call npm test or pytest"
 
 [limits]
 max_iterations = 3  # default 5
-max_test_attempts = 0  # no test infrastructure; skip test phase entirely
 
 [meta]
 note = "This overlay is appropriate for prototype repos only — production work should have tests"
+skip_test_phase_hint = "max_test_attempts is a test-engineer [limits] key (docs/guides/toml-overlay-syntax.md §2), not a fixer one — setting it here has no effect. To skip the test-engineer stage entirely, use Automation Config > Pipeline Profiles > Skip stages: test-engineer."

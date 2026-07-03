@@ -47,7 +47,7 @@ fi
 
 Then resolve the override directory from the project's `## Automation Config` →
 `### Agent Overrides` → `Path` key (default: `customization/`), matching the same key
-`core/agent-override-injector.md` reads at dispatch time. This is a narrow, read-only
+`../../core/agent-override-injector.md` reads at dispatch time. This is a narrow, read-only
 lookup of a single config value — it does NOT constitute general CLAUDE.md consumption
 and does not conflict with the "never read CLAUDE.md" intent for project-specific *logic*
 (see Constraints):
