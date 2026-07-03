@@ -47,6 +47,8 @@ GOT_BATCH=false; BATCH_N=""; POSITIONAL=""; DRY_RUN=false
 GOT_YOLO=false; GOT_STEP_MODE=false; GOT_DECOMPOSE=false; GOT_NO_DECOMPOSE=false
 PROFILE_NAME=""; CLARIFICATION_TEXT=""
 read -ra ARG_TOKENS <<< "$ARGUMENTS"
+# Recognized flag tokens — used as stop-markers when reconstructing multi-word values below.
+KNOWN_FLAG_RE='^(--batch|--dry-run|--yolo|--step-mode|--decompose|--no-decompose|--profile|--clarification)$'
 i=0
 while [ $i -lt ${#ARG_TOKENS[@]} ]; do
   tok="${ARG_TOKENS[$i]}"
@@ -57,8 +59,28 @@ while [ $i -lt ${#ARG_TOKENS[@]} ]; do
     --step-mode)     GOT_STEP_MODE=true ;;
     --decompose)     GOT_DECOMPOSE=true ;;
     --no-decompose)  GOT_NO_DECOMPOSE=true ;;
-    --profile)       i=$((i+1)); PROFILE_NAME="${ARG_TOKENS[$i]}" ;;
-    --clarification) i=$((i+1)); CLARIFICATION_TEXT="${ARG_TOKENS[$i]}" ;;
+    --profile)
+      # `read -ra` already split the shell-quoted "<name>" into separate tokens, so a
+      # multi-word profile name must be rejoined here rather than read as one array slot.
+      i=$((i+1)); PROFILE_NAME=""
+      while [ $i -lt ${#ARG_TOKENS[@]} ] && [[ ! "${ARG_TOKENS[$i]}" =~ $KNOWN_FLAG_RE ]]; do
+        PROFILE_NAME="${PROFILE_NAME:+$PROFILE_NAME }${ARG_TOKENS[$i]}"
+        i=$((i+1))
+      done
+      i=$((i-1)) # outer loop's `i=$((i+1))` advances past the last consumed token
+      ;;
+    --clarification)
+      # Same reconstruction as --profile: consume tokens up to the next recognized flag
+      # (or end-of-array) and rejoin with single spaces. KNOWN LIMITATION: if the answer text
+      # itself contains a substring matching a recognized flag (e.g. "use --yolo instead"),
+      # reconstruction stops early at that token. Prefer short, flag-free clarification text.
+      i=$((i+1)); CLARIFICATION_TEXT=""
+      while [ $i -lt ${#ARG_TOKENS[@]} ] && [[ ! "${ARG_TOKENS[$i]}" =~ $KNOWN_FLAG_RE ]]; do
+        CLARIFICATION_TEXT="${CLARIFICATION_TEXT:+$CLARIFICATION_TEXT }${ARG_TOKENS[$i]}"
+        i=$((i+1))
+      done
+      i=$((i-1))
+      ;;
     --*) ;;
     *) [ -z "$POSITIONAL" ] && POSITIONAL="$tok" ;;
   esac
@@ -113,11 +135,24 @@ If `RESUME_POINT == "FRESH"`, proceed with Step 1 below. Otherwise skip ahead pe
 mapping in `../../core/resume-detection.md`. Batch-mode invokes per-issue resume inside the per-issue
 loop, so the outer batch run does not skip ahead.
 
+**Webhook events beyond the base 5:** this skill's own NEEDS_CLARIFICATION handling (see
+steps/01-triage.md and steps/04-fixer-reviewer-loop.md) fires `pipeline-paused`, and
+`../../core/resume-detection.md` Step 9 fires `pipeline-resumed` on the next resumed invocation —
+both gated on `Webhook_URL` being set and the matching token present in `On events`, same as every
+other webhook call site. These two tokens are additive to the 5 tokens CLAUDE.md's `### Notifications`
+reference table currently enumerates (`pr-created`, `issue-blocked`, `pipeline-started`,
+`step-completed`, `pipeline-completed`). Add `pipeline-paused` and `pipeline-resumed` to your
+project's `On events` list to receive clarification pause/resume notifications from this pipeline.
+
 ## Mode flag semantics
 
-- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps, pauses only on NEEDS_CLARIFICATION.
+- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps, including step 11
+  (publish), pauses only on NEEDS_CLARIFICATION. There is no separate human publish-confirmation
+  gate in default mode; the pipeline completes end-to-end unattended once dispatched.
 - `--yolo`: zero gates, autonomous run to PR — auto-approve decomposition, auto-publish.
-- `--step-mode`: pause after each step for human review — mutually exclusive with `--yolo`.
+- `--step-mode`: pause after each step for human review, including a confirmation prompt before
+  step 11 dispatches — mutually exclusive with `--yolo`. Use this flag when a human
+  publish-review gate is desired.
 
 ## Configuration
 
@@ -146,6 +181,13 @@ If `MODE = batch`:
 - Outer loop: query the tracker for N bugs via `Bug query` from Automation Config.
 - For each ticket: write per-issue `.agent-flow/{ISSUE-ID}/state.json`, then execute the
   dispatch table below per-issue.
+- "Parallel" means concurrent `Task()` dispatch of per-ticket pipelines only — per-issue
+  `state.json` writes stay inside each ticket's own directory (no cross-ticket sharing, per
+  `../../core/state-manager.md`). The batch-level summary below, by contrast, IS shared across
+  tickets; this orchestrator (not any dispatched subagent) is its sole writer, folding each
+  ticket's result in sequentially as that ticket's `Task()` call returns, via the standard
+  atomic tmp+rename write. Single-writer-by-construction means no additional file-level locking
+  is required for the summary file either, even under parallel worktree dispatch.
 - Maintain a batch-level summary at `.agent-flow/batch-{timestamp}/state.json` with
   `pipeline_type: "bug_fix_batch"`, `processed[]`, `succeeded[]`, `blocked[]`.
 - On block: increment `block_count`. If `Max blocked per run` reached → skip remaining bugs.
@@ -191,7 +233,9 @@ agent prompt.
 Before each Task dispatch, apply Agent Overrides per `../../core/agent-override-injector.md` (.toml
 primary). Applies to both single and batch mode.
 
-**Step file override (planned v1.2):** replacing individual step files via `customization/steps/fix-bugs/{NN}-{name}.md` is not yet implemented. See TOML overlay documentation for current customization options.
+**Step file override (not yet implemented):** replacing individual step files via
+`customization/steps/fix-bugs/{NN}-{name}.md` is not currently supported by any shipped version.
+See TOML overlay documentation for current customization options.
 
 ## `--step-mode` prompt
 
@@ -236,8 +280,9 @@ After all bugs processed (batch only): emit a structured table
 
 - Single mode: work in CWD — no worktrees.
 - Batch mode: worktree behavior follows the Worktrees config (parallel) or sequential CWD.
-- Publisher (step 11) is NOT called automatically in single mode (default) — the user decides;
-  `--yolo` auto-publishes.
+- Publisher (step 11) runs automatically at the end of every non-paused, non-blocked run — this
+  is true in default mode as well as `--yolo` (see "## Mode flag semantics"). To gate publish on
+  a human decision, invoke with `--step-mode`.
 - Block Comment Template is passed to agents as context instructions.
 - Retry limits are passed to agents as context instructions.
 - Hooks fire before/after their respective agent steps, NOT inside the reviewer loop.

@@ -116,7 +116,7 @@ If `{Agent Overrides path}/architect.toml` exists, append its rendered Markdown 
 - Update `state.json`: set `decomposition.status = "completed"`, write `decomposition.decision`,
   `decomposition.strategy`, `decomposition.subtasks` list. Follow atomic write protocol.
 - Run subtask execution (see `../../../core/decomposition-heuristics.md`). After subtask execution completes,
-  skip to step 07-publish.
+  skip to step 11 (publish).
 
 ## State update (end of step)
 

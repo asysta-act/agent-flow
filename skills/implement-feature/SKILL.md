@@ -38,7 +38,7 @@ Mode semantics: default = supervised autopilot (pauses only on `NEEDS_CLARIFICAT
 
 ## Configuration
 
-Follow `../../core/config-reader.md`. Required sections: `Issue Tracker` (Type, State transitions, On start set), `Feature Workflow` (Feature query, On start set), `Source Control` (Remote, Base branch, Branch naming), `PR Rules` (Labels), `PR Description Template`, `Build & Test` (Build, Test, Verify commands), `Retry Limits`, `Module Docs`, `Hooks`, `Custom Agents`, `Notifications`, `Decomposition`, `Error Handling`, `Agent Overrides`, `Local Deployment`, `Pipeline Profiles`. Full key list in `docs/reference/automation-config.md`.
+Follow `../../core/config-reader.md`. Required sections: `Issue Tracker` (Type, State transitions, On start set), `Source Control` (Remote, Base branch, Branch naming), `PR Rules` (Labels), `PR Description Template`, `Build & Test` (Build, Test, Verify commands). Optional sections this skill also reads: `Feature Workflow` (Feature query, On start set — see Init step 4 for the On-start-set fallback), `Retry Limits`, `Module Docs`, `Hooks`, `Custom Agents`, `Notifications`, `Decomposition`, `Error Handling`, `Agent Overrides`, `Local Deployment`, `Pipeline Profiles`. Full key list in `docs/reference/automation-config.md`.
 
 ## MCP pre-flight
 
@@ -48,17 +48,9 @@ If the MCP server is unavailable, display: `Cannot connect to your issue tracker
 
 ### Step 0b: Config Validity Gate
 
-Scan Automation Config required sections for `<!-- TODO:` and `<...>` placeholders; block if incomplete. Canonical logic mirrored in `skills/fix-bugs/SKILL.md` Step 0b.
+After `../../core/config-reader.md` parses the required sections, scan their raw text for unfilled scaffolding placeholders — `<!-- TODO:` markers or angle-bracket templates like `<your-value-here>` left over from onboarding. If any required section (`Issue Tracker`, `Source Control`, `PR Rules`, `PR Description Template`, `Build & Test`) still contains one, BLOCK using the template from `../../core/config-reader.md` Failure Handling, with `Detail` listing the offending key(s) and `Recommendation` pointing to `/agent-flow:onboard`. This placeholder scan is local to this skill — `config-reader.md`'s own Failure Handling only verifies that required sections are *present*, not that their values are filled in, and no other skill currently duplicates this check.
 
 See `../../core/mcp-body-formatting.md` for newline-handling in MCP comment bodies.
-
-## Issue-ID validation (path-traversal defense)
-
-```bash
-if [[ ! "${ISSUE_ID}" =~ ^[A-Za-z0-9#._-]+$ || "${ISSUE_ID}" =~ ^\.+$ ]]; then
-  echo "[BLOCK] Invalid issue_id: ${ISSUE_ID}" >&2; exit 1
-fi
-```
 
 ## Pipeline profile parsing
 
@@ -66,9 +58,20 @@ Follow `../../core/profile-parser.md`. Valid stage names: `spec-analyst`, `analy
 
 ## Resume detection
 
-Follow `../../core/resume-detection.md`. Inputs: `ISSUE_ID`, `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`, `On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
+Follow `../../core/resume-detection.md` for the full contract, including Step 1's canonical `ISSUE_ID` path-traversal validation (single source of truth — this skill does not duplicate that regex). Inputs: `ISSUE_ID`, `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`, `On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
 
-If `RESUME_POINT == "FRESH"`, run the dispatch table below from step 01. Otherwise jump to the corresponding step per the FEATURE pipeline mapping in `../../core/resume-detection.md` Step 6.
+If `RESUME_POINT == "FRESH"`, run the dispatch table below from step 01. Otherwise, `RESUME_POINT` is a stage name produced by the phase-scan in `../../core/resume-detection.md` Step 8 (that contract's own Step 6 is a `$STATUS`-branch matrix, not a stage map — this is the FEATURE-pipeline stage map it defers to). Jump to the matching step:
+
+| `RESUME_POINT` (stage) | Resume at step |
+|---|---|
+| `spec_analysis` | 01 — `steps/01-spec.md` (spec-analyst) |
+| `code_analysis` | 01 — `steps/01-spec.md` (analyst `--phase impact`) if `architect.status` is not yet `"in_progress"`/`"completed"`, else 02 — `steps/02-architect.md` (architect). **Known limitation:** steps 01b and 02 both write the shared `code_analysis` stage key, so a crash between the two can leave `code_analysis.status = "completed"` from step 01b alone — phase-scan would then wrongly treat step 02 as done. Always cross-check `architect.status` before trusting this row. |
+| `decomposition` | 03 — `steps/03-decomposition.md` |
+| `fixer_reviewer` | 04 — `steps/04-fixer-reviewer-loop.md` |
+| `smoke_check` | 05 — `steps/05-smoke.md`. Not yet in `../../core/resume-detection.md` Step 8's phase-scan enumeration — until added there, a crash mid-`smoke_check` phase-scans as `test` pending rather than resuming at 05. |
+| `test` / `e2e_test` | 06 — `steps/06-test.md` |
+| `acceptance_gate` | 07 — `steps/07-acceptance-gate.md` |
+| `publisher` | 08 — `steps/08-publish.md` |
 
 ## Init (state + run_id + start webhook)
 
@@ -77,7 +80,7 @@ After resume detection (when `RESUME_POINT == "FRESH"`):
 1. Create `.agent-flow/{ISSUE_ID}/` and initialize `state.json` via `../../core/state-manager.md` — top-level `status = "running"`, `pipeline = "implement-feature"`, `mode = "feature"`, empty `stages = {}` map, `run_id = <uuid>`.
 2. Check out the working branch per `Branch naming` in `Source Control` config.
 3. Fire `pipeline-started` webhook if configured (see `../../core/agent-states.md`).
-4. Apply `Issue Tracker → On start set` transition to the issue (state + implicit self-assign — same protocol as `skills/fix-bugs/SKILL.md` Step 1).
+4. Apply the issue-start transition: use `Feature Workflow → On start set` when that key is configured; otherwise fall back to `Issue Tracker → On start set` (state + implicit self-assign — same protocol as the state-init step in `skills/fix-bugs/SKILL.md` Step Dispatch row 00).
 
 ## Step dispatch
 
@@ -105,7 +108,7 @@ The orchestrator MUST inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as 
 In default mode (no `--yolo`, no `--step-mode`):
 
 - **Spec Checkpoint** after step 01: display spec + AC summary; ask the user to confirm or revise before architect runs.
-- **Decomposition Approval** checkpoint after step 02: show architect task tree + AC coverage; user approves before fixer loop starts.
+- **Decomposition Approval** checkpoint — fires only when decomposition is actually triggered (`decompose_mode = FORCE`, or `AUTO` with the architect indicating decomposition is warranted; see `steps/03-decomposition.md`): after step 02, show the architect task tree + AC coverage; user approves before the fixer loop starts. When decomposition is NOT triggered (`decompose_mode = DISABLED`, or `AUTO` with no decomposition signal), the pipeline proceeds directly from step 02 to step 04 with no additional gate.
 
 `--yolo` skips both checkpoints and runs fully autonomous to PR. `--step-mode` prompts `[step-mode] Step NN/08 completed. Continue? [c/s/a]` after every step — see `../../core/resume-detection.md` for `a` (abort) handling.
 
@@ -123,7 +126,7 @@ Before EVERY Task dispatch, follow `../../core/agent-override-injector.md` for T
 
 After each step completes, if `$GOT_STEP_MODE == true`: pause and display step-result summary, prompt `[step-mode] Step NN/08 completed. Continue? [c/s/a]`. `c` = continue; `s` = skip next step (write `status = "skipped"` to next stage's state.json record before resuming); `a` = abort (write `status = "paused"` and `last_completed_step` to state.json; exit 0; resume by re-invoking `/agent-flow:implement-feature <ISSUE-ID>`).
 
-**Near-miss WARN**: if a file exists at `customization/steps/implement-feature/{NN}-*.md` that does NOT match any of the 8 canonical step filenames, log `[WARN] Unrecognized step override file: {filename}` and continue.
+**Near-miss WARN** (forward-looking guard — replacing step files via `customization/steps/` is not an implemented override mechanism today; only `{Agent Overrides path}/{agent}.toml` overlays are supported, per `../../core/agent-override-injector.md`): if a file exists at `customization/steps/implement-feature/{NN}-*.md`, log `[WARN] Unrecognized step override file: {filename} (step-file overrides are not yet supported — use a TOML agent overlay instead)` and continue.
 
 ## Block handler
 
@@ -131,15 +134,9 @@ Follow `../../core/block-handler.md`. On `fixer` / `reviewer` / `test-engineer` 
 
 ## Architecture freshness check (advisory)
 
-Advisory pre-architect warning — does not block dispatch:
+<!-- @snippet:architecture-freshness -->
 
-```bash
-last_commit=$(git log -1 --format="%H" -- docs/architecture.md 2>/dev/null)
-if [ -n "$last_commit" ]; then
-  commits_since=$(git rev-list HEAD ^"$last_commit" --count 2>/dev/null || echo 0)
-  [ "$commits_since" -ge 25 ] && echo "[WARN] docs/architecture.md has not been updated in ${commits_since} commits (threshold: 25)."
-fi
-```
+Before architect dispatch (step 02), run the canonical advisory check from `../../core/snippets/architecture-freshness.md`. Non-blocking — never gates dispatch, regardless of output.
 
 ## Step detail files
 

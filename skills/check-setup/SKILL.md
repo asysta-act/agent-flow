@@ -43,17 +43,31 @@ Find the row matching the configured Type in the Validation Rules table.
 - Apply the instance validation rule (if any) to the Instance value
 - For unknown Type → [WARN] "Unknown tracker type '{Type}'. Validation skipped."
 
+### 3b. Build & Test — Verify command (optional key)
+
+`Verify command` is an optional key inside the required `Build & Test` section (per CLAUDE.md: it
+runs after PR merge, and the issue is re-opened if it fails). It is not required for pipeline
+readiness, so check it separately from the required-key table in Step 3:
+
+- Key absent → [SKIP] "Build & Test — Verify command not configured (optional; runs after PR merge, re-opens the issue on failure)"
+- Key present, non-empty, not a placeholder → [OK] "Build & Test — Verify command configured"
+- Key present but empty or a placeholder (`<...>`) → [WARN] "Build & Test — Verify command is present but empty/placeholder; post-merge verification will not run"
+
 4. For each key: verify that the value exists and is NOT a placeholder (`<...>`)
    - Present and filled → [OK]
    - Empty or placeholder → [FAIL]
 
-5. Verify optional sections (if they exist, check the format):
-   - Retry Limits, Hooks, Custom Agents, Notifications, Worktrees, E2E Test, Browser Verification, Error Handling, Decomposition, Pipeline Profiles, Metrics, Feature Workflow, Local Deployment, Agent Overrides
+5. Verify optional sections (if they exist, check the format). This is the full 18-section
+   canonical list from CLAUDE.md's Automation Config reference — keep this list in sync with it:
+   - Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees, E2E Test, Browser Verification, Error Handling, Feature Workflow, Decomposition, Pipeline Profiles, Metrics, Agent Overrides, Local Deployment, Sprint Planning, Autopilot, Pause Limits
    - Exists and correct format → [OK]
    - Does not exist → [SKIP] (optional)
    - Exists but incorrect format → [WARN]
    - Local Deployment (if present): Type must be `docker` or `native` → [WARN] if neither; Start command and Stop command must be non-empty → [WARN] if missing
    - Browser Verification (if present): On events must be `reproduce`, `verify`, or `reproduce, verify` → [WARN] if other; Stop command (optional) must be non-empty if present → [WARN] if empty
+   - Sprint Planning (if present): Mode must be `suggest` or `apply` → [WARN] if neither; Max issues (if present) must be an integer 1–50 → [WARN] if out of range
+   - Autopilot (if present): must have exactly 7 keys — Max issues per run, Lock timeout, Log file, Bug limit, Feature limit, On error, Dry run → [WARN] "Autopilot — expected exactly 7 keys, found {N}" if the count differs. Note: `Bug query` lives in Issue Tracker and `Feature query` lives in Feature Workflow — neither belongs in Autopilot, and their presence there does not count toward the 7. On error (if present) must be `skip` or `stop` → [WARN] if neither
+   - Pause Limits (if present): Pause timeout must parse as `<N> hours` or `<N> days` within range 1 hour–365 days (3600s–31536000s, matching `parse_pause_timeout()` in `skills/autopilot/SKILL.md`) → [WARN] "Pause Limits — Pause timeout '{value}' is out of range or unparseable; autopilot falls back to the default (30 days)" if invalid. This is advisory only — autopilot does not abort on an invalid value, so this never escalates past [WARN]
 
 ### Block 2: MCP servers (presence and connectivity)
 
@@ -76,8 +90,19 @@ Find the row matching the configured Type in the Validation Rules table.
 
 8. Verify that tokens in `.mcp.json` are not empty or placeholders → [OK] or [FAIL]
    - If tracker Type is `gitea` AND `.mcp.json` contains a `command` field referencing `forgejo-mcp`: emit `[WARN] forgejo-mcp detected in .mcp.json for Type: gitea — re-run /agent-flow:setup-mcp to install gitea-mcp.`
+     Rationale: `forgejo-mcp` is a third-party MCP server that also targets Gitea-compatible
+     instances (Forgejo is a Gitea fork), so it's an easy substitution mistake for a `Type: gitea`
+     project. `/agent-flow:setup-mcp` always installs the dedicated `gitea-mcp` binary for this
+     tracker type (see `docs/reference/trackers.md`'s MCP Server Detection table) — a `forgejo-mcp`
+     command here is a non-standard substitute, not the expected binary, even though it may work.
 
 ### Block 3: Connectivity
+
+> **Pattern source:** `core/mcp-detection.md`'s Classification Reference table is the canonical
+> single source for the TLS/auth/not-found/timeout trigger-pattern lists used across the plugin.
+> The TLS and auth pattern lists in Steps 9 and 10 below mirror that table's `"tls"` and `"auth"`
+> rows (adapted here to also gate the curl confirmation probe). If a pattern is added or changed,
+> update `core/mcp-detection.md` first and mirror the change into both copies below.
 
 9. Run the Bug query from Automation Config via MCP (limit 1 result):
    - Success → [OK] with the number of bugs found
@@ -88,7 +113,7 @@ Find the row matching the configured Type in the Validation Rules table.
         Run a curl probe to confirm network reachability:
         - Check `which curl` — if curl is not available, skip probe and emit:
           [FAIL] "Issue tracker — TLS error detected. Add NODE_OPTIONS: --use-system-ca to .mcp.json env block. (curl not available for confirmation probe)"
-        - Run: `curl -s -o /dev/null -w "%{http_code}" --max-time 5 {Instance}`
+        - Run: `curl -s -o /dev/null -w "%{http_code}" --proto "=http,https" --max-time 5 "{Instance}"`
         - curl exit 0 and HTTP code != 000 →
           [FAIL] "Issue tracker — server reachable but MCP connection failed (likely TLS) — add NODE_OPTIONS: --use-system-ca to the env block in .mcp.json"
         - curl exit non-zero or HTTP code 000 →
@@ -111,7 +136,7 @@ Find the row matching the configured Type in the Validation Rules table.
          If {sc_base_url} was derived, run a curl probe:
          - Check `which curl` — if curl is not available, skip probe and emit:
            [FAIL] "Source control — TLS error detected. Add NODE_OPTIONS: --use-system-ca to .mcp.json env block. (curl not available for confirmation probe)"
-         - Run: `curl -s -o /dev/null -w "%{http_code}" --max-time 5 {sc_base_url}`
+         - Run: `curl -s -o /dev/null -w "%{http_code}" --proto "=http,https" --max-time 5 "{sc_base_url}"`
          - curl exit 0 and HTTP code != 000 →
            [FAIL] "Source control — server reachable but MCP connection failed (likely TLS) — add NODE_OPTIONS: --use-system-ca to the env block in .mcp.json"
          - curl exit non-zero or HTTP code 000 →
@@ -158,7 +183,7 @@ else
 fi
 ```
 
-Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUMENTS` (same flag used by Block 4). The 4-branch decision tree:
+Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUMENTS` (same flag used by Block 4). The 5-branch decision tree:
 - `--skip-build` flag → `[SKIP] Docker - skipped (--skip-build flag)`
 - No Dockerfile present → `[SKIP] Docker - no Dockerfile`
 - `docker` binary not on PATH → `[SKIP] Docker - docker binary not found` (handles CI environments without Docker)
@@ -166,6 +191,11 @@ Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUM
 - Docker build exits non-zero → `[FAIL] Docker - {last 3 lines of build log}`
 
 ## Output format
+
+> The template below is populated from all Blocks in this file, including Blocks 5–7 (Plugin
+> Composability, Dispatch Enforcement Hook, Agent Overrides) and the Deprecated config detection
+> pass, which are defined further below. `[ADVISORY]` lines (Block 6 only) and `[SKIP]` lines never
+> count toward the `{N} FAIL, {M} WARN` totals in the Result line.
 
 ```
 ## Setup report — {Remote from Automation Config}
@@ -193,8 +223,18 @@ Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUM
 ### Docker
 [SKIP] Docker - no Dockerfile
 
+### Plugin Composability
+[OK]   No plugin conflicts detected
+
+### Dispatch Enforcement Hook
+[ADVISORY] PostToolUse hook not configured — dispatch enforcement is opt-in. See docs/guides/dispatch-enforcement.md to install.
+
 ### Agent Overrides
 [FAIL] Agent overrides - .toml overlays present (customization/browser-agent.toml customization/fixer.toml) but neither tomllib (Python 3.11+) nor the tomli backport is importable by python3. The injector will SILENTLY DROP these overlays. Fix: install Python 3.11+, or run 'python3 -m pip install tomli'.
+
+### Deprecated config
+[WARN] Deprecated config section detected: ### Extra labels
+       Move any labels into ### PR Rules → Labels (which fully supports the use case). See CHANGELOG.md.
 
 ---
 Result: {N} FAIL, {M} WARN — {verdict}
@@ -206,7 +246,7 @@ Verdict:
 
 ### Block 5: Plugin Composability
 
-13. Check installed plugins:
+14. Check installed plugins:
     - Look for plugin registry: `.claude/plugins.json`, `.claude-plugins`, or another file with plugin metadata (exact location depends on the Claude Code version — if none of these files exist → [SKIP] "Plugin registry not found — conflict detection skipped")
     - If found: read the list of installed plugins
     - For each plugin: check if it registers commands with the same base name as agent-flow commands (without namespace prefix)
@@ -215,7 +255,7 @@ Verdict:
 
 ### Block 6: Dispatch Enforcement Hook (advisory)
 
-14. Check whether the dispatch enforcement hook is installed:
+15. Check whether the dispatch enforcement hook is installed:
     a. Verify that `hooks/validate-dispatch.sh` exists in the plugin installation directory.
        - Glob with `.claude/plugins/**/hooks/validate-dispatch.sh`; if not found, try `hooks/validate-dispatch.sh` relative to CWD.
        - Found → [OK] "hooks/validate-dispatch.sh present at {path}"
@@ -238,7 +278,7 @@ apply, and nothing surfaces it. This block catches that exact condition. The sam
 happens on TOML syntax errors and unknown-key validation failures, so present-but-unparseable
 overlays are validated end-to-end too.
 
-15. Resolve the override directory from `### Agent Overrides → Path` in Automation Config
+16. Resolve the override directory from `### Agent Overrides → Path` in Automation Config
     (default `customization/`). Set `$override_path` to the resolved value and run the probe:
 
 ```bash
@@ -264,7 +304,7 @@ else
 fi
 ```
 
-16. If the probe reported `[OK]` (parser available) AND at least one overlay exists, validate each
+17. If the probe reported `[OK]` (parser available) AND at least one overlay exists, validate each
     overlay end-to-end so syntax errors and unknown-key violations — which also drop the overlay
     silently — are caught. Locate the parser library with Glob: pattern
     `.claude/plugins/**/skills/setup-agents/lib/toml-merge.sh` first, then
