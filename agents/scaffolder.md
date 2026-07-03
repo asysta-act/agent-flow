@@ -215,13 +215,13 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 1. `dispatched_at` — Field is present and non-empty for stage `scaffolding`. The orchestrator wrote this pre-dispatch.
 
-2. `dispatch_witness` — Field is present, exactly 64 hex characters, and matches the sha256 of `{subagent_type}|{model}|{prompt_head_128}` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function.
+2. `dispatch_witness` — Field is present and matches the shape `^[0-9a-f]{64}$` (64 lowercase hex characters). Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function, which checks presence and hex-shape only — it does NOT recompute or cryptographically compare against the sha256 of `{subagent_type}|{model}|{prompt_head_128}` (that value is produced once, pre-dispatch, by `compute_dispatch_witness` in the same file; nothing re-derives or verifies it against the dispatch tuple after the fact).
 
 3. `status` — Field equals `"in_progress"` for this stage. The orchestrator wrote this pre-dispatch (status flips to `"completed"` only AFTER you return, so observing `"in_progress"` proves the normal dispatch flow ran).
 
 4. `stage_name` — State.json `stage_name` for this stage equals `scaffolding` (this value is injected by the orchestrator as a Tier-1 prompt template variable: `EXPECTED_STAGE_NAME=scaffolding`). If the values mismatch, the orchestrator's dispatch table is inconsistent with the prompt — Block immediately.
 
-5. `agent_name` — State.json `agent_name` for this stage equals `scaffolder` (injected as `EXPECTED_AGENT_NAME=scaffolder`). Mismatch → Block.
+5. `agent_name` — State.json `agent_name` for this stage equals the value injected as `EXPECTED_AGENT_NAME` (the namespaced Task subagent_type, e.g. `agent-flow:scaffolder`). Mismatch → Block.
 
 If ANY invariant fails, output a Block comment using the standard Block Comment Template with `Reason: Step completion invariant violated: {invariant_name}` and exit with BLOCKED status.
 

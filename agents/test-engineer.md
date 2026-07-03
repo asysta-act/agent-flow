@@ -106,13 +106,13 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 1. **`dispatched_at`** — Field is present and non-empty for stage `{EXPECTED_STAGE_NAME}` (here: `test` for the default unit-test invocation, or `e2e_test` when dispatched with the `--e2e` flag). Orchestrator wrote this pre-dispatch as a timestamp; absence proves the dispatch flow was bypassed.
 
-2. **dispatch_witness** — Field is present, exactly 64 hex characters, and matches `sha256({subagent_type}|{model}|{prompt_head_128})` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh check_dispatch_witness`.
+2. **dispatch_witness** — Field is present and matches the shape `^[0-9a-f]{64}$` (64 lowercase hex characters). Verify via `core/lib/stage-invariant.sh check_dispatch_witness`, which checks presence and hex-shape only — it does NOT recompute or cryptographically compare against `sha256({subagent_type}|{model}|{prompt_head_128})` (that value is produced once, pre-dispatch, by `compute_dispatch_witness` in the same file; nothing re-derives or verifies it against the dispatch tuple after the fact).
 
 3. **status** — Equals `"in_progress"` for this stage at the moment of your check. Status flips to `"completed"` only AFTER you return; observing `"in_progress"` proves the dispatch flow ran.
 
 4. **stage_name** — Equals `test` or `e2e_test` matching the dispatched flag (orchestrator-injected as the `EXPECTED_STAGE_NAME` Tier-1 prompt variable). Mismatch indicates wiring drift between unit-test and e2e invocations.
 
-5. **agent_name** — Equals `test-engineer` (orchestrator-injected as the `EXPECTED_AGENT_NAME` Tier-1 prompt variable). Mismatch indicates wrong subagent routed.
+5. **agent_name** — Equals the value injected as the `EXPECTED_AGENT_NAME` Tier-1 prompt variable (the namespaced Task subagent_type, e.g. `agent-flow:test-engineer`). Mismatch indicates wrong subagent routed.
 
 If ANY invariant fails: Block with `Reason: Step completion invariant violated: {invariant_name}` using the standard Block Comment Template. Do NOT write `tool_uses`, `completed_at`, or `status="completed"` to state.json — that responsibility belongs to the orchestrator only after you return cleanly.
 
