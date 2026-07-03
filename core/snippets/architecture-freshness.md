@@ -23,5 +23,5 @@ fi
 **Non-blocking:** the block always exits 0 (advisory only); pipeline continues regardless of warning/info output.
 
 ## Used by:
-- `skills/fix-bugs/SKILL.md` line 338 (citation marker `<!-- @snippet:architecture-freshness -->`)
+- `skills/fix-bugs/SKILL.md:165` (citation marker `<!-- @snippet:architecture-freshness -->`)
 

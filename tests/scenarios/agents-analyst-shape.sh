@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Verifies: AC-AGT-003
-# Description: agents/analyst.md has Phase Dispatch section, name: analyst, model: sonnet
+# Description: agents/analyst.md has Phase Dispatch section, name: analyst, model: sonnet.
+# Also verifies CLAUDE.md's Bug-Fix Pipeline callouts for analyst --phase triage
+# (reproduction_steps) and --phase impact (<=5 affected files) are backed by matching
+# agents/analyst.md content, and that CLAUDE.md's "PR descriptions always in English"
+# Key Convention is backed by matching agents/publisher.md enforcement.
 set -uo pipefail
 
 # NOTE: REPO_ROOT assumes test file location is tests/scenarios/. Run after Phase 7 has moved files.
@@ -17,6 +21,8 @@ FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
 
 ANALYST_FILE="$REPO_ROOT/agents/analyst.md"
+CLAUDE_MD="$REPO_ROOT/CLAUDE.md"
+PUBLISHER_FILE="$REPO_ROOT/agents/publisher.md"
 
 if [ ! -f "$ANALYST_FILE" ]; then
   echo "SKIP: agents/analyst.md not found (implementation pending)" >&2
@@ -77,6 +83,60 @@ if grep -qiE 'triage.*impact|impact.*triage' "$ANALYST_FILE"; then
   echo "OK: analyst.md description references both triage and impact phases"
 else
   fail "analyst.md description does not reference both phases"
+fi
+
+# ---------------------------------------------------------------------------
+# Assertion 6: CLAUDE.md's "+reproduction_steps" callout on ANALYST --phase
+# triage is backed by an actual reproduction-steps extraction step in
+# agents/analyst.md's triage phase
+# ---------------------------------------------------------------------------
+echo "--- Assertion 6: CLAUDE.md +reproduction_steps callout matches analyst.md triage phase ---"
+if grep -qE 'ANALYST --phase triage.*reproduction_steps' "$CLAUDE_MD"; then
+  echo "OK: CLAUDE.md documents +reproduction_steps for ANALYST --phase triage"
+else
+  fail "CLAUDE.md missing the +reproduction_steps callout on the ANALYST --phase triage pipeline step"
+fi
+
+if grep -qE 'Extract reproduction steps for browser automation' "$ANALYST_FILE"; then
+  echo "OK: analyst.md triage phase documents reproduction steps extraction"
+else
+  fail "analyst.md triage phase missing the reproduction steps extraction step (contradicts CLAUDE.md +reproduction_steps callout)"
+fi
+
+# ---------------------------------------------------------------------------
+# Assertion 7: CLAUDE.md's "<=5 affected files" callout on analyst --phase
+# impact is backed by the matching cap in analyst.md's impact-phase Output
+# Contract and Constraints
+# ---------------------------------------------------------------------------
+echo "--- Assertion 7: CLAUDE.md <=5 affected files callout matches analyst.md impact phase ---"
+if grep -qF '≤5 affected files' "$CLAUDE_MD"; then
+  echo "OK: CLAUDE.md documents analyst (--phase impact) reports <=5 affected files"
+else
+  fail "CLAUDE.md missing the '<=5 affected files' callout for analyst (--phase impact)"
+fi
+
+if grep -qE 'Affected files.*max 5' "$ANALYST_FILE" && grep -qE 'Max 5 affected files in output' "$ANALYST_FILE"; then
+  echo "OK: analyst.md impact phase Output Contract and Constraints cap affected files at 5"
+else
+  fail "analyst.md impact phase missing the max-5 affected files cap (contradicts CLAUDE.md '<=5 affected files' callout)"
+fi
+
+# ---------------------------------------------------------------------------
+# Assertion 8: CLAUDE.md's "PR descriptions always in English" Key Convention
+# is backed by matching enforcement in agents/publisher.md — the agent that
+# authors PR descriptions later in the same bug-fix pipeline analyst triages
+# ---------------------------------------------------------------------------
+echo "--- Assertion 8: CLAUDE.md 'PR descriptions always in English' matches publisher.md enforcement ---"
+if grep -qF 'PR descriptions always in English' "$CLAUDE_MD"; then
+  echo "OK: CLAUDE.md documents the 'PR descriptions always in English' Key Convention"
+else
+  fail "CLAUDE.md missing the 'PR descriptions always in English' Key Convention"
+fi
+
+if [ -f "$PUBLISHER_FILE" ] && grep -qiE 'never write the pr description in a language other than english' "$PUBLISHER_FILE"; then
+  echo "OK: publisher.md enforces English-only PR descriptions"
+else
+  fail "publisher.md missing English-only PR description enforcement (contradicts CLAUDE.md 'PR descriptions always in English')"
 fi
 
 # ---------------------------------------------------------------------------

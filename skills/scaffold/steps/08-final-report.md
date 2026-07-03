@@ -130,6 +130,5 @@ If no stage produced a mismatch, render NO block (clean run).
 {else}
 1. Your project is ready. Try `/agent-flow:implement-feature` with a tracker issue.
 2. Run `/agent-flow:check-setup` to validate configuration
-3. Run `/agent-flow:scaffold validate` to verify project state
 {/if}
 ```

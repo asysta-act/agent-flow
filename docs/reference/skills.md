@@ -31,7 +31,7 @@ This reference covers all 17 skills in the agent-flow plugin. All 17 agent-flow 
 | Planning | [/sprint-plan](#sprint-plan) | Plans a sprint from backlog issues using capacity constraints and priority ranking |
 | Versioning | [/version-check](#version-check) | Compares installed vs latest version |
 | Versioning | [/changelog](#changelog) | Generates changelog from merged PRs |
-| Discussion | [/discuss](#discuss) | Multi-agent discussion on a topic or issue |
+| Discussion | [/discuss](#discuss) | Multi-agent discussion on a topic (freeform text; not tracker-aware) |
 
 ---
 
@@ -75,7 +75,7 @@ This reference covers all 17 skills in the agent-flow plugin. All 17 agent-flow 
 **Flags:**
 - `--dry-run` — Full short-circuit: print what would be processed, no lock, no dispatch, no state writes
 
-**What it does:** Reads `### Issue Tracker`, `### Feature Workflow` (optional), and `### Autopilot` (optional) from `## Automation Config`, fetches issues via the tracker MCP, classifies them as bugs or features, and dispatches `fix-bugs` or `implement-feature` per issue sequentially via the Skill tool. Acquires a portable `mkdir`-based lock (`.agent-flow/autopilot.lock/`) to prevent concurrent runs on the same host. Produces a summary table with outcome, duration, and token usage per issue. Typically invoked headlessly:
+**What it does:** Reads `### Issue Tracker`, `### Feature Workflow` (optional), and `### Autopilot` (optional) from `## Automation Config`, fetches issues via the tracker MCP, classifies them as bugs or features, and dispatches `fix-bugs` or `implement-feature` per issue sequentially via a headless `claude -p` child-process invocation — NOT the Skill tool, since pipeline entry-point skills block the Skill tool dispatch path via `disable-model-invocation: true`. Acquires a portable `mkdir`-based lock (`.agent-flow/autopilot.lock/`) to prevent concurrent runs on the same host. Produces a summary table with outcome, duration, and token usage per issue. Typically invoked headlessly:
 
 ```bash
 claude -p "Run /agent-flow:autopilot" --dangerously-skip-permissions
@@ -142,26 +142,33 @@ claude -p "Run /agent-flow:autopilot" --dangerously-skip-permissions
 **Syntax:**
 
 ```
-/agent-flow:implement-feature <ISSUE-ID> [--dry-run] [--decompose | --no-decompose] [--profile <name>] [--yolo | --step-mode]
+/agent-flow:implement-feature <ISSUE-ID> [--dry-run] [--decompose | --no-decompose | --decompose-only] [--profile <name>] [--yolo | --step-mode] [--clarification "<text>"]
+/agent-flow:implement-feature --description "<text>" [--dry-run] [--decompose | --no-decompose | --decompose-only] [--profile <name>] [--yolo | --step-mode]
 ```
 
 **Arguments:**
-- `<ISSUE-ID>` — Required. Feature issue ID in the tracker.
+- `<ISSUE-ID>` — Feature issue ID in the tracker. Mutually exclusive with `--description`.
+- `--description "<text>"` — Alternate invocation mode: describe the feature inline instead of reading it from a tracker issue. Mutually exclusive with `<ISSUE-ID>`.
 
 **Flags:**
 - `--dry-run` — Run spec analysis and architecture design only, no side effects
 - `--decompose` — Force decomposition into subtasks
-- `--no-decompose` — Disable decomposition (single-pass)
+- `--no-decompose` — Disable decomposition (single-pass); mutually exclusive with `--decompose-only`
+- `--decompose-only` — Exit after tracker subtask creation, without implementing the subtasks (implies `--decompose`; mutually exclusive with `--no-decompose`)
 - `--profile <name>` — Apply a pipeline profile from Automation Config
 - `--yolo` — Skip all confirmations, auto-approve decomposition and auto-publish (mutually exclusive with `--step-mode`)
 - `--step-mode` — Pause after every pipeline step for manual review before continuing (mutually exclusive with `--yolo`)
+- `--clarification "<text>"` — Provide the human answer to a paused-pipeline NEEDS_CLARIFICATION question and resume from the paused point.
 
-**What it does:** Runs the full feature pipeline: spec-analyst extracts requirements, architect designs the solution and optionally decomposes it into subtasks, then fixer/reviewer/test-engineer execute each subtask. The user confirms the decomposition plan before execution starts. After all subtasks pass, the result is presented for publishing. When decomposition is active, creates corresponding tracker sub-issues under the parent issue before executing subtasks (configurable via `Create tracker subtasks` in Decomposition config).
+**What it does:** Runs the full feature pipeline: spec-analyst extracts requirements, architect designs the solution and optionally decomposes it into subtasks, then fixer/reviewer/test-engineer execute each subtask. The user confirms the decomposition plan before execution starts. After all subtasks pass, the result is presented for publishing. When decomposition is active, creates corresponding tracker sub-issues under the parent issue before executing subtasks (configurable via `Create tracker subtasks` in Decomposition config). With `--decompose-only`, the pipeline exits right after subtask creation and never dispatches fixer/reviewer/test-engineer.
 
 **Example:**
 
 ```
 /agent-flow:implement-feature PROJ-50 --decompose
+/agent-flow:implement-feature --description "Add CSV export to the reports page" --dry-run
+/agent-flow:implement-feature PROJ-50 --decompose-only
+/agent-flow:implement-feature PROJ-50 --clarification "Use option B"
 ```
 
 **Related skills:** [/fix-bugs](#fix-bugs), [/scaffold](#scaffold)
@@ -333,7 +340,13 @@ When CLI override flags are provided (`--tracker-type`, `--tracker-instance`, `-
 **Flags:**
 - `--skip-build` — Skip the build and test command validation
 
-**What it does:** Performs a comprehensive validation of your agent-flow setup. Checks that all required Automation Config sections and keys are present, values are not placeholders, table format is correct, MCP servers matching the tracker type are available, and build/test commands execute successfully. Reports pass/fail for each validation block with actionable fix suggestions.
+**What it does:** Performs a comprehensive validation of your agent-flow setup. Checks that all required Automation Config sections and keys are present, values are not placeholders, table format is correct, MCP servers matching the tracker type are available, and build/test commands execute successfully. Reports pass/fail for each validation block with actionable fix suggestions. Additional blocks beyond the core config/MCP/connectivity/build-test checks:
+
+- **Docker dry-build** — if a `Dockerfile` exists and `docker` is on PATH (and `--skip-build` was not passed), runs `docker build --no-cache` as a smoke test and reports `[OK]`/`[FAIL]` (with the last 3 log lines on failure), or `[SKIP]` when there's no `Dockerfile`, `docker` isn't installed, or `--skip-build` was passed.
+- **Plugin Composability** — scans installed plugins for command-name conflicts with agent-flow's unprefixed command names and warns per conflicting plugin/command pair.
+- **Dispatch Enforcement Hook** — advisory-only check for whether `hooks/validate-dispatch.sh` is present and wired into `~/.claude/settings.json` as a `PostToolUse` hook; results here never affect the FAIL count or verdict.
+- **Agent Overrides (TOML validation)** — verifies a TOML parser (`tomllib`/`tomli`) is importable by `python3` (overlays are silently dropped by the override injector otherwise) and, when available, parses and validates every `customization/{agent}.toml` overlay end-to-end, reporting per-file `[OK]`/`[FAIL]`.
+- **Deprecated config detection** — scans CLAUDE.md for deprecated Automation Config sections (e.g. `### Extra labels`) and emits a `[WARN]` with a migration pointer; this never changes the exit code.
 
 **Example:**
 
@@ -384,22 +397,28 @@ TOML overlay syntax and the 3-tier merge contract are documented in `core/overla
 **Syntax:**
 
 ```
-/agent-flow:metrics [--period <N>] [--output <path>] [--format <md|json>]
+/agent-flow:metrics [--period <N>] [--output <path>] [--format <md|json|html>]
 ```
 
 **Flags:**
 - `--period <N>` — Analysis period in days (default: 30)
-- `--output <path>` — Output file path (default: stdout)
-- `--format <md|json>` — Output format: markdown or JSON (default: md)
+- `--output <path>` — Output file path (default: stdout; for `--format html` with no `--output`, defaults to `./metrics.html`)
+- `--format <md|json|html>` — Output format: markdown, JSON, or a self-contained HTML dashboard (default: md, with an interactive save prompt when the flag is omitted entirely — see below)
 
 **What it does:** Generates a pipeline analytics report covering success rates, per-agent effectiveness, common failure patterns, and trend data. Analyzes `[agent-flow]` comments and PR history to compute metrics. Useful for identifying bottleneck agents and tuning retry limits.
 
-**Pipeline history file:** `.agent-flow/pipeline-history.md` is an append-only run log written after every pipeline completion. It contains metadata only — fields: `run_id`, `date`, `pipeline`, `outcome`, `agents_touched`, `block_agent`, `block_step`, `block_reason` (sanitized via 18-pattern credential redaction including bare-keyword variables). The fixer agent reads the last 5 entries and the reviewer agent reads the last 10 entries at Step 1 to inform their decisions. Full contract: see `core/post-publish-hook.md` Section 5. For `.gitignore` guidance see [docs/guides/installation.md § Pipeline State and .gitignore](../guides/installation.md#4-pipeline-state-and-gitignore).
+**HTML dashboard (`--format html`):** Generates a self-contained HTML file (inline CSS/JS, no external requests) with a header, a Pipeline Overview (Active/Blocked/Completed cards), a sortable Issue Table, a Blocked Issues panel, a Recent Activity timeline, statistics (success rate, throughput, block distribution), and threshold-based Recommendations. All tracker-sourced fields (issue title, state, stage, agent, PR link, block reason/recommendation, timeline content) are HTML-escaped before interpolation, and PR links are additionally validated (only `https?://` or bare `#N` values are rendered as `<a href>`; anything else — e.g. a `javascript:` scheme — is rendered as plain escaped text) to prevent XSS from crafted tracker content. Written to `--output` if given, otherwise `./metrics.html`.
+
+**Interactive save prompt:** When `/agent-flow:metrics` is invoked with no `--format` flag at all, the markdown report is rendered and displayed first, then the skill asks `Save output? [1] No [2] JSON → stdout [3] HTML → ./metrics.html` and acts on the response (any unrecognized input is treated as "No"). Supplying `--format` explicitly skips this prompt entirely. Autopilot never invokes `/metrics`, so this interactive prompt is never reached from unattended/headless runs.
+
+**Pipeline history file:** `.agent-flow/pipeline-history.md` is an append-only run log written after every pipeline completion. It contains metadata only — fields: `run_id`, `date`, `pipeline`, `outcome`, `complexity`, `duration_s`, `agents_touched`, `block_agent`, `block_step`, `block_reason` (sanitized via 18-pattern credential redaction including bare-keyword variables). `/metrics` itself reads this file as an optional, supplementary fast-path cross-check (Step 2a): for entries within `--period`, it reads `outcome`, `complexity`, and `duration_s` directly (no regex against comment prose), and uses `agents_touched`/`block_agent`/`block_step` to cross-check per-agent invocation counts and block-stage bucketing. The file retains only the last 50 runs, so `/metrics` treats it as a supplement, never a replacement, for tracker-comment parsing and state.json — when the same run appears in more than one source, `/metrics` prefers state.json, then pipeline-history.md, then the tracker comment. Separately, the fixer agent reads the last 5 entries and the reviewer agent reads the last 10 entries at Step 1 to inform their decisions — see `docs/reference/agents.md` for that usage. Full contract: see `core/post-publish-hook.md` Section 5. For `.gitignore` guidance see [docs/guides/installation.md § Pipeline State and .gitignore](../guides/installation.md#4-pipeline-state-and-gitignore).
 
 **Example:**
 
 ```
 /agent-flow:metrics --period 14 --format json --output metrics.json
+/agent-flow:metrics --format html
+/agent-flow:metrics
 ```
 
 **Related skills:** [/fix-bugs](#fix-bugs)
@@ -551,23 +570,27 @@ TOML overlay syntax and the 3-tier merge contract are documented in `core/overla
 
 ### /discuss
 
-> Multi-agent discussion — explores a topic or issue with multiple agent perspectives.
+> Multi-agent discussion — explores a freeform topic with multiple agent perspectives.
 
 **Syntax:**
 
 ```
-/agent-flow:discuss <topic>
+/agent-flow:discuss <topic> [--agents <list>]
 ```
 
 **Arguments:**
-- `<topic>` — Required. Topic, question, or issue ID to discuss.
+- `<topic>` — Required. Freeform topic or question text. Always treated as literal text — `/discuss` never queries the issue tracker or resolves issue IDs, even if the topic string happens to look like one (there is no tracker MCP tool in this skill's `allowed-tools`).
 
-**What it does:** Facilitates a structured multi-agent discussion on a given topic or issue. Multiple agents contribute their perspective (e.g., reviewer raises concerns, architect proposes approaches, spec-analyst clarifies scope). Useful for exploring complex decisions, reviewing tradeoffs, or getting multi-perspective analysis before committing to an approach.
+**Flags:**
+- `--agents <list>` — Comma-separated agent names to participate (e.g. `--agents reviewer,architect`). Validated against `agents/*.md`; an unknown name stops the discussion before any dispatch with `Unknown agent: {name}. Valid agents: {list}.`. Duplicate names are deduped (case-sensitive, first occurrence kept). Default when omitted: `reviewer,fixer,architect`. Max 3 agents per discussion — if more than 3 remain after dedupe, only the first 3 (in the given order) are used, and the skill tells you which were dropped.
+
+**What it does:** Facilitates a structured multi-agent discussion on a given topic. Multiple agents contribute their perspective (e.g., reviewer raises concerns, architect proposes approaches, fixer weighs implementation tradeoffs) — read-only, no code changes, no tracker writes. Useful for exploring complex decisions, reviewing tradeoffs, or getting multi-perspective analysis before committing to an approach.
 
 **Example:**
 
 ```
 /agent-flow:discuss "Should we migrate the auth module to JWT?"
+/agent-flow:discuss "Should we migrate the auth module to JWT?" --agents reviewer,architect
 ```
 
 **Related skills:** [/analyze-bug](#analyze-bug)

@@ -440,7 +440,7 @@ Optional directory with per-agent customization files. For each agent, create a 
 
 Create `customization/reviewer.toml` to add project-specific reviewer instructions, `customization/fixer.toml` for fixer instructions, and so on. See [Custom Agents Guide](../guides/custom-agents.md) for details.
 
-**TOML overlay format (preferred):** The preferred override format is a TOML file at `{path}/{agent-name}.toml` instead of `{agent-name}.md`. The `.md` format is a deprecated alias — it still works but emits `[WARN] Deprecated override format: {file}. Migrate to .toml.` Use `/agent-flow:setup-agents` to auto-generate TOML stubs with smart defaults. See [TOML overlay syntax guide](../guides/toml-overlay-syntax.md) for the full schema, 3-tier merge rules, and worked examples.
+**TOML overlay format (required):** The override format is a TOML file at `{path}/{agent-name}.toml`. A legacy `{agent-name}.md`-only file (no `.toml` companion) is **not supported** — it is NOT applied. Its content is dropped (never parsed, never appended to the agent prompt), an `[ERROR] Legacy .md overlay format is not supported; manual conversion required — see docs/guides/toml-overlay-syntax.md for TOML overlay format examples.` is logged to stderr, and provenance is recorded as `overlay_source=md_rejected`. This never blocks the pipeline — dispatch continues immediately with the bare (un-overlaid) agent prompt. Use `/agent-flow:setup-agents` to auto-generate TOML stubs with smart defaults. See [TOML overlay syntax guide](../guides/toml-overlay-syntax.md) §8–9 for the full schema, 3-tier merge rules, migration steps, and worked examples.
 
 **TOML merge tiers (summary):** Tier 1 — scalar overrides (`model`, `style`): overlay value replaces plugin default from agent frontmatter. Tier 2 — array of tables (`[[process_additions]]`, `[[constraints]]`): overlay entries appended after plugin defaults (order preserved). Tier 3 — deep merge (`[limits]`): overlay keys override corresponding plugin-default keys; absent keys are inherited unchanged. The `[meta]` free-form table accepts arbitrary annotation keys without schema validation and is not consumed by dispatch logic.
 
@@ -639,7 +639,7 @@ Keys: Post-fix agent, Pre-publish agent. Default (none).
 
 ### Notifications
 
-Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`). Default (none).
+Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, `pipeline-resumed`). Default (none).
 
 ### Worktrees
 

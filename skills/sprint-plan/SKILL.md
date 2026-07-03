@@ -144,7 +144,7 @@ Follow `../../core/external-input-sanitizer.md`: wrap each issue's title, descri
 - `sprint.stages.prioritization.started_at`      = current ISO-8601 UTC timestamp
 - `sprint.stages.prioritization.model`           = `"opus"` (from `agents/priority-engine.md` frontmatter)
 - `sprint.stages.prioritization.status`          = `"in_progress"`
-- `sprint.stages.prioritization.agent_name`      = `"priority-engine"`
+- `sprint.stages.prioritization.agent_name`      = `"agent-flow:priority-engine"`
 - `sprint.stages.prioritization.stage_name`      = `"prioritization"`
 - `sprint.stages.prioritization.dispatched_at`   = current ISO-8601 UTC timestamp
 - `sprint.stages.prioritization.dispatch_witness` = sha256("agent-flow:priority-engine|opus|<prompt_head_128>")
@@ -156,7 +156,7 @@ Follow atomic write protocol from `../../core/state-manager.md`. All fields writ
 
 You MUST invoke `Task(subagent_type='agent-flow:priority-engine', model='opus')`. DO NOT inline-execute.
 
-Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "priority-engine"`, `EXPECTED_STAGE_NAME = "prioritization"`.
+Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "agent-flow:priority-engine"`, `EXPECTED_STAGE_NAME = "prioritization"`.
 
 Context: list of issues (sanitizer-wrapped per above) + historical data (if available) + triage complexity map + `EXPECTED_AGENT_NAME` + `EXPECTED_STAGE_NAME`.
 
@@ -187,7 +187,7 @@ Before dispatch, check Agent Overrides: follow `../../core/agent-override-inject
 - `sprint.stages.sprint_planning.started_at`      = current ISO-8601 UTC timestamp
 - `sprint.stages.sprint_planning.model`           = `"sonnet"` (from `agents/sprint-planner.md` frontmatter)
 - `sprint.stages.sprint_planning.status`          = `"in_progress"`
-- `sprint.stages.sprint_planning.agent_name`      = `"sprint-planner"`
+- `sprint.stages.sprint_planning.agent_name`      = `"agent-flow:sprint-planner"`
 - `sprint.stages.sprint_planning.stage_name`      = `"sprint_planning"`
 - `sprint.stages.sprint_planning.dispatched_at`   = current ISO-8601 UTC timestamp
 - `sprint.stages.sprint_planning.dispatch_witness` = sha256("agent-flow:sprint-planner|sonnet|<prompt_head_128>")
@@ -199,13 +199,13 @@ Follow atomic write protocol from `../../core/state-manager.md`. All fields writ
 
 You MUST invoke `Task(subagent_type='agent-flow:sprint-planner', model='sonnet')`. DO NOT inline-execute.
 
-Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "sprint-planner"`, `EXPECTED_STAGE_NAME = "sprint_planning"`.
+Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "agent-flow:sprint-planner"`, `EXPECTED_STAGE_NAME = "sprint_planning"`.
 
 Context:
 - Priority-engine output (full ranked list: P0/P1/P2 tiers) — already agent-produced structured markdown, not raw external content; no sanitizer wrapping needed
 - Sprint Planning config values: sprint_duration, capacity_unit, effective_capacity, velocity_source
 - Triage complexity map (from Step 2 — extracted enum values only)
-- `--all` flag presence (if set, sprint-planner generates multi-sprint release plan)
+- `--all` flag presence (informs sprint-planner this invocation is part of a multi-sprint release plan being orchestrated by the skill; does not change the agent's single-sprint output — see `agents/sprint-planner.md` step 8)
 - `EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`
 
 **Post-dispatch state write:** after the agent returns, atomically write:

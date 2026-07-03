@@ -228,6 +228,7 @@ Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUM
 
 ### Dispatch Enforcement Hook
 [ADVISORY] PostToolUse hook not configured — dispatch enforcement is opt-in. See docs/guides/dispatch-enforcement.md to install.
+[ADVISORY] Agent NEVER-constraints (e.g. publisher's 'NEVER push to main') are prompt-level only and are NOT technically enforced by this plugin even when the hook is installed. Enable server-side branch protection as the actual enforcement boundary. See SECURITY.md — Known Limitations.
 
 ### Agent Overrides
 [FAIL] Agent overrides - .toml overlays present (customization/browser-agent.toml customization/fixer.toml) but neither tomllib (Python 3.11+) nor the tomli backport is importable by python3. The injector will SILENTLY DROP these overlays. Fix: install Python 3.11+, or run 'python3 -m pip install tomli'.
@@ -255,6 +256,15 @@ Verdict:
 
 ### Block 6: Dispatch Enforcement Hook (advisory)
 
+This block only checks whether the opt-in `hooks/validate-dispatch.sh` audit hook is wired up —
+that hook is itself advisory-only (PostToolUse fires after the fact, so it cannot block a direct
+push, a force push, or any other destructive action; see `docs/guides/dispatch-enforcement.md`).
+Wiring the hook does NOT technically enforce any agent's `NEVER` constraints (e.g. publisher's
+"NEVER push to main/development directly"). Regardless of the a/b result below, this block always
+surfaces that broader risk and the actual enforcement boundary in step c, per
+`SECURITY.md` → "Known Limitations" → "Advisory-only enforcement — no technical backstop for
+agent NEVER-constraints".
+
 15. Check whether the dispatch enforcement hook is installed:
     a. Verify that `hooks/validate-dispatch.sh` exists in the plugin installation directory.
        - Glob with `.claude/plugins/**/hooks/validate-dispatch.sh`; if not found, try `hooks/validate-dispatch.sh` relative to CWD.
@@ -264,7 +274,13 @@ Verdict:
        - Read `~/.claude/settings.json` (if accessible).
        - Found entry referencing `validate-dispatch` → [OK] "PostToolUse hook wired in ~/.claude/settings.json"
        - Not found or file unreadable → [ADVISORY] "PostToolUse hook not configured — dispatch enforcement is opt-in. See docs/guides/dispatch-enforcement.md to install."
-    c. All results in this block are advisory — they NEVER contribute to the FAIL count or change the final verdict.
+    c. Always emit, regardless of a/b results → [ADVISORY] "Agent NEVER-constraints (e.g. publisher's
+       'NEVER push to main') are prompt-level only and are NOT technically enforced by this plugin
+       even when the hook above is installed — PostToolUse is advisory and fires after the action
+       already happened. The actual enforcement boundary is server-side branch protection (required
+       PR review, required status checks, no direct/force pushes) on any branch this plugin is
+       pointed at. See SECURITY.md → 'Known Limitations' for the full explanation."
+    d. All results in this block are advisory — they NEVER contribute to the FAIL count or change the final verdict.
 
 ### Block 7: Agent Overrides (TOML overlay parsing)
 

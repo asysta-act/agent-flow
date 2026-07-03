@@ -234,7 +234,7 @@ flowchart TD
     MCP_CHECK --> MODE{Mode<br/>Selection}
 
     MODE -->|Interactive| SPEC_INTERACTIVE[Spec Phase<br/>Interactive Q&A]
-    MODE -->|YOLO checkpoint| SPEC_YOLO[Spec Phase<br/>Autonomous]
+    MODE -->|Step Mode| SPEC_YOLO[Spec Phase<br/>Interactive Q&A + per-step pause]
     MODE -->|Full YOLO| SPEC_FULL[Spec Phase<br/>Autonomous]
 
     SPEC_INTERACTIVE --> SPEC_LOOP{spec-writer ↔<br/>spec-reviewer}
@@ -294,7 +294,7 @@ flowchart TD
 |------|-------|-------|-------|-------|
 | 0-INFRA | Infrastructure Declaration | (skill) | N/A | Collects tracker/SC intent; always runs (even Full YOLO) |
 | 0-MCP | MCP Verification | (skill) | N/A | Verifies MCP for declared "ready" services; auto-downgrades in Full YOLO |
-| 0 | Mode Selection | (skill) | N/A | Interactive / YOLO with checkpoint / Full YOLO |
+| 0 | Mode Selection | (skill) | N/A | Interactive (default) / Step Mode (`--step-mode`) / Full YOLO (`--yolo`) |
 | 1 | Specification | spec-writer ↔ spec-reviewer | opus | Loop up to Spec iterations (default 5) |
 | 2 | Spec Checkpoint | (skill) | N/A | Skip in Full YOLO; user approves or aborts |
 | 3 | Skeleton Generation | scaffolder | sonnet | Reads tech stack from spec/README.md; generates E2E Test + Decomposition config |

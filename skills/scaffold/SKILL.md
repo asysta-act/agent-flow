@@ -588,30 +588,14 @@ as a `[WARN]` and continue (do NOT block — features are already committed).
 
 ### Step 8b: Close Tracker Issues
 
-See also `steps/07-spec-verify.md` §07c ("Close Tracker Issues") for the same procedure phrased as a
-single compact guard + summary — keep both in sync when editing either.
+Authoritative procedure: `steps/07-spec-verify.md` §07c ("Close Tracker Issues") — keep both in sync
+when editing either. Agent dispatch is NOT required for this step (direct tracker calls only).
 
-**Guard:** check both `tracker_effective_status` and `tracker_write_available` before attempting any
-tracker calls. Skip this step entirely (no back-reference reading needed) if
-`tracker_effective_status != ready` OR `tracker_write_available == false`.
+**Guard:** check `tracker_effective_status` and `tracker_write_available` before any tracker calls; skip entirely if `tracker_effective_status != "ready"` OR `tracker_write_available == false` OR no back-reference comments (`<!-- {TrackerType}: ... -->`) found in `spec/epics/*.md`. If `State transitions` in Automation Config does not include a 'Done' mapping → `WARN: State transitions missing 'Done'. Skipping closure.`
 
-If `tracker_effective_status = ready` and `tracker_write_available`, close all epic and story tracker issues.
+If the guard does not trigger: determine which epics are fully completed by checking each against the blocked features list from Step 05's block handler (an epic with any blocked subtask is NOT fully completed). For each fully-completed epic: transition the epic issue to Done, then close each story sub-issue individually for ALL tracker types (no cascade assumption) — verify every transition via `../../core/status-verification.md`; a story already in Done state counts as success. Epics with blocked subtasks are skipped and left open for manual triage. Per-issue failure: `WARN: Could not transition {issue_id} to Done: {error}`, continue.
 
-Read `On start set` Done mapping from `{trackers_md_path}` State Transition Syntax table.
-
-If state transitions config does not include a 'Done' mapping:
-→ [WARN] "State transitions config does not include a 'Done' mapping — issues left open."
-
-Read back-reference comments from `spec/epics/*.md` to find issue IDs. Parse `<!-- {TrackerType}: {STORY-ISSUE-ID} -->` back-reference comments in spec/epics/*.md.
-
-For each epic issue:
-- Check if any subtasks are in blocked features list. If blocked → skip with message `skipped (blocked subtasks)`.
-- Transition epic issue to Done state. Follow `../../core/status-verification.md` to verify the transition succeeded.
-- Close each story sub-issue individually for ALL tracker types (no cascade assumption). Verify each transition the same way.
-
-Per-issue failure WARN: `Could not transition issue {ID} to Done: {reason}`.
-
-Display: `Transitioned N issues to Done. M skipped (blocked subtasks).`
+Display: `Transitioned {N}/{M} epic issues and {S} story issues to Done. {skipped} epics skipped (blocked subtasks).`
 
 ---
 

@@ -27,7 +27,7 @@ scope analysis, YAGNI detection, feasibility assessment, specification standards
    - `spec/epics/*.md` — all epic files
 
 2. Check completeness — every REQUIRED section must be present and filled:
-   - spec/README.md: Vision & Goals, Users & Personas, Tech Stack, Design & UX (REQUIRED when the project is a web application — frontend, fullstack, or server-rendered with browser UI; not required for CLI tools, libraries, and pure API projects), Out of Scope
+   - spec/README.md: Vision & Goals (incl. success criteria), Users & Personas, Tech Stack, Design & UX (REQUIRED when the project is a web application — frontend, fullstack, or server-rendered with browser UI; not required for CLI tools, libraries, and pure API projects), Out of Scope
    - spec/architecture.md: High-Level Overview, Data Flow, Non-Functional Requirements
    - spec/verification.md: Test Strategy, Definition of Done, Risks & Assumptions
    - spec/epics/*.md: Description, User Stories with acceptance criteria, Dependencies, Priority

@@ -727,7 +727,7 @@ The spec-writer creates the complete `spec/` folder that drives all downstream a
 | Type | Execution |
 | Pipeline(s) | Bug-fix, Feature (triggered on block) |
 | Inputs | Block context (agent name, step, reason, detail, recommendation), Automation Config |
-| Outputs | Rollback report (context type, base branch, rollback status, stash status, issue state) |
+| Outputs | Rollback report (context type, base branch, rollback status, stash status, untracked files removed) |
 | Constraints | Never force pushes. Never deletes remote branches. Skips rollback for read-only agent blocks (analyst, spec-analyst, architect), publisher blocks, and scaffolder blocks. Single pass, no retries. |
 
 The rollback-agent is triggered automatically by the block handler in pipeline skills. It does not run independently — it is always dispatched as part of the error handling flow.
@@ -740,9 +740,10 @@ The rollback-agent is triggered automatically by the block handler in pipeline s
 - **Base branch:** main
 - **Rollback:** completed
 - **Stash:** created (user changes preserved)
-- **Issue:** PROJ-123 → Blocked
-- **Comment:** posted
+- **Untracked files removed:** 2 (from `git clean -fdn` dry run)
 ```
+
+Posting the block comment and transitioning the issue state to Blocked are owned exclusively by the orchestrator's block handler (`core/block-handler.md`) — rollback-agent never touches the issue tracker.
 
 ---
 

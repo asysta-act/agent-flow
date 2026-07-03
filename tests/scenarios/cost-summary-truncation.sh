@@ -4,6 +4,10 @@ set -euo pipefail
 # AC-37: summary_table truncation rule applied when stage count > 20
 # Traces: COST-R10
 # Description: Verifies state/schema.md documents truncation with ≤20 rows + truncation notice
+# Note: sole scenario for AC-37 — formerly duplicated by ac-cost-summary-truncation.sh
+#       (deleted; both asserted the identical 20-row/4000-char/truncation-notice facts
+#       against state/schema.md). Per CONTRIBUTING.md rule 9, extend this scenario
+#       instead of adding a new ac-cost-summary-truncation-style file for AC-37.
 
 # Depends on Phase 7 implementation
 

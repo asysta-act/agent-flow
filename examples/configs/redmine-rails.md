@@ -22,7 +22,7 @@
 |------|---------|
 | Remote | `<owner/repo>` |
 | Base branch | `main` |
-| Branch naming | `fix/{issue}-{short-description}` |
+| Branch naming | `fix/{issue-id}-{description}` |
 
 ### PR Rules
 | Key | Value |

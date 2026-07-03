@@ -32,7 +32,7 @@ Before any pipeline operation, verify MCP tool availability:
    - `triage.stage_name` = `"triage"`
    - `triage.dispatch_witness` = sha256("agent-flow:analyst|sonnet|<prompt_head_128>") (compute via `core/lib/stage-invariant.sh::compute_dispatch_witness`; `prompt_head_128` is the first 128 UTF-8-safe bytes of the un-expanded prompt template, BEFORE Tier-1 variable expansion)
 
-   Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "agent-flow:analyst"`, `EXPECTED_STAGE_NAME = "triage"`.
+   Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "agent-flow:analyst"`, `EXPECTED_STAGE_NAME = "triage"`, `STATE_PATH = ".agent-flow/{ISSUE-ID}/analyze-bug-state.json"`. `STATE_PATH` is the orchestrator-injected state path referenced by `agents/analyst.md`'s Step Completion Invariants — it tells the dispatched analyst to read/verify invariants 1-3 against this skill's ephemeral stub instead of the literal default `.agent-flow/{ISSUE-ID}/state.json`.
 
    You MUST invoke `Task(subagent_type='agent-flow:analyst', model='sonnet')` with `--phase triage` on bug $ARGUMENTS. DO NOT inline-execute. Inline execution is a CONTRACT VIOLATION detected by the PostToolUse validator.
 
@@ -69,7 +69,7 @@ Before any pipeline operation, verify MCP tool availability:
    - `code_analysis.stage_name` = `"code_analysis"`
    - `code_analysis.dispatch_witness` = sha256("agent-flow:analyst|sonnet|<prompt_head_128>") (recomputed for this phase's prompt via `core/lib/stage-invariant.sh::compute_dispatch_witness`)
 
-   Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "agent-flow:analyst"`, `EXPECTED_STAGE_NAME = "code_analysis"`.
+   Inject Tier-1 variables: `EXPECTED_AGENT_NAME = "agent-flow:analyst"`, `EXPECTED_STAGE_NAME = "code_analysis"`, `STATE_PATH = ".agent-flow/{ISSUE-ID}/analyze-bug-state.json"`. `STATE_PATH` is the orchestrator-injected state path referenced by `agents/analyst.md`'s Step Completion Invariants — it tells the dispatched analyst to read/verify invariants 1-3 against this skill's ephemeral stub instead of the literal default `.agent-flow/{ISSUE-ID}/state.json`.
 
    You MUST invoke `Task(subagent_type='agent-flow:analyst', model='sonnet')` with `--phase impact`. DO NOT inline-execute. Inline execution is a CONTRACT VIOLATION detected by the PostToolUse validator.
 
@@ -79,8 +79,9 @@ Before any pipeline operation, verify MCP tool availability:
    Triage output: {full step-3 triage output for this bug}.
    EXPECTED_AGENT_NAME = agent-flow:analyst
    EXPECTED_STAGE_NAME = code_analysis
+   STATE_PATH = .agent-flow/{ISSUE-ID}/analyze-bug-state.json
    ```
-   (matches the pattern used by `skills/fix-bugs/steps/02-impact.md`.)
+   (the `EXPECTED_AGENT_NAME`/`EXPECTED_STAGE_NAME` lines match the pattern used by `skills/fix-bugs/steps/02-impact.md`; `STATE_PATH` is additional here because analyze-bug dispatches against `analyze-bug-state.json` rather than fix-bugs' literal default `.agent-flow/{ISSUE-ID}/state.json`, so fix-bugs has no need to inject it.)
 5. Display results (triage + impact report)
 
 No code changes, no issue tracker state changes, no resumable pipeline state — the ephemeral dispatch-witness stub written in steps 3/4 is ordinary dispatch bookkeeping, not a pipeline checkpoint. Analysis only.

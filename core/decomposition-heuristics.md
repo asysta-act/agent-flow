@@ -4,7 +4,7 @@
 
 Determine whether a ticket should be decomposed into subtasks before the fixer-reviewer loop begins.
 
-> **Scope note:** The `decompose_flag` decision process (Input Contract + Process sections below — evaluating analyst impact thresholds) applies to the bug-fix pipeline only. The feature pipeline reaches its DECOMPOSE/SINGLE_PASS decision differently (architect-driven, see `skills/implement-feature/SKILL.md` Step 5). The **Task Tree Validation** algorithm (below) is shared by both pipelines: once either pipeline has a task tree (from architect dispatch), both `skills/fix-bugs/steps/02-impact.md` and `skills/implement-feature/steps/03-decomposition.md` validate it using the same algorithm.
+> **Scope note:** The `decompose_flag` decision process (Input Contract + Process sections below — evaluating analyst impact thresholds) applies to the bug-fix pipeline only. The feature pipeline reaches its DECOMPOSE/SINGLE_PASS decision differently (architect-driven, see implement-feature step 3 / `skills/implement-feature/steps/03-decomposition.md`). The **Task Tree Validation** algorithm (below) is shared by both pipelines: once either pipeline has a task tree (from architect dispatch), both `skills/fix-bugs/steps/02-impact.md` and `skills/implement-feature/steps/03-decomposition.md` validate it using the same algorithm.
 
 ## Input Contract
 

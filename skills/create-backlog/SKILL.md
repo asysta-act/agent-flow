@@ -92,7 +92,11 @@ Follow atomic write protocol from `../../core/state-manager.md`.
 Read the spec path provided in `$ARGUMENTS`:
 - **Directory:** Glob `{spec-path}/epics/*.md` (spec-based scaffold format). If no `epics/` subdir exists, glob `{spec-path}/*.md`.
 - **Single file:** Read the single file.
-- **Multiple files (space-separated or glob pattern):** Read each matched file in order.
+- **Multiple files (space-separated or glob pattern, including the `epics/*.md` and bare `*.md` directory
+  globs above whenever they match more than one file):** Read each matched file in order. For each file,
+  prepend a `--- FILE: {path} ---` boundary marker line (where `{path}` is the file's path as matched)
+  immediately before that file's content, then concatenate all files in match order. This produces the
+  "concatenated with file boundary markers" content passed to backlog-creator in Step 2 below.
 
 If the path does not exist or is empty: STOP with "Specification path not found or empty: {spec-path}"
 
@@ -103,7 +107,9 @@ Update `state.json`: write `backlog.spec_path`. Follow atomic write protocol fro
 You MUST invoke `Task(subagent_type='agent-flow:backlog-creator', model='sonnet')`. DO NOT inline-execute.
 
 Context to pass:
-- Specification content (all files read in Step 1, concatenated with file boundary markers)
+- Specification content (all files read in Step 1, concatenated with `--- FILE: {path} ---` boundary
+  markers as constructed in Step 1 above — one marker per source file, immediately preceding that file's
+  content)
 - Epic template path: `{sprint_planning.epic_template}` if configured — otherwise omit (agent uses built-in template)
 - `Max epics: 10`
 

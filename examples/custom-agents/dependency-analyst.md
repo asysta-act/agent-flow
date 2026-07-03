@@ -39,6 +39,22 @@ Package ecosystems (npm, pip, NuGet, Maven), semantic versioning, license compat
    {PASS | WARN — {reason} | BLOCK — {reason}}
    ```
 
+## Output Contract
+
+### Inputs
+
+| Section | Source | Required |
+|---------|--------|----------|
+| Changed dependency files + diff | upstream fixer or PR diff | yes |
+| Project license (for compatibility check) | project CLAUDE.md, LICENSE file, or package metadata | no (falls back to "unknown" and flags license-compatibility rows as WARN, noted as a limitation) |
+
+### Outputs
+
+| Section produced | When | Required fields |
+|------------------|------|-----------------|
+| `## Dependency Analysis Report` | always | Changes table (Package, Change, From, To, Risk, Notes); Risks (list of risk descriptions); Verdict: PASS / WARN — {reason} / BLOCK — {reason} |
+| `[agent-flow] 🔴 Pipeline Block` | on BLOCK verdict (critical vulnerability or copyleft license conflict) | Agent: dependency-analyst; Step: the configured integration point (post-fix or pre-publish); Reason; Detail; Recommendation |
+
 ## Step Completion Invariants
 
 Invariant fields checked: `dispatched_at`, `dispatch_witness`, `status`, `stage_name`, `agent_name`. Tokens: `EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`.

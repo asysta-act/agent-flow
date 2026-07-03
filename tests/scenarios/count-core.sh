@@ -1,14 +1,11 @@
 #!/bin/bash
 # Covers: AC-2 (core-contract count = 17, UNCHANGED; maxdepth-1 only, excludes core/aliases/)
+# AC-2 and AC-CT-004 (count-core-contracts.sh) assert the identical fact (core/ top-level
+# .md count == 17). Per CONTRIBUTING.md rule 9 (no duplicate coverage for an existing AC id),
+# the find|wc -l assertion lives in one place only — count-core-contracts.sh — and this
+# scenario delegates to it instead of re-implementing the same grep logic.
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
-ACTUAL=$(find "$REPO_ROOT/core" -maxdepth 1 -name '*.md' -type f | wc -l | tr -d ' ')
-if [ "$ACTUAL" -eq 17 ]; then
-  echo "PASS: v9-5-count-core — core/ top-level .md count = 17 (unchanged)"
-  exit 0
-else
-  echo "FAIL: v9-5-count-core — expected 17 core/*.md files, got $ACTUAL"
-  exit 1
-fi
+exec "$REPO_ROOT/tests/scenarios/count-core-contracts.sh"

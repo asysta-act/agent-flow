@@ -1,11 +1,17 @@
 # Step 04 — Fixer-Reviewer Loop (Subtask Execution)
 
-**Single-pass (without decomposition):** Execute steps 04a–04e once for the entire feature.
+**Single-pass (without decomposition):** Execute steps 04a–04d once for the entire feature, then proceed
+directly to step 05 (`steps/05-smoke.md`). Steps 04e and 04f are decomposition-only and do NOT run in
+single-pass mode — step 05 is the single, canonical Build+Test gate in this mode, so there is no
+per-subtask gate to run beforehand.
 
-**Decomposition (sequential mode):** For each subtask in topological order:
+**Decomposition (sequential mode):** For each subtask in topological order, execute steps 04a–04f:
 - Verify that all depends_on have status "completed". If not → skip (waiting).
 - Build context for fixer: entire decomposition plan + summary of previous subtasks
   (what changed, why, diff summary) + current subtask (scope, files, acceptance criteria).
+- 04e provides a per-subtask Build+Test gate before that subtask is committed (04f) — it verifies only the
+  incremental change just made, and is distinct from step 05's feature-level gate, which runs exactly once,
+  after the loop over all subtasks has finished (not per subtask).
 
 ## 04a. Pre-fix hook
 
@@ -100,16 +106,23 @@ state.json write of the final verdict, if `Webhook URL` is configured AND `step-
 fire with `step_name: "fixer_reviewer"`, `iteration_count: {total iterations}`. Advisory failure: log `[WARN]`
 and continue. Fires once per top-level stage — never once per iteration.
 
-## 04e. Smoke check (build + test)
+## 04e. Per-subtask smoke check (decomposition only — build + test)
 
-After fixer↔reviewer approval, verify the codebase still builds and existing tests pass.
+**Decomposition mode only.** Does not run in single-pass mode (see the mode note at the top of this file) —
+single-pass mode goes straight from 04d to step 05, which is the sole Build+Test gate for that mode. This
+step is a lightweight, per-subtask gate: after fixer↔reviewer approval of the CURRENT subtask, verify that
+subtask's incremental change did not break the build or existing tests, before it is committed (04f). It
+does not write to the `smoke_check` state.json stage — that stage is owned exclusively by step 05
+(`steps/05-smoke.md`), which performs the one feature-level Build+Test gate after all subtasks in the loop
+have completed.
 
 1. Read `Build command` and `Test command` from Automation Config.
 2. Run Build command via Bash. If it fails → Block handler (step X) with
-   `agent = smoke-check, Step = 04e, Reason = Build command failed after fixer↔reviewer approval`.
+   `agent = smoke-check, Step = 04e, Reason = Build command failed after fixer↔reviewer approval of subtask {subtask-id}`.
 3. Run Test command via Bash. If it fails → Block handler (step X) with
-   `agent = smoke-check, Step = 04e, Reason = Existing tests failed after fixer↔reviewer approval`.
-4. Both pass → continue to step 05.
+   `agent = smoke-check, Step = 04e, Reason = Existing tests failed after fixer↔reviewer approval of subtask {subtask-id}`.
+4. Both pass → continue to 04f (commit subtask), then advance to the next subtask in the loop. Once every
+   subtask has completed 04a–04f, exit the loop and continue to step 05 for the single feature-level gate.
 
 ## 04f. Commit subtask (decomposition only)
 

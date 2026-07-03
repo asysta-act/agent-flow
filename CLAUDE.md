@@ -99,7 +99,7 @@ You are a [Role] specializing in [domain].
 ## Expertise
 ## Process (numbered steps)
 ## Output Contract (mandatory — structured output schema agents return)
-## Step Completion Invariants (mandatory — fields the orchestrator MUST verify in state.json before considering the stage complete: `dispatched_at` non-null ISO 8601, `dispatch_witness` non-null 64-hex sha256, `tool_uses` ≥ 1, `status="completed"`. Failure → orchestrator returns BLOCKED with reason `completion_invariant_violated:<missing-field>`. Witness verified via `core/lib/stage-invariant.sh::check_dispatch_witness`.)
+## Step Completion Invariants (mandatory — before returning to the orchestrator, the agent itself SHALL verify 5 fields read from state.json: `dispatched_at` non-null ISO 8601, `dispatch_witness` non-null 64-hex sha256 (shape-checked via `core/lib/stage-invariant.sh::check_dispatch_witness`), `status == "in_progress"`, `stage_name` matching the orchestrator-injected `EXPECTED_STAGE_NAME`, and `agent_name` matching the orchestrator-injected `EXPECTED_AGENT_NAME`. These 5 are orchestrator pre-dispatch writes the agent can observe before it returns; `tool_uses`, `completed_at`, and `status="completed"` are separate orchestrator post-dispatch writes the agent cannot observe and must NOT attempt to write. Failure on any invariant → agent Blocks with `Reason: Step completion invariant violated: {invariant_name}` using the standard Block Comment Template and exits BLOCKED.)
 ## Constraints (NEVER rules, limits, failure handling)
 ```
 

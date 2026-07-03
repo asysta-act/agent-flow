@@ -43,7 +43,7 @@ are agent-specific.
 | Agent | Tier 1 (scalar override) | Tier 2 (array append) | Tier 3 — `[limits]` keys |
 |-------|--------------------------|-----------------------|---------------------------|
 | `analyst` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_files_reported` |
-| `fixer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_diff_lines`, `max_iterations` |
+| `fixer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_diff_lines`, `max_iterations`, `max_build_retries` |
 | `reviewer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_review_iterations` |
 | `acceptance-gate` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `ac_threshold`, `complexity_threshold` |
 | `test-engineer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_test_attempts`, `test_framework` |
@@ -60,13 +60,20 @@ are agent-specific.
 | `backlog-creator` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | (none agent-specific) |
 | `sprint-planner` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | (none agent-specific) |
 
-**Shared `[limits]` keys** (semantically applicable to any agent):
+**`[limits]` keys shared across more than one row of the table above** (each is still owned by
+specific agents, not "any agent" — the per-agent table above is authoritative for which agents
+may set which key):
 
-| Key | Default | Description |
+| Key | Default | Owning agent(s) |
 |-----|---------|-------------|
-| `max_build_retries` | `3` | Max build step retries |
-| `max_spec_iterations` | `5` | Max spec-writer ↔ spec-reviewer iterations |
-| `max_root_cause_iterations` | `3` | Max root cause analysis iterations |
+| `max_build_retries` | `3` | `fixer` only |
+| `max_spec_iterations` | `5` | `scaffolder` and `spec-writer` (both run spec-authoring loops) |
+| `max_root_cause_iterations` | `3` | `spec-analyst` only |
+
+Every `[limits]` key overrideable via TOML MUST appear in at least one agent's Tier 3 column in
+the per-agent table above (Section 2); the unknown-key validator (Section 6.2) rejects any
+`[limits]` key set on an agent whose row in that table does not list it — there is no separate
+"available to any agent" exception list.
 
 **`[meta]`** is free-form and available to all agents — any sub-keys are accepted without validation.
 
@@ -222,22 +229,28 @@ team_owner = "security-team"
 
 ### 4.2 `fixer-no-tests.toml`
 
+This example mirrors the shipped `examples/customization/fixer-no-tests.toml`. Note that
+`max_test_attempts` is a **test-engineer-only** Tier 3 key (see Section 2) — it is NOT in
+fixer's Tier 3 column, so it cannot be set here; setting it in `customization/fixer.toml` would
+be rejected by the Section 6.2 unknown-key validator. Only `max_diff_lines` and `max_iterations`
+are valid `[limits]` keys for `fixer`. To actually skip the test-engineer stage, use
+Automation Config > Pipeline Profiles > Skip stages: `test-engineer` instead.
+
 ```toml
 # customization/fixer.toml
-# Prototype branch policy: skip test dispatch on prototype/* branches.
-[[process_additions]]
-step = "before_test_dispatch"
-instruction = "If the current branch matches the pattern prototype/*, skip test dispatch. Only run the smoke build. Mark the PR as Draft and add the label prototype-no-tests."
+# Example: Fixer overlay for projects without unit test infrastructure (legacy, prototype)
+[[constraints]]
+rule = "DO NOT generate test files in src/test/ — this project has no test infrastructure"
 
 [[constraints]]
-rule = "On prototype/* branches, NEVER create a ready-for-review PR. Always use draft mode."
+rule = "Verification by manual smoke check; do NOT call npm test or pytest"
 
 [limits]
-max_diff_lines = 200
-max_test_attempts = 0
+max_iterations = 3  # default 5
 
 [meta]
-policy = "prototype-no-tests"
+note = "This overlay is appropriate for prototype repos only — production work should have tests"
+skip_test_phase_hint = "max_test_attempts is a test-engineer [limits] key (Section 2), not a fixer one — setting it here has no effect. To skip the test-engineer stage entirely, use Automation Config > Pipeline Profiles > Skip stages: test-engineer."
 ```
 
 ### 4.3 `analyst-monorepo.toml`
@@ -510,10 +523,12 @@ rule = "Reject any PR that adds a dependency without package.json rationale."
 # --- Tier 3: Table deep merge (only listed keys merged; rest inherited from plugin default) ---
 [limits]
 # Tier 3 keys vary by agent — see per-agent reference table (Section 2).
-# Shared keys available to any agent where semantically applicable:
-max_build_retries        = 2    # default: 3
-max_spec_iterations      = 5    # default: 5
-max_root_cause_iterations = 3   # default: 3
+# A [limits] key is only valid for the agent(s) listed in its Tier 3 column in that table —
+# e.g. max_build_retries below is valid ONLY in customization/fixer.toml, not in any other
+# agent's overlay:
+max_build_retries        = 2    # fixer only; default: 3
+max_spec_iterations      = 5    # scaffolder and spec-writer only; default: 5
+max_root_cause_iterations = 3   # spec-analyst only; default: 3
 
 # --- [meta]: free-form table — NOT subject to unknown-key validation ---
 # All sub-keys accepted; NOT consumed by plugin dispatch logic.
