@@ -48,7 +48,7 @@ witness_out=$(
   if ! command -v compute_dispatch_witness >/dev/null 2>&1; then
     exit 98
   fi
-  compute_dispatch_witness "test_stage" "test-subagent" "sonnet" "EXAMPLE_PROMPT_HEAD_128_BYTES_TOKEN" 2>/dev/null
+  compute_dispatch_witness "test_stage" "test-subagent" "sonnet" "EXAMPLE_PROMPT_HEAD_128_BYTES_TOKEN" "none" "none" 2>/dev/null
 ) || witness_rc=$?
 
 if [ "$witness_rc" -eq 99 ]; then

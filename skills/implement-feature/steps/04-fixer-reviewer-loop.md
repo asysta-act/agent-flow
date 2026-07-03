@@ -1,5 +1,18 @@
 # Step 04 — Fixer-Reviewer Loop (Subtask Execution)
 
+## Centralized claim-write ritual (v2.0 gate-as-signer)
+
+Immediately before **every** `Task()` dispatch in this loop, perform the
+centralized claim-write ritual defined once in `../../claim-ritual.md`. The
+ritual mints a fresh `claim_nonce` (`secrets.token_hex(16)`) + a monotonic
+`dispatch_seq`, atomically writes the **claim-only** stage record into
+`state.json`, and atomically writes the top-level per-dispatch marker
+`.agent-flow/pending-dispatch.json` (temp + `os.replace`). This is the single
+source of truth and **supersedes** the legacy `dispatch_witness` /
+`compute_dispatch_witness` fields on keyed (`schema_version "2.0"`) runs: the
+orchestrator writes no key and no signed tag, and the prompt head is
+gate-observed ground truth, not an orchestrator-written field.
+
 **Single-pass (without decomposition):** Execute steps 04a–04d once for the entire feature, then proceed
 directly to step 05 (`steps/05-smoke.md`). Steps 04e and 04f are decomposition-only and do NOT run in
 single-pass mode — step 05 is the single, canonical Build+Test gate in this mode, so there is no
@@ -26,18 +39,22 @@ Follow atomic write protocol from `../../../core/state-manager.md`.
 
 ### Pre-dispatch witness write
 
-Both fixer and reviewer bind to canonical stage `fixer_reviewer` per design.md §4.2 (shared in the iteration loop). Source `core/lib/stage-invariant.sh` and recompute the witness for EACH fixer or reviewer dispatch (each iteration has its own prompt — therefore its own witness). Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables.
+Both fixer and reviewer bind to canonical stage `fixer_reviewer` per design.md §4.2 (shared in the iteration loop). Source `core/lib/stage-invariant.sh`. For EACH fixer or reviewer dispatch, resolve the Agent Override overlay FIRST (each iteration has its own prompt AND its own overlay resolution — therefore its own witness), then recompute the witness. Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$FIXER_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness fixer_reviewer agent-flow:fixer opus "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness fixer_reviewer agent-flow:fixer opus "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:fixer"   # agent-flow:reviewer for the reviewer dispatch
 EXPECTED_STAGE_NAME="fixer_reviewer"
-# Merge: state.json[stages.fixer_reviewer] = { dispatched_at, dispatch_witness,
-#   agent_name, stage_name, status="in_progress" } atomically.
-# On every iteration, OVERWRITE these fields with the current iteration's values.
+# Merge: state.json[stages.fixer_reviewer] = { dispatched_at, agent_name, stage_name,
+#   prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+#   in ONE atomic write. Then append OVERLAY_BLOCK to the prompt.
+# On every iteration, OVERWRITE these fields (including overlay_source/overlay_digest) with the
+# current iteration's values.
 ```
 
 ## Agent Override injection

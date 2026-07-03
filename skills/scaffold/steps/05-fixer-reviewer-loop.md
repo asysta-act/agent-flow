@@ -3,6 +3,19 @@
 Implements all epics/subtasks in batches. For each batch, runs fixer ↔ reviewer loop
 per subtask, handles NEEDS_CLARIFICATION, and commits after batch completion.
 
+## Centralized claim-write ritual (v2.0 gate-as-signer)
+
+Scaffold is **NOT** exempt from the dispatch witness (this closes the documented
+0-witness scaffold gap). Immediately before **every** `Task()` dispatch in this
+skill (spec-writer, scaffolder, architect, fixer, reviewer, test-engineer),
+perform the centralized claim-write ritual defined once in `../../claim-ritual.md`.
+The ritual mints a fresh `claim_nonce` (`secrets.token_hex(16)`) + a monotonic
+`dispatch_seq`, atomically writes the **claim-only** stage record into
+`state.json`, and atomically writes the top-level per-dispatch marker
+`.agent-flow/pending-dispatch.json` (temp + `os.replace`). The orchestrator
+writes no key and no signed tag; the prompt head is gate-observed ground truth,
+not an orchestrator-written field.
+
 Note: Hooks (Pre-fix, Post-fix, Pre-publish, Post-publish) are NOT executed during scaffold
 because the project is being created from scratch — no existing CI, linter config, or external
 integration to hook into.

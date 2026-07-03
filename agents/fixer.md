@@ -122,7 +122,7 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 1. `dispatched_at` — Field is present and non-empty for stage `fixer_reviewer`. The orchestrator wrote this pre-dispatch.
 
-2. `dispatch_witness` — Field is present and matches the shape `^[0-9a-f]{64}$` (64 lowercase hex characters). Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function, which checks presence and hex-shape only — it does NOT recompute or cryptographically compare against the sha256 of `{subagent_type}|{model}|{prompt_head_128}` (that value is produced once, pre-dispatch, by `compute_dispatch_witness` in the same file; nothing re-derives or verifies it against the dispatch tuple after the fact).
+2. `dispatch_witness` — The signed witness is computed and recorded by the PreToolUse gate (the sole key holder), NOT by the orchestrator and NOT stored in `state.json`. On a keyed run (`schema_version` `"2.0"`) it is the keyed HMAC tag the gate appends to the gate-owned ledger `.agent-flow/{RUN-ID}/dispatch-ledger.jsonl`, keyed by `(run_id, stage, claim_nonce)`, over the per-field sub-hashed canonical preimage `subagent_type|model|prompt_head_128|overlay_source|overlay_digest|stage|run_id|claim_nonce` (the gate observes `prompt_head_128` from the dispatched prompt and signs it as ground truth — it is not a compared claim). Verify by reading the ledger for a `WITNESS_OK` entry for this run's `(run_id, stage)`; on a legacy v1.0 run (no key, no ledger) this is expected and is NOT a failure.
 
 3. `status` — Field equals `"in_progress"` for this stage. The orchestrator wrote this pre-dispatch (status flips to `"completed"` only AFTER you return, so observing `"in_progress"` proves the normal dispatch flow ran).
 

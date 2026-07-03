@@ -11,7 +11,7 @@ A Claude Code plugin (`agent-flow`) that automates bug-fix workflows, feature im
 
 ## Repository Structure
 
-No build system, no dependencies. Manual test suite in `tests/`. This is a pure plugin of markdown definitions.
+No build system; zero third-party PACKAGE dependencies — requires bash + Python 3 (stdlib only) on PATH. Manual test suite in `tests/`. This is a pure plugin of markdown definitions plus shell + Python hooks.
 
 - `.claude-plugin/` — Plugin metadata (`plugin.json`, `marketplace.json`)
 - `agents/` — 17 agent definitions (markdown with YAML frontmatter)
@@ -99,7 +99,7 @@ You are a [Role] specializing in [domain].
 ## Expertise
 ## Process (numbered steps)
 ## Output Contract (mandatory — structured output schema agents return)
-## Step Completion Invariants (mandatory — before returning to the orchestrator, the agent itself SHALL verify 5 fields read from state.json: `dispatched_at` non-null ISO 8601, `dispatch_witness` non-null 64-hex sha256 (shape-checked via `core/lib/stage-invariant.sh::check_dispatch_witness`), `status == "in_progress"`, `stage_name` matching the orchestrator-injected `EXPECTED_STAGE_NAME`, and `agent_name` matching the orchestrator-injected `EXPECTED_AGENT_NAME`. These 5 are orchestrator pre-dispatch writes the agent can observe before it returns; `tool_uses`, `completed_at`, and `status="completed"` are separate orchestrator post-dispatch writes the agent cannot observe and must NOT attempt to write. Failure on any invariant → agent Blocks with `Reason: Step completion invariant violated: {invariant_name}` using the standard Block Comment Template and exits BLOCKED.)
+## Step Completion Invariants (mandatory — before returning to the orchestrator, the agent itself SHALL verify 5 fields read from state.json: `dispatched_at` non-null ISO 8601, `dispatch_witness` non-null (on a legacy v1.0 run, 64-hex sha256 shape-checked via `core/lib/stage-invariant.sh::check_dispatch_witness`; on a keyed v2.0 run, a `WITNESS_OK` entry in the PreToolUse gate's ledger, signed as a keyed HMAC-SHA256 tag over `subagent_type|model|prompt_head_128|overlay_source|overlay_digest|stage|run_id|claim_nonce` — see `docs/guides/dispatch-enforcement.md`), `status == "in_progress"`, `stage_name` matching the orchestrator-injected `EXPECTED_STAGE_NAME`, and `agent_name` matching the orchestrator-injected `EXPECTED_AGENT_NAME`. These 5 are orchestrator pre-dispatch writes the agent can observe before it returns; `tool_uses`, `completed_at`, and `status="completed"` are separate orchestrator post-dispatch writes the agent cannot observe and must NOT attempt to write. Failure on any invariant → agent Blocks with `Reason: Step completion invariant violated: {invariant_name}` using the standard Block Comment Template and exits BLOCKED.)
 ## Constraints (NEVER rules, limits, failure handling)
 ```
 

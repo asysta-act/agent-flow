@@ -21,7 +21,7 @@ You are a THIN CONTROLLER. You:
 - Read state from disk (`.agent-flow/{ISSUE-ID}/state.json`)
 - Follow deterministic decision logic (this document + step files)
 - Dispatch fresh subagents via the Task tool (one per step)
-- Write atomic state.json updates (including `dispatched_at` + `dispatch_witness` BEFORE each Task)
+- Resolve the Agent Override overlay, then write atomic state.json updates (including `dispatched_at` + overlay fields + `dispatch_witness` BEFORE each Task)
 
 You do NOT:
 - Reason about the bug domain (subagents do that)
@@ -160,12 +160,12 @@ Follow `skills/implement-feature/SKILL.md` Step 0b: Config Validity Gate identic
 placeholder scan across `Issue Tracker`, `Source Control`, `PR Rules`, `Build & Test`, `PR
 Description Template` → BLOCK) before proceeding to Step 00 — canonical logic lives there.
 
-## Architecture freshness (advisory)
+## Preflight checks (advisory)
 
 <!-- @snippet:architecture-freshness -->
+<!-- @snippet:dispatch-enforcement-preflight -->
 
-Before fixer dispatch, run the canonical architecture freshness check from
-`core/snippets/architecture-freshness.md`. Advisory only, non-blocking.
+Before fixer dispatch, run both canonical advisory (non-blocking) checks: `core/snippets/architecture-freshness.md` (stale architecture docs) and `core/snippets/dispatch-enforcement-preflight.md` (is the blocking PreToolUse `Task` gate wired across the settings tree — user/project/project-local, not just `~/.claude/settings.json`, since hooks combine?).
 
 ## Worktree / batch processing
 
@@ -207,14 +207,24 @@ in `state.json` — never leave a stage at `"pending"` after the step's turn pas
 | 12   | steps/12-result.md                         | terminal report + dispatch-audit surfacing             |
 
 For each step you SHALL invoke the Task tool with the `subagent_type` listed in the corresponding
-step file. Before invoking Task, you SHALL write atomically to `state.json` under
-`stages.<stage>`:
-- `dispatched_at`   = ISO-8601 UTC now
-- `dispatch_witness` = sha256("<subagent_type>|<model>|<prompt_head_128>") via
-  `core/lib/stage-invariant.sh::compute_dispatch_witness`
-- `agent_name`      = `<subagent_type>`
-- `stage_name`      = `<canonical stage name>` (per the step file)
-- `status`          = `"in_progress"`
+step file. Before invoking Task, you SHALL, in this ORDER: (1) run the Agent Override Injector
+(`../../core/agent-override-injector.md`) to resolve `overlay_source` (`toml` | `none` |
+`md_rejected`) and its rendered overlay block; (2) compute `overlay_digest` from that block via
+`core/lib/stage-invariant.sh::compute_overlay_digest`; (3) compute `dispatch_witness` WITH the
+overlay inputs; (4) write atomically (ONE write) to `state.json` under `stages.<stage>`:
+- `dispatched_at`    = ISO-8601 UTC now
+- `agent_name`       = `<subagent_type>`
+- `stage_name`       = `<canonical stage name>` (per the step file)
+- `prompt_head_128`  = first 128 UTF-8-safe bytes of the raw prompt template
+- `overlay_source`   = `<toml | none | md_rejected>`
+- `overlay_digest`   = `<sha256 hex of rendered block | "none" | "md_rejected">`
+- `dispatch_witness` = sha256("<subagent_type>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness STAGE SUBAGENT_TYPE MODEL
+  PROMPT_HEAD_128 OVERLAY_SOURCE OVERLAY_DIGEST`
+- `status`           = `"in_progress"`
+
+Then (5) append the rendered overlay block to the prompt and invoke Task. The overlay is resolved
+BEFORE the witness so the receipt binds the overlay actually applied.
 
 You SHALL also inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 variables in the
 agent prompt.

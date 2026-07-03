@@ -5,7 +5,7 @@
 # FC mapped:   FC-REL-1 (a/b/c/d/e)
 # What it checks:
 #   Parses canonical stage names from 3 authoritative sources and asserts parity:
-#   Source 1: hooks/validate-dispatch.sh — STAGES=(...) array
+#   Source 1: hooks/validate-dispatch.sh — STAGES = [...] Python list
 #   Source 2: skills/fix-bugs/SKILL.md + skills/implement-feature/SKILL.md
 #             — <stage_allowlist> blocks (REQUIRED + OPTIONAL union)
 #   Source 3: state/schema.md — "- **Applicable stages:**" anchor (L411)
@@ -17,19 +17,20 @@
 # ===========================================================================
 set -uo pipefail
 
-REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT="${AGENT_FLOW_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 . "$REPO_ROOT/tests/lib/assert.sh"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
 
 FAIL=0
 fail() { echo "FAIL: FC-REL-1.$1" >&2; FAIL=1; }
 
-# Source 1: STAGES from hooks/validate-dispatch.sh single-line array
+# Source 1: STAGES from hooks/validate-dispatch.sh Python list (multi-line).
+# The hook is a Python process; STAGES is declared as STAGES = [ "a", "b", ... ]
+# spanning several lines. Extract every quoted token from the STAGES block.
 HOOK="hooks/validate-dispatch.sh"
 [ -f "$HOOK" ] || { fail "src1-missing: $HOOK not found"; exit 1; }
-S1=$(grep -E '^STAGES=\(' "$HOOK" \
-  | sed -E 's/^STAGES=\(([^)]*)\).*/\1/' \
-  | tr ' ' '\n' | grep -v '^$' | sort -u)
+S1=$(awk '/^STAGES = \[/{f=1} f{print} /\]/{if(f)exit}' "$HOOK" \
+  | grep -oE '"[a-z][a-z0-9_]+"' | tr -d '"' | sort -u)
 
 # Source 2: <stage_allowlist> union from both skills
 S2=""

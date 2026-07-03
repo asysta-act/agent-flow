@@ -27,13 +27,16 @@ publisher binds to canonical stage `publisher` per design.md §4.2.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$PUBLISHER_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness publisher agent-flow:publisher haiku "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness publisher agent-flow:publisher haiku "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:publisher"
 EXPECTED_STAGE_NAME="publisher"
-# Merge: state.json[stages.publisher] = { dispatched_at, dispatch_witness, agent_name,
-#   stage_name, status="in_progress" } atomically.
+# Merge: state.json[stages.publisher] = { dispatched_at, agent_name, stage_name,
+#   prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+#   in ONE atomic write. Then append OVERLAY_BLOCK to the prompt.
 ```
 
 ## Agent Override injection
@@ -64,6 +67,11 @@ Read `.agent-flow/dispatch-audit.log` (or absent → silent). Parse each line an
 - **OK** — `WITNESS_OK` audit line present.
 - **SUPPRESSED** — stage is NOT in REQUIRED or OPTIONAL list (do not surface; this is a stage from
   another skill's pipeline).
+
+> **Overlay binding note:** the dispatch witness now binds the resolved overlay (`overlay_source` +
+> `overlay_digest`), so a dropped overlay (a `.toml` present on disk but `overlay_source != toml`)
+> is enforced by the hook's V2 overlay-presence check and surfaces here as a `WITNESS_MISMATCH`
+> audit line. Continue to surface such entries as anomalies via the terminal block below.
 
 ```bash
 SKILL_DIR="${CLAUDE_SKILL_DIR:-skills/implement-feature}"

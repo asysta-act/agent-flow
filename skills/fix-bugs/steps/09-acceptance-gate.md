@@ -32,12 +32,15 @@ Before dispatching, atomically write per-stage pre-dispatch fields to
 - `acceptance_gate.agent_name`      = `"agent-flow:acceptance-gate"`
 - `acceptance_gate.stage_name`      = `"acceptance_gate"`
 - `acceptance_gate.dispatched_at`   = current ISO-8601 UTC timestamp
-- `acceptance_gate.dispatch_witness` = sha256("agent-flow:acceptance-gate|sonnet|<prompt_head_128>")
-  (compute via `core/lib/stage-invariant.sh::compute_dispatch_witness`)
+- `acceptance_gate.prompt_head_128` = first 128 UTF-8-safe bytes of the un-expanded prompt template
+- `acceptance_gate.overlay_source`  = `toml` | `none` | `md_rejected` (from the Agent Override Injector — resolve it FIRST, see "Agent Override injection" below)
+- `acceptance_gate.overlay_digest`  = sha256 hex of the rendered overlay block (`toml`), else literal `none` / `md_rejected` (via `compute_overlay_digest`)
+- `acceptance_gate.dispatch_witness` = sha256("agent-flow:acceptance-gate|sonnet|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  (compute via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness acceptance_gate agent-flow:acceptance-gate sonnet <prompt_head_128> <overlay_source> <overlay_digest>`; the overlay is resolved BEFORE the witness)
 - `acceptance_gate.tokens_used` = 0, `acceptance_gate.duration_ms` = 0, `acceptance_gate.tool_uses` = 0
 
 Follow atomic write protocol from `../../../core/state-manager.md`. All fields written in a single atomic
-replace.
+replace. Then append the rendered overlay block to the prompt and dispatch.
 
 ## Agent Override injection
 

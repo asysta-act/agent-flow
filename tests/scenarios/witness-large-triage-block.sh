@@ -6,12 +6,14 @@
 #
 # Real-world trigger: analyst stage with 5 acceptance_criteria items per
 # CLAUDE.md (mandates 2-5 items). dispatch_witness may live at line ~13+
-# in pretty-printed JSON. The grep window is -A 30 (6x safety margin).
+# in pretty-printed JSON. After the A1 fix (REQ-029/REQ-030) the reader shells
+# to Python json.load and reads the WHOLE document, so the line-distance window
+# bug class is structurally eliminated (strictly stronger than any grep -A N).
 #
 # Repo-root resolution works when invoked from tests/scenarios/.
 set -uo pipefail
 
-REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT="${AGENT_FLOW_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 LIB="$REPO_ROOT/core/lib/stage-invariant.sh"
 FIXTURE="$REPO_ROOT/tests/fixtures/witness/triage-5ac.json"
 
@@ -32,7 +34,6 @@ DELTA=$((WITNESS_LINE - TRIAGE_LINE))
 # shellcheck disable=SC1090
 . "$LIB"
 
-EXPECTED_WITNESS="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 VERDICT=$(check_dispatch_witness "triage" "$FIXTURE" 2>/dev/null)
 RC=$?
 
@@ -46,16 +47,19 @@ if [ "$RC" -ne 0 ]; then
     fail "ASSERT-2: rc=${RC} (expected 0) for WITNESS_OK verdict on valid witness"
 fi
 
-# Assertion 3 (structural): library must use -A 30 or greater (regression guard
-# — prevents future regression to a narrower window).
-if ! grep -qE 'grep[[:space:]]+-A[[:space:]]+(3[0-9]|[4-9][0-9]|[1-9][0-9]{2,})' "$LIB"; then
-    fail "ASSERT-3: $LIB no longer contains 'grep -A 30' (or wider) — regression risk if window narrows back below realistic stage-block size"
+# Assertion 3 (structural): the A1 fix (REQ-029/REQ-030) makes __read_stage_field
+# shell to Python json.load — a WHOLE-document read with no line window — so a
+# witness at any distance is found. This is the regression guard: the reader must
+# use json.load (the one-source whole-document reader), strictly stronger than any
+# grep -A N window.
+if ! grep -q 'json.load' "$LIB"; then
+    fail "ASSERT-3: $LIB no longer reads via json.load — the A1 whole-document reader is the regression guard against a narrow line window"
 fi
 
-# Assertion 4: window must NOT be the old -A 8 form
+# Assertion 4: the reader must NOT reintroduce the old narrow grep -A 8 window.
 if grep -qE 'grep[[:space:]]+-A[[:space:]]+8[^0-9]' "$LIB"; then
-    fail "ASSERT-4: $LIB still contains 'grep -A 8' — regression: window narrowed below safe threshold"
+    fail "ASSERT-4: $LIB still contains 'grep -A 8' — regression: narrow line window reintroduced"
 fi
 
-echo "PASS: witness-large-triage-block — 5-AC triage block (delta=${DELTA} lines) → WITNESS_OK rc=0; grep -A window >= 30 confirmed structurally"
+echo "PASS: witness-large-triage-block — 5-AC triage block (delta=${DELTA} lines) → WITNESS_OK rc=0; whole-document json.load reader confirmed structurally"
 exit 0

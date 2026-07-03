@@ -18,13 +18,16 @@ acceptance-gate binds to canonical stage `acceptance_gate` per design.md §4.2.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$ACCEPTANCE_GATE_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness acceptance_gate agent-flow:acceptance-gate sonnet "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness acceptance_gate agent-flow:acceptance-gate sonnet "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:acceptance-gate"
 EXPECTED_STAGE_NAME="acceptance_gate"
-# Merge: state.json[stages.acceptance_gate] = { dispatched_at, dispatch_witness,
-#   agent_name, stage_name, status="in_progress" } atomically.
+# Merge: state.json[stages.acceptance_gate] = { dispatched_at, agent_name, stage_name,
+#   prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+#   in ONE atomic write. Then append OVERLAY_BLOCK to the prompt.
 ```
 
 ## Agent Override injection

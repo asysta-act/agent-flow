@@ -1,0 +1,20 @@
+{
+  "_comment": "FIXTURE (anchor, REQ-025): keyed v2.0 run whose dispatch-ledger.jsonl 'tag' was computed under a DIFFERENT key than the discovered sibling dispatch.key. Key presence is the downgrade authority, so a tag that does not verify under the run key is WITNESS_MISMATCH (exit 2 under strict) -- never a silent skip and never a false UNVERIFIABLE.",
+  "schema_version": "2.0",
+  "fixture_kind": "keyed_wrong_key_mismatch",
+  "stages": {
+    "fixer_reviewer": {
+      "dispatched_at": "2026-04-18T13:30:00Z",
+      "subagent_type": "agent-flow:fixer",
+      "agent_name": "agent-flow:fixer",
+      "model": "opus",
+      "stage_name": "fixer_reviewer",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "0123456789abcdef0123456789abcdef",
+      "dispatch_seq": 5,
+      "status": "completed"
+    }
+  }
+}
