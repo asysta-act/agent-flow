@@ -122,43 +122,36 @@ Legacy flat `.agent-flow/state.json` → log `[WARN]` and continue with the new 
 
 ## Step 0b — Resume detection
 
-Follow `../../core/resume-detection.md` for resume detection logic. Inputs: `ISSUE_ID` (single) or
-`BATCH_RUN_ID="batch-{timestamp}"` (batch); `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`,
-`On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
+Follow `../../core/resume-detection.md` for resume detection logic. Inputs: `ISSUE_ID` (single) or `BATCH_RUN_ID="batch-{timestamp}"` (batch);
+`MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`, `On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
 
-If `RESUME_POINT == "FRESH"`, proceed with Step 1 below. Otherwise skip ahead per the BUG resume
-mapping in `../../core/resume-detection.md`. Batch-mode invokes per-issue resume inside the per-issue
-loop, so the outer batch run does not skip ahead.
+If `RESUME_POINT == "FRESH"`, proceed with Step 1 below. Otherwise skip ahead per the BUG resume mapping in `../../core/resume-detection.md`.
+Batch-mode invokes per-issue resume inside the per-issue loop, so the outer batch run does not skip ahead.
 
-**Webhook events beyond the base 5:** NEEDS_CLARIFICATION fires `pipeline-paused`;
-`../../core/resume-detection.md` Step 9 fires `pipeline-resumed` on resume (both gated on
-`Webhook_URL` + matching `On events` token).
+**Webhook events beyond the base 5:** NEEDS_CLARIFICATION fires `pipeline-paused`; `../../core/resume-detection.md` Step 9 fires
+`pipeline-resumed` on resume (both gated on `Webhook_URL` + matching `On events` token).
 
 ## Mode flag semantics
 
-- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps including step 11
-  (publish) end-to-end unattended; pauses only on NEEDS_CLARIFICATION.
+- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps including step 11 (publish) end-to-end unattended; pauses only on NEEDS_CLARIFICATION.
 - `--yolo`: zero gates, autonomous run to PR — auto-approve decomposition, auto-publish.
-- `--step-mode`: pause after each step (including before step 11) for human review — mutually
-  exclusive with `--yolo`; use this flag for a human publish-review gate.
+- `--step-mode`: pause after each step (including before step 11) for human review — mutually exclusive with `--yolo`; use this flag for a human publish-review gate.
 
 ## Configuration
 
-Read from `## Automation Config` in CLAUDE.md per `../../core/config-reader.md`. Required sections:
-Issue Tracker, Source Control, PR Rules, Build & Test, PR Description Template. Optional:
-Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees, Decomposition,
-Error Handling, Agent Overrides, Local Deployment, Browser Verification, Pipeline Profiles,
-Pause Limits, E2E Test. See `docs/reference/automation-config.md` for the full key contract.
+Read from `## Automation Config` in CLAUDE.md per `../../core/config-reader.md`. Required sections: Issue Tracker, Source Control,
+PR Rules, Build & Test, PR Description Template. Optional: Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees,
+Decomposition, Error Handling, Agent Overrides, Local Deployment, Browser Verification, Pipeline Profiles, Pause Limits, E2E Test.
+See `docs/reference/automation-config.md` for the full key contract.
 
-Pipeline profile parsing: follow `../../core/profile-parser.md`. Stage names eligible for skip:
-`triage`, `analyst-impact`, `test-engineer`, `test-engineer-e2e`, `browser-agent-reproduce`,
-`browser-agent-verify`. NEVER skip: `fixer`, `reviewer`, `publisher` (these stages CANNOT be skipped).
+Pipeline profile parsing: follow `../../core/profile-parser.md`. Stage names eligible for skip: `triage`, `analyst-impact`,
+`test-engineer`, `test-engineer-e2e`, `browser-agent-reproduce`, `browser-agent-verify`. NEVER skip: `fixer`, `reviewer`, `publisher`
+(these stages CANNOT be skipped).
 
 ### Config Validity Gate
 
-Follow `skills/implement-feature/SKILL.md` Step 0b: Config Validity Gate identically (unfilled
-placeholder scan across `Issue Tracker`, `Source Control`, `PR Rules`, `Build & Test`, `PR
-Description Template` → BLOCK) before proceeding to Step 00 — canonical logic lives there.
+Follow `skills/implement-feature/SKILL.md` Step 0b: Config Validity Gate identically (unfilled placeholder scan across
+`Issue Tracker`, `Source Control`, `PR Rules`, `Build & Test`, `PR Description Template` → BLOCK) before proceeding to Step 00 — canonical logic lives there.
 
 ## Preflight checks (advisory)
 
@@ -175,10 +168,9 @@ If `MODE = batch`:
 - Outer loop: query the tracker for N bugs via `Bug query` from Automation Config.
 - For each ticket: write per-issue `.agent-flow/{ISSUE-ID}/state.json`, then execute the
   dispatch table below per-issue.
-- "Parallel" means concurrent `Task()` dispatch only — per-issue `state.json` writes stay inside
-  each ticket's own directory (no cross-ticket sharing). The batch-level summary below IS shared,
-  but this orchestrator is its sole writer (sequential fold-in as each `Task()` returns, atomic
-  tmp+rename) — no additional file-level locking needed even under parallel dispatch.
+- "Parallel" means concurrent `Task()` dispatch only — per-issue `state.json` writes stay inside each ticket's own
+  directory (no cross-ticket sharing). The batch-level summary below IS shared, but this orchestrator is its sole
+  writer (sequential fold-in as each `Task()` returns, atomic tmp+rename) — no additional file-level locking needed.
 - Maintain a batch-level summary at `.agent-flow/batch-{timestamp}/state.json` with
   `pipeline_type: "bug_fix_batch"`, `processed[]`, `succeeded[]`, `blocked[]`.
 - On block: increment `block_count`. If `Max blocked per run` reached → skip remaining bugs.
@@ -234,9 +226,8 @@ agent prompt.
 Before each Task dispatch, apply Agent Overrides per `../../core/agent-override-injector.md` (.toml
 primary). Applies to both single and batch mode.
 
-**Step file override (not yet implemented):** replacing individual step files via
-`customization/steps/fix-bugs/{NN}-{name}.md` is not currently supported by any shipped version.
-See TOML overlay documentation for current customization options.
+**Step file override (not yet implemented):** replacing individual step files via `customization/steps/fix-bugs/{NN}-{name}.md`
+is not currently supported by any shipped version. See TOML overlay documentation for current customization options.
 
 ## `--step-mode` prompt
 

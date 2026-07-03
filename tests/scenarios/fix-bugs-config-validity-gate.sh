@@ -51,19 +51,23 @@ if grep -q '\[agent-flow\].*Pipeline Block' "$FIX_BUGS"; then
 fi
 
 # Config Validity Gate appears between the Configuration section's required-
-# sections list and the Architecture freshness section (structural position)
+# sections list and the Preflight checks section (structural position).
+# The section was renamed from "Architecture freshness" to "Preflight checks"
+# when dispatch-enforcement-preflight was folded into it alongside
+# architecture-freshness (v2.0) -- match either name so this stays green
+# across that rename.
 config_line=$(grep -n '^## Configuration' "$FIX_BUGS" | head -1 | cut -d: -f1)
 gate_line=$(grep -n '### Config Validity Gate' "$FIX_BUGS" | head -1 | cut -d: -f1)
-arch_line=$(grep -n '^## Architecture freshness' "$FIX_BUGS" | head -1 | cut -d: -f1)
+arch_line=$(grep -nE '^## (Architecture freshness|Preflight checks)' "$FIX_BUGS" | head -1 | cut -d: -f1)
 
 if [ -z "$config_line" ] || [ -z "$gate_line" ] || [ -z "$arch_line" ]; then
-  fail "skills/fix-bugs/SKILL.md: could not find all required structural markers (Configuration, Config Validity Gate, Architecture freshness)"
+  fail "skills/fix-bugs/SKILL.md: could not find all required structural markers (Configuration, Config Validity Gate, Architecture freshness/Preflight checks)"
 else
   if [ "$gate_line" -le "$config_line" ]; then
     fail "skills/fix-bugs/SKILL.md: Config Validity Gate (line $gate_line) must appear after the Configuration heading (line $config_line)"
   fi
   if [ "$gate_line" -ge "$arch_line" ]; then
-    fail "skills/fix-bugs/SKILL.md: Config Validity Gate (line $gate_line) must appear before Architecture freshness (line $arch_line)"
+    fail "skills/fix-bugs/SKILL.md: Config Validity Gate (line $gate_line) must appear before Architecture freshness/Preflight checks (line $arch_line)"
   fi
 fi
 
