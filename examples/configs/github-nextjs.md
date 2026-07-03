@@ -19,7 +19,7 @@
 |------|---------|
 | Remote | `github.com/<owner/repo>` |
 | Base branch | `main` |
-| Branch naming | `fix/{issue}-{short-description}` |
+| Branch naming | `fix/{issue-id}-{description}` |
 
 ### PR Rules
 | Key | Value |
@@ -127,6 +127,18 @@ Fixes #{issue_number}
 |------|---------|
 | Output | stdout |
 | Period | 30 |
+
+### Sprint Planning (optional)
+| Key | Value |
+|------|---------|
+| Sprint duration | 2 weeks |
+| Capacity unit | story-points |
+| Team capacity | 40 |
+| Velocity target | 35 |
+| Sprint field | `Sprint` |
+| Mode | suggest |
+| Max issues | 20 |
+| Epic template | `epic: {title}` |
 
 ### Autopilot (optional)
 | Key | Value |

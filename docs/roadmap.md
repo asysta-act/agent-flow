@@ -5,7 +5,7 @@ workflows — from issue tracker to merged PR — using a pipeline of specialize
 
 ---
 
-## v1.1.0 — Planned
+## v1.3.0 — Planned
 
 ### Direct Mode (tracker-free)
 Use a text prompt, file, or TODO comment as the input instead of an issue tracker.
@@ -17,7 +17,7 @@ with a clear "missing X, install with Y" message instead of a mid-run failure.
 
 ---
 
-## v1.2.0 — Planned
+## v1.4.0 — Planned
 
 ### Step File Overrides
 Replace any individual pipeline step with a project-specific version by placing a file at

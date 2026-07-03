@@ -33,7 +33,6 @@ jq -nc \
 **`pr_url`:** nullable. `null` for `outcome: "blocked"` or `outcome: "failed"`; populated for `outcome: "success"`.
 
 ## Used by:
-- `skills/fix-bugs/SKILL.md:907` (citation marker `<!-- @snippet:pipeline-completion -->`)
-- `skills/fix-bugs/steps/07-publish.md:96` (citation marker `<!-- @snippet:pipeline-completion -->`)
-- `skills/implement-feature/steps/07-publish.md:55` (citation marker `<!-- @snippet:pipeline-completion -->`)
+- `skills/fix-bugs/steps/12-result.md:174` (citation marker `<!-- @snippet:pipeline-completion -->`)
+- `skills/implement-feature/steps/08-publish.md:148` (citation marker `<!-- @snippet:pipeline-completion -->`)
 

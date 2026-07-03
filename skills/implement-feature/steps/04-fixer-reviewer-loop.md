@@ -1,11 +1,30 @@
 # Step 04 — Fixer-Reviewer Loop (Subtask Execution)
 
-**Single-pass (without decomposition):** Execute steps 04a–04e once for the entire feature.
+## Centralized claim-write ritual (v2.0 gate-as-signer)
 
-**Decomposition (sequential mode):** For each subtask in topological order:
+Immediately before **every** `Task()` dispatch in this loop, perform the
+centralized claim-write ritual defined once in `../../claim-ritual.md`. The
+ritual mints a fresh `claim_nonce` (`secrets.token_hex(16)`) + a monotonic
+`dispatch_seq`, atomically writes the **claim-only** stage record into
+`state.json`, and atomically writes the top-level per-dispatch marker
+`.agent-flow/pending-dispatch.json` (temp + `os.replace`). This is the single
+source of truth and **supersedes** the legacy `dispatch_witness` /
+`compute_dispatch_witness` fields on keyed (`schema_version "2.0"`) runs: the
+orchestrator writes no key and no signed tag, and the prompt head is
+gate-observed ground truth, not an orchestrator-written field.
+
+**Single-pass (without decomposition):** Execute steps 04a–04d once for the entire feature, then proceed
+directly to step 05 (`steps/05-smoke.md`). Steps 04e and 04f are decomposition-only and do NOT run in
+single-pass mode — step 05 is the single, canonical Build+Test gate in this mode, so there is no
+per-subtask gate to run beforehand.
+
+**Decomposition (sequential mode):** For each subtask in topological order, execute steps 04a–04f:
 - Verify that all depends_on have status "completed". If not → skip (waiting).
 - Build context for fixer: entire decomposition plan + summary of previous subtasks
   (what changed, why, diff summary) + current subtask (scope, files, acceptance criteria).
+- 04e provides a per-subtask Build+Test gate before that subtask is committed (04f) — it verifies only the
+  incremental change just made, and is distinct from step 05's feature-level gate, which runs exactly once,
+  after the loop over all subtasks has finished (not per subtask).
 
 ## 04a. Pre-fix hook
 
@@ -20,18 +39,22 @@ Follow atomic write protocol from `../../../core/state-manager.md`.
 
 ### Pre-dispatch witness write
 
-Both fixer and reviewer bind to canonical stage `fixer_reviewer` per design.md §4.2 (shared in the iteration loop). Source `core/lib/stage-invariant.sh` and recompute the witness for EACH fixer or reviewer dispatch (each iteration has its own prompt — therefore its own witness). Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables.
+Both fixer and reviewer bind to canonical stage `fixer_reviewer` per design.md §4.2 (shared in the iteration loop). Source `core/lib/stage-invariant.sh`. For EACH fixer or reviewer dispatch, resolve the Agent Override overlay FIRST (each iteration has its own prompt AND its own overlay resolution — therefore its own witness), then recompute the witness. Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$FIXER_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness fixer_reviewer agent-flow:fixer opus "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness fixer_reviewer agent-flow:fixer opus "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:fixer"   # agent-flow:reviewer for the reviewer dispatch
 EXPECTED_STAGE_NAME="fixer_reviewer"
-# Merge: state.json[stages.fixer_reviewer] = { dispatched_at, dispatch_witness,
-#   agent_name, stage_name, status="in_progress" } atomically.
-# On every iteration, OVERWRITE these fields with the current iteration's values.
+# Merge: state.json[stages.fixer_reviewer] = { dispatched_at, agent_name, stage_name,
+#   prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+#   in ONE atomic write. Then append OVERLAY_BLOCK to the prompt.
+# On every iteration, OVERWRITE these fields (including overlay_source/overlay_digest) with the
+# current iteration's values.
 ```
 
 ## Agent Override injection
@@ -100,16 +123,23 @@ state.json write of the final verdict, if `Webhook URL` is configured AND `step-
 fire with `step_name: "fixer_reviewer"`, `iteration_count: {total iterations}`. Advisory failure: log `[WARN]`
 and continue. Fires once per top-level stage — never once per iteration.
 
-## 04e. Smoke check (build + test)
+## 04e. Per-subtask smoke check (decomposition only — build + test)
 
-After fixer↔reviewer approval, verify the codebase still builds and existing tests pass.
+**Decomposition mode only.** Does not run in single-pass mode (see the mode note at the top of this file) —
+single-pass mode goes straight from 04d to step 05, which is the sole Build+Test gate for that mode. This
+step is a lightweight, per-subtask gate: after fixer↔reviewer approval of the CURRENT subtask, verify that
+subtask's incremental change did not break the build or existing tests, before it is committed (04f). It
+does not write to the `smoke_check` state.json stage — that stage is owned exclusively by step 05
+(`steps/05-smoke.md`), which performs the one feature-level Build+Test gate after all subtasks in the loop
+have completed.
 
 1. Read `Build command` and `Test command` from Automation Config.
 2. Run Build command via Bash. If it fails → Block handler (step X) with
-   `agent = smoke-check, Step = 04e, Reason = Build command failed after fixer↔reviewer approval`.
+   `agent = smoke-check, Step = 04e, Reason = Build command failed after fixer↔reviewer approval of subtask {subtask-id}`.
 3. Run Test command via Bash. If it fails → Block handler (step X) with
-   `agent = smoke-check, Step = 04e, Reason = Existing tests failed after fixer↔reviewer approval`.
-4. Both pass → continue to step 05.
+   `agent = smoke-check, Step = 04e, Reason = Existing tests failed after fixer↔reviewer approval of subtask {subtask-id}`.
+4. Both pass → continue to 04f (commit subtask), then advance to the next subtask in the loop. Once every
+   subtask has completed 04a–04f, exit the loop and continue to step 05 for the single feature-level gate.
 
 ## 04f. Commit subtask (decomposition only)
 

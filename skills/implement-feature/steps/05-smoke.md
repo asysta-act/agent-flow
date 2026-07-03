@@ -8,7 +8,7 @@ After the fixer ↔ reviewer loop approves the change, verify that the codebase 
 
 If neither `Build command` nor `Test command` is configured in Automation Config (`Build & Test` section):
 
-- Write `state.json[stages.smoke_check].status = "skipped"`, `stage_name = "smoke_check"`, `agent_name = null`, `dispatched_at = <now>`, `dispatch_witness = null` per `../../../core/state-manager.md` atomic write protocol.
+- Write `state.json[stages.smoke_check].status = "skipped"`, `stage_name = "smoke_check"`, `agent_name = null`, `dispatched_at = <now>`, `prompt_head_128 = null`, `overlay_source = null`, `overlay_digest = null`, `dispatch_witness = null` per `../../../core/state-manager.md` atomic write protocol.
 - Skip the `step-completed` webhook for skipped stages.
 - Proceed to step 06.
 
@@ -20,7 +20,8 @@ If neither `Build command` nor `Test command` is configured in Automation Config
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 # state.json[stages.smoke_check] = {
 #   dispatched_at: $DISPATCHED_AT, stage_name: "smoke_check",
-#   agent_name: null, dispatch_witness: null, status: "in_progress"
+#   agent_name: null, prompt_head_128: null, overlay_source: null,
+#   overlay_digest: null, dispatch_witness: null, status: "in_progress"
 # } atomically per ../../../core/state-manager.md.
 ```
 

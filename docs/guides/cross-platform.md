@@ -9,18 +9,19 @@ Manual checklist for verifying the pipeline on different platforms.
 - [ ] `## Automation Config` in the project's CLAUDE.md
 - [ ] Test issue exists in the issue tracker
 
+Issue tracker / source control backend MCP checks below apply to whichever backend your project's `## Automation Config` `### Issue Tracker` section specifies (GitHub is the canonical backend for the public release; Gitea, YouTrack, Jira, Linear, and Redmine remain supported for self-hosted projects — see [mcp-configuration.md](mcp-configuration.md)).
+
 ## Windows
 
 - [ ] `/agent-flow:check-setup` — all checks OK
 - [ ] `/agent-flow:analyze-bug <TEST-ISSUE>` — triage + analysis completes
-- [ ] Gitea MCP server (`gitea-mcp.exe`) responds
+- [ ] GitHub MCP server responds (`api.githubcopilot.com/mcp/`), or Gitea MCP server (`gitea-mcp.exe`) responds if configured
 - [ ] YouTrack MCP server (npx) responds
 - [ ] Worktree paths work (relative path in Automation Config)
 
 ## Linux
 
-- [ ] Gitea MCP binary: `chmod +x` set
-- [ ] Path to binary in `.mcp.json` follows Linux convention
+- [ ] If using Gitea: MCP binary has `chmod +x` set and the path in `.mcp.json` follows Linux convention
 - [ ] `/agent-flow:check-setup` — all checks OK
 - [ ] `/agent-flow:analyze-bug <TEST-ISSUE>` — triage + analysis completes
 - [ ] Worktree paths: relative format (not `C:\...`)
@@ -28,7 +29,7 @@ Manual checklist for verifying the pipeline on different platforms.
 ## macOS
 
 - [ ] Analogous to Linux — not officially supported
-- [ ] Gitea MCP binary: darwin-amd64 or darwin-arm64
+- [ ] If using Gitea: MCP binary is darwin-amd64 or darwin-arm64
 
 ## Notes
 

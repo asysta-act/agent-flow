@@ -72,18 +72,23 @@ Step 03 has no required agent dispatch — the decomposition decision is a heuri
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 # state.json[stages.decomposition] = {
 #   dispatched_at, stage_name: "decomposition", agent_name: null,
+#   prompt_head_128: null, overlay_source: null, overlay_digest: null,
 #   dispatch_witness: null, status: "in_progress"
 # } atomically. On heuristic completion, set status="completed" and write
 # decomposition.decision = "DECOMPOSE" | "SINGLE_PASS".
 ```
 
-If the optional `backlog-creator` dispatch fires (Step 03a backlog mode), compute a witness for stage `backlog_creation` per design.md §4.2:
+If the optional `backlog-creator` dispatch fires (Step 03a backlog mode), resolve the Agent Override overlay FIRST, then compute a witness for stage `backlog_creation` per design.md §4.2:
 
 ```bash
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$BACKLOG_CREATOR_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness backlog_creation agent-flow:backlog-creator sonnet "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness backlog_creation agent-flow:backlog-creator sonnet "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 EXPECTED_AGENT_NAME="agent-flow:backlog-creator"
 EXPECTED_STAGE_NAME="backlog_creation"
+# Merge prompt_head_128, overlay_source, overlay_digest, dispatch_witness into the stage block
+# in ONE atomic write, then append OVERLAY_BLOCK to the prompt.
 ```
 
 ## Step 03a: Create tracker subtasks

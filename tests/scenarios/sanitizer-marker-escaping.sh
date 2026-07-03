@@ -2,7 +2,7 @@
 # Test: core/external-input-sanitizer.md has step 1b with marker escape logic
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 FAIL=0
 fail() { echo "FAIL: $1"; FAIL=1; }

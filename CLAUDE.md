@@ -11,7 +11,7 @@ A Claude Code plugin (`agent-flow`) that automates bug-fix workflows, feature im
 
 ## Repository Structure
 
-No build system, no dependencies. Manual test suite in `tests/`. This is a pure plugin of markdown definitions.
+No build system; zero third-party PACKAGE dependencies — requires bash + Python 3 (stdlib only) on PATH. Manual test suite in `tests/`. This is a pure plugin of markdown definitions plus shell + Python hooks.
 
 - `.claude-plugin/` — Plugin metadata (`plugin.json`, `marketplace.json`)
 - `agents/` — 17 agent definitions (markdown with YAML frontmatter)
@@ -21,6 +21,7 @@ No build system, no dependencies. Manual test suite in `tests/`. This is a pure 
 - `examples/` — Config templates, custom agent examples, MCP config examples
 - `checklists/` — Pipeline phase checklists (review, test, publish)
 - `tests/` — Test harness with scenarios and CI workflow
+- `hooks/` — Operator opt-in Claude Code hooks (`validate-dispatch.sh`, PostToolUse dispatch-witness audit); not auto-registered via `plugin.json`, see `docs/guides/dispatch-enforcement.md`
 - `.agent-flow/` — Per-run pipeline state files (state.json, pipeline.log, browser artifacts)
 - `state/` — State schema documentation
 - `core/` — 17 shared pipeline pattern contracts
@@ -98,11 +99,11 @@ You are a [Role] specializing in [domain].
 ## Expertise
 ## Process (numbered steps)
 ## Output Contract (mandatory — structured output schema agents return)
-## Step Completion Invariants (mandatory — fields the orchestrator MUST verify in state.json before considering the stage complete: `dispatched_at` non-null ISO 8601, `dispatch_witness` non-null 64-hex sha256, `tool_uses` ≥ 1, `status="completed"`. Failure → orchestrator returns BLOCKED with reason `completion_invariant_violated:<missing-field>`. Witness verified via `core/lib/stage-invariant.sh::check_dispatch_witness`.)
+## Step Completion Invariants (mandatory — before returning to the orchestrator, the agent itself SHALL verify 5 fields read from state.json: `dispatched_at` non-null ISO 8601, `dispatch_witness` non-null (on a legacy v1.0 run, 64-hex sha256 shape-checked via `core/lib/stage-invariant.sh::check_dispatch_witness`; on a keyed v2.0 run, a `WITNESS_OK` entry in the PreToolUse gate's ledger, signed as a keyed HMAC-SHA256 tag over `subagent_type|model|prompt_head_128|overlay_source|overlay_digest|stage|run_id|claim_nonce` — see `docs/guides/dispatch-enforcement.md`), `status == "in_progress"`, `stage_name` matching the orchestrator-injected `EXPECTED_STAGE_NAME`, and `agent_name` matching the orchestrator-injected `EXPECTED_AGENT_NAME`. These 5 are orchestrator pre-dispatch writes the agent can observe before it returns; `tool_uses`, `completed_at`, and `status="completed"` are separate orchestrator post-dispatch writes the agent cannot observe and must NOT attempt to write. Failure on any invariant → agent Blocks with `Reason: Step completion invariant violated: {invariant_name}` using the standard Block Comment Template and exits BLOCKED.)
 ## Constraints (NEVER rules, limits, failure handling)
 ```
 
-> **Reliability contract:** `## Step Completion Invariants` is a mandatory structured section in every `agents/*.md`. Custom agents that lack it will fail the harness scenario `tests/scenarios/step-completion-invariants-completeness.sh`. See `core/lib/stage-invariant.sh` for the runtime helper functions (`compute_dispatch_witness`, `check_dispatch_witness`, `emit_witness_audit`).
+> **Reliability contract:** `## Step Completion Invariants` is a mandatory structured section in every `agents/*.md`. Custom agents that lack it will fail the harness scenario `tests/scenarios/step-completion-invariants-completeness.sh`. See `core/lib/stage-invariant.sh` for the runtime helper functions (`compute_dispatch_witness`, `check_dispatch_witness`, `emit_witness_audit`). The operator opt-in `hooks/validate-dispatch.sh` (see `docs/guides/dispatch-enforcement.md`) provides a complementary, advisory-only PostToolUse audit of the same `dispatched_at` witness data — it is not auto-installed and never blocks (exit 0 always).
 
 ### Model Selection
 
@@ -151,7 +152,7 @@ Projects using this plugin must have `## Automation Config` in their CLAUDE.md w
 | Module Docs | Path | (none) |
 | Hooks | Pre-fix, Post-fix, Pre-publish, Post-publish | (none) |
 | Custom Agents | Post-fix agent, Pre-publish agent | (none) |
-| Notifications | Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`) | (none) |
+| Notifications | Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, `pipeline-resumed`) | (none) |
 | Worktrees | Batch size, Base path, Cleanup | (none) |
 | E2E Test | Framework, Command | (none) |
 | Browser Verification | Base URL, Start command, Stop command, On events, Timeout, Max pages, Screenshot storage, Exploration, Exploration max clicks | (none) |
@@ -188,7 +189,7 @@ Optional. Keys: Post-fix agent, Pre-publish agent. Default (none).
 
 ### Notifications
 
-Optional. Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`). Default (none).
+Optional. Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, `pipeline-resumed`). Default (none).
 
 ### Worktrees
 
@@ -260,7 +261,7 @@ Valid range: min 1 hour, max 365 days. Invalid values fall back to the default (
 
 ## Webhook Payloads
 
-Webhook payloads are forward-compatible — additive fields may be added in future MINOR versions without a schema version bump. Consumers MUST use lenient JSON parsing (ignore unknown fields). Existing payload fields (`pr-created`, `agent-flow-block`) are never renamed or removed. The events `pipeline-started`, `step-completed`, and `pipeline-completed` are supported. Webhook delivery failure is advisory — `[WARN] Webhook delivery failed` is logged and the pipeline continues.
+Webhook payloads are forward-compatible — additive fields may be added in future MINOR versions without a schema version bump. Consumers MUST use lenient JSON parsing (ignore unknown fields). Existing payload fields (`pr-created`, `agent-flow-block`) are never renamed or removed. The events `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, and `pipeline-resumed` are supported. Webhook delivery failure is advisory — `[WARN] Webhook delivery failed` is logged and the pipeline continues.
 
 **Operator trust required**: The `Webhook URL` value is dispatched via `curl` without scheme or host validation. Operators are responsible for configuring trusted URLs pointing to internal observability endpoints. SSRF defenses (e.g., restricting `file://`/`gopher://` schemes) are deferred to a future release. Per spec design §3.6.
 
@@ -332,6 +333,12 @@ gh release create vX.Y.Z --target main --title "vX.Y.Z" --notes-file <notes>
 `release/vX.Y.Z` is unprotected, so source PRs merge into it without the `main` status-check gate; that gate applies once, at step 4. (A bare local `git merge --squash` of a PR's content also works but leaves the source PR showing "closed" rather than "merged" — prefer the re-target flow so the merge history stays explicit.)
 
 **Bundled version = the highest individual classification.** Classify each bundled PR against the Versioning Policy table, then the release takes the max: any MAJOR → MAJOR; else any MINOR → MINOR; else PATCH. Prefer keeping individual source PRs version-neutral (no `plugin.json` / `marketplace.json` / `CHANGELOG` edits) so bumps never compete or conflict; finalize the single bump + the combined CHANGELOG entry on the integration branch. If one source PR already carries the bump, ensure the others do not and reconcile the CHANGELOG on the integration branch.
+
+### Changelog Entry Content
+
+A CHANGELOG entry documents *what changed for a consumer* of the plugin — new/changed/fixed behavior, contract changes, and why the old behavior was wrong. It NEVER documents the internal process used to find or produce the change: no "found via N-agent review", no naming the subagents/tools/workflow that did the work, no audit-methodology notes. That belongs in the PR description or commit body, not in a file consumers read to learn what to update.
+
+Ground the "why" in the observed defect, not the workflow that discovered it — e.g. "status was derived only from X, never from Y, so Z was silently misclassified" is a good changelog line; "verifier agent flagged this and an orchestrator confirmed it" is not.
 
 ## Cross-File Invariants
 

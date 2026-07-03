@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 # Verifies: AC-CT-004 (counts contract)
 # Description: core/ has exactly 17 .md files at maxdepth 1
+
+# CONSOLIDATION NOTE (CONTRIBUTING.md rule 9 — "No duplicate coverage for an
+# existing AC id"): this scenario and tests/scenarios/count-core.sh (AC-2)
+# previously asserted the identical criterion via near-duplicate grep logic —
+# both ran `find "$REPO_ROOT/core" -maxdepth 1 -name '*.md' -type f | wc -l`
+# and compared the result to 17. The assertion logic now lives in exactly one
+# place — this file, the canonical AC-CT-004 scenario — and count-core.sh
+# delegates to it (`exec .../count-core-contracts.sh`) instead of
+# re-implementing the same check, so both AC ids (AC-2 and AC-CT-004) stay
+# covered by one assertion without duplicated logic to drift out of sync.
+
 set -uo pipefail
 
 # NOTE: REPO_ROOT assumes test file location is tests/scenarios/. Run after Phase 7 has moved files.

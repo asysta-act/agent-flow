@@ -1,8 +1,8 @@
 # agent-flow
 
-> **v1.0.0** — Initial public release. [View on GitHub](https://github.com/asysta-act/agent-flow)
+> **v2.0.0** — MAJOR breaking release: keyed (HMAC-signed) dispatch witness + extended agent output contracts. See [CHANGELOG.md](CHANGELOG.md) for release history. [View on GitHub](https://github.com/asysta-act/agent-flow)
 
-A Claude Code plugin that automates the full development lifecycle — from bug triage through fix, review, test, and publish. 17 specialized AI agents, 17 orchestration skills, 17 core contracts, zero dependencies.
+A Claude Code plugin that automates the full development lifecycle — from bug triage through fix, review, test, and publish. 17 specialized AI agents, 17 orchestration skills, 17 core contracts, zero third-party PACKAGE dependencies (requires bash + Python 3, stdlib only).
 
 ```mermaid
 graph LR
@@ -43,7 +43,7 @@ graph LR
 - **Feature pipeline** — Specification extraction, architecture design, task decomposition, implementation, review, test, and publish.
 - **Project scaffolding** — Describe a project in natural language. Get a specification, buildable skeleton, and fully implemented features with tests. Use `--yolo` for full automation or `--step-mode` for per-step debugging.
 - **17 specialized agents** — Each with a defined role, model assignment (opus/sonnet/haiku), and constraints. Read-only analysts never touch code; execution agents make changes.
-- **Zero dependencies** — Pure markdown definitions. No build system, no runtime, no package manager. Works on macOS, Linux, and Windows (Git Bash required on Windows).
+- **Zero third-party PACKAGE dependencies** — Pure markdown definitions plus shell + Python hooks. No build system, no package manager; it requires only bash + Python 3 (stdlib only) on PATH. Works on macOS, Linux, and Windows (Git Bash required on Windows).
 
 ---
 
@@ -133,6 +133,8 @@ With `--no-implement`: Infrastructure Declaration → Scaffolder (with stack fla
 
 Hook integration points (pre-fix, post-fix, pre-publish, post-publish) and pipeline profiles are supported. See [Pipeline Reference](docs/reference/pipelines.md) for full details.
 
+> **Optional dispatch-enforcement hook.** Separately from the pipeline integration-point hooks above, agent-flow ships an opt-in PostToolUse audit hook (`hooks/validate-dispatch.sh`) that records a per-stage dispatch audit to `.agent-flow/dispatch-audit.log`. It is **not** auto-installed — you wire it into `settings.json` manually. This is a different feature from the pre-fix/post-fix/pre-publish/post-publish hooks. See [Dispatch Enforcement](docs/guides/dispatch-enforcement.md) for installation and usage.
+
 ---
 
 ## Skills
@@ -205,7 +207,7 @@ Projects using this plugin need `## Automation Config` in their CLAUDE.md. Use `
 | PR Description Template | Template for PR body |
 | Build & Test | Build and test commands |
 
-**18 optional config sections** cover retry limits, module docs, hooks, custom agents, notifications, worktrees, E2E testing, browser verification, local deployment, sprint planning, error handling, feature workflow, decomposition, pipeline profiles, metrics, agent overrides, and pause limits.
+**18 optional config sections** cover retry limits, module docs, hooks, custom agents, notifications, worktrees, E2E testing, browser verification, local deployment, sprint planning, error handling, feature workflow, decomposition, pipeline profiles, metrics, agent overrides, autopilot, and pause limits.
 
 Minimal example:
 

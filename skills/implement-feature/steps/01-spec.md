@@ -11,17 +11,20 @@ protocol from `../../../core/state-manager.md`.
 
 ### Pre-dispatch witness write
 
-Source `core/lib/stage-invariant.sh` and write the dispatch witness atomically to `state.json[stages.spec_analysis]` before invoking Task. Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables so the agent self-check can cross-verify.
+Source `core/lib/stage-invariant.sh`. Resolve the Agent Override overlay (see the "Agent Override injection" section below) BEFORE computing the witness, then write the dispatch witness atomically to `state.json[stages.spec_analysis]` before invoking Task. Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables so the agent self-check can cross-verify.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$SPEC_ANALYST_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness spec_analysis agent-flow:spec-analyst sonnet "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness spec_analysis agent-flow:spec-analyst sonnet "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:spec-analyst"
 EXPECTED_STAGE_NAME="spec_analysis"
-# Merge into state.json[stages.spec_analysis]: { dispatched_at, dispatch_witness,
-# agent_name, stage_name, status="in_progress" } via ../../../core/state-manager.md atomic write.
+# Merge into state.json[stages.spec_analysis]: { dispatched_at, agent_name, stage_name,
+# prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+# in ONE atomic write via ../../../core/state-manager.md. Then append OVERLAY_BLOCK to the prompt.
 ```
 
 ## Agent Override injection
@@ -30,7 +33,7 @@ Before dispatch, check Agent Overrides: follow `../../../core/agent-override-inj
 If `{Agent Overrides path}/spec-analyst.toml` exists, append its rendered Markdown content to the agent's context as `## Project-Specific Instructions`.
 
 You MUST invoke Task(subagent_type='agent-flow:spec-analyst', model='sonnet'). DO NOT inline-execute.
-- Context: issue details from the issue tracker (wrapped in EXTERNAL INPUT markers per `../../../core/external-input-sanitizer.md`)
+- Context: issue ID and tracker config only. This skill does not pre-fetch or pass issue tracker content (title, description, comments, custom fields) in the Context block — spec-analyst performs its own MCP read directly (see `agents/spec-analyst.md` Process step 1), which is the point where external content first enters the agent's context. spec-analyst is responsible for self-applying `../../../core/external-input-sanitizer.md` to that content immediately after each MCP read.
 - Expected output: structured specification with acceptance criteria
 
 If spec-analyst blocks → proceed to step X (Block handler).
@@ -70,13 +73,16 @@ write protocol from `../../../core/state-manager.md`.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$ANALYST_IMPACT_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness code_analysis agent-flow:analyst sonnet "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness code_analysis agent-flow:analyst sonnet "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:analyst"
 EXPECTED_STAGE_NAME="code_analysis"
-# Merge: state.json[stages.code_analysis] = { dispatched_at, dispatch_witness,
-#   agent_name, stage_name, status="in_progress" } atomically per ../../../core/state-manager.md.
+# Merge: state.json[stages.code_analysis] = { dispatched_at, agent_name, stage_name,
+#   prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+#   in ONE atomic write per ../../../core/state-manager.md. Then append OVERLAY_BLOCK to the prompt.
 ```
 
 ## Agent Override injection

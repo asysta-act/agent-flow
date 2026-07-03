@@ -5,6 +5,9 @@
       "agent_name": "analyst",
       "stage_name": "triage",
       "model": "sonnet",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "prompt_head_128": "PROMPT_HEAD_triage_5ac",
       "severity": "M",
       "area": "core/lib",
       "complexity": "M",
@@ -19,7 +22,8 @@
         "Step 1: do thing",
         "Step 2: do other thing"
       ],
-      "dispatch_witness": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": "in_progress",
+      "dispatch_witness": "88320f4cacc4c7c1336591acbeab2b356395d4845e36c98db23528b17dbf562f",
       "completed_at": "2026-05-13T00:00:00Z"
     }
   }

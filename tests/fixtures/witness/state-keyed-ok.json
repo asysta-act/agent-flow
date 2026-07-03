@@ -1,0 +1,20 @@
+{
+  "_comment": "FIXTURE (anchor, REQ-025): keyed v2.0 run. With a sibling dispatch.key (per-run, 0600, 64-hex) and a dispatch-ledger.jsonl line whose 'tag' == HMAC-SHA256 Option-A over the sub-hash canon of this stage's claim (claim_nonce 0123456789abcdef0123456789abcdef), the PostToolUse audit returns WITNESS_OK / exit 0. The key+ledger live next to the run state at runtime and are NEVER stored in this dir.",
+  "schema_version": "2.0",
+  "fixture_kind": "keyed_ok",
+  "stages": {
+    "fixer_reviewer": {
+      "dispatched_at": "2026-04-18T13:30:00Z",
+      "subagent_type": "agent-flow:fixer",
+      "agent_name": "agent-flow:fixer",
+      "model": "opus",
+      "stage_name": "fixer_reviewer",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "0123456789abcdef0123456789abcdef",
+      "dispatch_seq": 5,
+      "status": "in_progress"
+    }
+  }
+}

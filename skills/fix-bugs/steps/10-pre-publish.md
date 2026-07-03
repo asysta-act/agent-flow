@@ -37,9 +37,13 @@ Before dispatch, check Agent Overrides: follow `../../../core/agent-override-inj
    - `pre_publish_custom.agent_name`      = `<custom agent name from frontmatter>`
    - `pre_publish_custom.stage_name`      = `"pre_publish_custom"`
    - `pre_publish_custom.dispatched_at`   = current ISO-8601 UTC timestamp
-   - `pre_publish_custom.dispatch_witness` = sha256("<agent_name>|<model>|<prompt_head_128>")
+   - `pre_publish_custom.prompt_head_128` = first 128 UTF-8-safe bytes of the un-expanded prompt template
+   - `pre_publish_custom.overlay_source`  = `toml` | `none` | `md_rejected` (resolve the Agent Override overlay FIRST)
+   - `pre_publish_custom.overlay_digest`  = sha256 hex of the rendered overlay block (`toml`), else literal `none` / `md_rejected` (via `compute_overlay_digest`)
+   - `pre_publish_custom.dispatch_witness` = sha256("<agent_name>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+     (compute via the 6-arg `compute_dispatch_witness pre_publish_custom <agent_name> <model> <prompt_head_128> <overlay_source> <overlay_digest>`; the overlay is resolved BEFORE the witness)
 4. Invoke `Task(subagent_type=<custom-agent>, model=<model>)` with the agent's full body as system prompt
-   plus the standard Tier-1 variables (`EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`).
+   plus the standard Tier-1 variables (`EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`), appending the rendered overlay block to the prompt.
 5. After dispatch, write `pre_publish_custom.completed_at`, `pre_publish_custom.tokens_used`,
    `pre_publish_custom.duration_ms`, `pre_publish_custom.tool_uses`.
 

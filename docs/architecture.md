@@ -1,6 +1,6 @@
 # Architecture
 
-agent-flow is a Claude Code plugin built as a 2-layer system: skills orchestrate WHAT to do, agents specialize in HOW to do it. The plugin is pure markdown with zero runtime dependencies. All project-specific configuration lives outside the plugin in the consuming project's CLAUDE.md.
+agent-flow is a Claude Code plugin built as a 2-layer system: skills orchestrate WHAT to do, agents specialize in HOW to do it. The plugin is pure markdown plus shell + Python hooks, with zero third-party PACKAGE dependencies (requires bash + Python 3, stdlib only). All project-specific configuration lives outside the plugin in the consuming project's CLAUDE.md.
 
 **Current counts:** 17 agents · 17 skills · 18 optional config sections · 17 core contracts.
 
@@ -231,11 +231,11 @@ Required sections (Issue Tracker, Source Control, PR Rules, PR Description Templ
 
 ### Versioning Policy
 
-The config contract is versioned along with the plugin:
+The config contract is versioned along with the plugin. This table summarizes the three MAJOR triggers; see CLAUDE.md's canonical **Versioning Policy** section for the full, authoritative rule set (this table must stay in sync with it):
 
 | Level | Trigger | Impact |
 |-------|---------|--------|
-| MAJOR (X.0.0) | New required key, renamed section | Breaking — consumers must update config |
+| MAJOR (X.0.0) | Breaking change in Automation Config contract (new required key, renamed section) — OR breaking change in agent output format contract (new/modified structured output sections that Agent Overrides or external tooling may parse) — OR introduction of a mandatory new structured contract section in agent definition files that prior-version agents would fail validation against | Breaking — consumers must update config, agent overrides, or custom agent files |
 | MINOR (X.Y.0) | New optional section, new skill/agent | Non-breaking — existing configs work unchanged |
 | PATCH (X.Y.Z) | Behavior fix without contract change | Invisible — no config changes needed |
 
@@ -340,7 +340,7 @@ The file lives under `.agent-flow/` (not `.claude/`), consistent with all other 
 
 ## State Management
 
-The state schema (`state/schema.md`) uses `schema_version: "1.0"`. All additions are **additive** — backward-compatible reads from prior pipelines continue without modification.
+The state schema (`state/schema.md`) defines `schema_version`: `"1.0"` for legacy keyless runs and **`"2.0"`** for keyed runs (PR #15 gate-as-signer dispatch witness — the first **non-additive** change). All earlier additions remain **additive** and backward-compatible; a v1.0 state stays valid and is verified under the legacy sha256 dual-mode (never a false `WITNESS_MISMATCH`).
 
 Additive keys in `state.json`:
 
@@ -349,7 +349,12 @@ Additive keys in `state.json`:
 | `analyst_triage.*` | analyst agent (`--phase triage`) | Triage output — severity, area, complexity, AC count, reproduction steps |
 | `analyst_impact.*` | analyst agent (`--phase impact`) | Impact output — affected files list (max 5), root cause area |
 | `mode_flag` | pipeline skill | Active mode: `yolo`, `default`, or `step-mode` |
-| `overlay_source` | skill (pre-dispatch) | `toml`, `md` (legacy), or `none` — provenance of agent customization |
+| `overlay_source` | skill (pre-dispatch) | `toml`, `none`, or `md_rejected` — provenance of agent customization |
+| `overlay_digest` | skill (pre-dispatch) | v2.0: sha256 of the RAW LF-normalized `.toml` file bytes when `overlay_source=toml` (v1.0 legacy: of the rendered overlay block); the literal `none` or `md_rejected` otherwise |
+| `prompt_head_128` | skill (pre-dispatch) | v1.0 only. On keyed v2.0 runs the gate OBSERVES `head128(tool_input.prompt)` and signs it as ground truth — it is not an orchestrator-committed/compared field |
+| `claim_nonce` / `dispatch_seq` / `override_path` | skill (pre-dispatch, v2.0) | Per-dispatch nonce + monotonic counter + resolved overlay dir, written into the CLAIM and the top-level marker |
+
+**Overlay-bound dispatch witness (v2.0 gate-as-signer).** On keyed runs (`schema_version "2.0"`) the witness is an **HMAC-SHA256 keyed tag** the PreToolUse `Task` gate (`hooks/validate-dispatch-pre.sh`, the sole per-run key holder) computes over a per-field sub-hashed canonical preimage (`subagent_type | model | prompt_head_128 | overlay_source | overlay_digest | stage | run_id | claim_nonce`) and records in the gate-owned ledger `.agent-flow/{RUN-ID}/dispatch-ledger.jsonl` — never in `state.json`. The gate observes-and-signs the dispatched prompt head as ground truth, recomputes `overlay_digest` from the RAW `.toml` bytes, and on a verified match ALLOWs; on a mismatch it emits a deny envelope and `exit 2`, which **blocks the dispatch before the tool runs** (Claude Code ≥ 2.1.90). The PostToolUse audit (`hooks/validate-dispatch.sh` — pure Python; it sources nothing, and the bash `core/lib/stage-invariant.sh` keyed path is demoted to a parity-pinned self-test) re-verifies every ledger tag as a second layer and **cannot block** (it runs after the tool — finding A8). The security authority for "is this run keyed" is the presence of the `0600 dispatch.key`. Legacy v1.0 keyless runs keep the additive `sha256("<subagent_type>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")` 5-tuple receipt with the V1 recompute + V2 overlay-presence dual-mode. Verification is **strict by default**: `AGENT_FLOW_STRICT_DISPATCH` is strict unless explicitly `"0"` (or a `STRICT_DISPATCH_OFF` flag file is present).
 
 The dedup logic in `core/state-manager.md` identifies in-progress pipelines by reading `state.json.status`. The analyst agent writes to `state.analyst_triage` and `state.analyst_impact` sub-objects, providing a natural split of triage+impact data.
 

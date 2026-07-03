@@ -110,7 +110,7 @@ non-empty, render it to the following Markdown layout:
 ...
 ```
 
-**Render rules (per design.md Section 2):**
+**Render rules:**
 
 1. Heading is fixed: `## Project-Specific Instructions` — exact case, no trailing punctuation.
 2. Source comment is mandatory: exactly one HTML
@@ -146,6 +146,54 @@ empty (no overlay, or overlay failure absorbed), the base prompt is used unchang
 
 ---
 
+### Step 5 — Record `overlay_source` / `override_path` in the CLAIM (the gate signs `overlay_digest`)
+
+`overlay_digest` is **GATE-OBSERVED ground truth** (PR #15, REQ-031/A5) — the same model as
+`prompt_head_128`. It is the `sha256` of the **RAW, LF-normalized `.toml` file bytes** at
+`override_path/<short>.toml` (**not** the rendered Markdown block), and **only the PreToolUse
+gate computes it**: the gate reads the on-disk `.toml` once and SIGNS that digest
+(`hooks/lib/witness_overlay.py::recompute_overlay_digest`, the one LF-normalizing authority). The
+orchestrator does **NOT** compute, normalize, or commit `overlay_digest` into the CLAIM — so an
+LF/CRLF-naive producer digest can never diverge from the gate's value and false-DENY every
+overlay dispatch on Windows. There is **no producer-claim-vs-gate digest compare**.
+
+Under the gate-as-signer model the witness itself is **no longer a `state.json` field**: the
+orchestrator writes only the CLAIM (`overlay_source`, `override_path`, plus `subagent_type`,
+`model`, `claim_nonce`, `dispatch_seq`, `status`, `dispatched_at`) and **holds no key**; the gate
+is the sole signer and records the keyed HMAC tag — together with its own recomputed
+`overlay_digest` — in the gate-owned ledger (`.agent-flow/{RUN-ID}/dispatch-ledger.jsonl`). The
+injector runs UPSTREAM of the claim write, and the orchestrator follows this ordering per stage:
+
+1. **Run the Agent Override Injector** (Steps 1–4) → resolves the overlay, yielding
+   `overlay_source` (`toml` | `none` | `md_rejected`), the resolved `override_path`, and the
+   rendered Markdown block (the block is appended to the prompt; it is NOT what is hashed).
+2. **Do NOT record `overlay_digest`.** The gate derives it as ground truth:
+   - `overlay_source=toml` → the gate signs the `sha256` of the RAW LF-normalized bytes of
+     `override_path/<short>.toml` (read from disk at intercept).
+   - `overlay_source=none` / `md_rejected` → the gate signs the literal source token.
+   (The bash `core/lib/stage-invariant.sh::compute_overlay_digest` helper is LEGACY v1.0 ONLY and
+   is retained for the demoted `--self-test`; it is never on the keyed compared path.)
+3. **Persist the resolved `override_path`** (REQ-032/A6) in the CLAIM so the Claude-Code-spawned
+   gate — which never inherits the skill's `AGENT_FLOW_OVERRIDE_PATH` env — reads it from
+   `state.json` and looks up the correct `.toml`.
+4. **ONE atomic state.json CLAIM write** for the stage block: `dispatched_at`,
+   `status:"in_progress"`, `subagent_type`, `model`, `stage_name`, `overlay_source`,
+   `override_path`, `claim_nonce`, `dispatch_seq` — **no key, no tag, NO `overlay_digest`, and NO
+   `prompt_head_128`** (the gate observes the post-expansion head and recomputes the overlay
+   digest, signing both as ground truth — neither is an orchestrator-committed/compared field).
+5. **Append the rendered overlay block** to the prompt (Step 4 concatenation), write the
+   per-dispatch marker, then invoke `Task(...)`.
+
+Dropping a TOML overlay flips the CLAIM's `overlay_source` `toml`→`none` (a structural field the
+gate binds), and a one-byte body edit changes the gate's SIGNED digest — caught by the PostToolUse
+audit re-verifying the signed ledger digest against the on-disk `.toml`. Honest bound: the digest
+records **WHICH overlay (by content) was applied** and gives **detection of out-of-key tampering**
+— any party WITHOUT the run's per-run key cannot mint or silently alter a passing witness. It does
+**NOT** provide producer-unforgeability: a same-OS-user process can read the key and forge. That
+residual is the same-trust-domain limit documented in `state/schema.md`.
+
+---
+
 ## Output Contract
 
 On every dispatch the injector emits exactly ONE provenance log line via
@@ -170,6 +218,29 @@ once for the `toml`/`md`/`none` branches. The injector adds one explicit
 `log_overlay_provenance` call ONLY on the `md_rejected` short-circuit (where
 `resolve_overlay()` was not called). DO NOT add a second `log_overlay_provenance` call after
 `resolve_overlay()` returns — this would produce duplicate lines.
+
+### `overlay_source` is a CLAIM field; `overlay_digest` is gate-observed ground truth
+
+Beyond the provenance log line, the injector's resolution result feeds the dispatch witness:
+
+- **`overlay_source`** — a CLAIM field; the `state.json` enum is exactly `toml` | `none` |
+  `md_rejected` (`md` is a provenance-log-only historical value, never written to the state field).
+- **`overlay_digest`** (REDEFINED, REQ-031/A5) — **NOT a CLAIM field.** The gate computes it as
+  ground truth: the 64-hex `sha256` of the **RAW LF-normalized `.toml` file bytes** at
+  `override_path/<short>.toml` for `toml`, else the literal `none` / `md_rejected`. It is **no
+  longer** the digest of the rendered Markdown block, and the orchestrator does **not** commit it.
+
+`overlay_source`, `override_path`, `subagent_type`, and `model` are CLAIM fields, deterministically
+reproducible on disk so the orchestrator and the gate resolve the same values. `overlay_digest` and
+`prompt_head_128` are **gate-observed**: the gate computes and signs them from the on-disk `.toml`
+and the intercepted prompt, with **no producer-claim-vs-gate compare** (eliminating the Windows/CRLF
+false-DENY surface). All are sub-hashed fields of the gate's keyed canonical preimage
+(`subagent_type|model|prompt_head_128|overlay_source|overlay_digest|stage|run_id|claim_nonce`,
+each field individually `sha256`'d then `|`-joined, then HMAC-keyed). The signed tag — and the
+gate's recomputed `overlay_digest` — live in the gate-owned ledger, not `state.json`. The witness
+therefore records **WHICH overlay (by content digest)** was applied at dispatch — detection of
+out-of-key tampering, not producer-unforgeability (a same-OS-user process can still forge). See
+`state/schema.md` for field definitions and the honest threat-model delta.
 
 ---
 
