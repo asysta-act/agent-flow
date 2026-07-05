@@ -22,6 +22,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -46,12 +47,11 @@ reader_content=""; [ -f "$READER" ] && reader_content="$(cat "$READER")"
 matches_re "$reader_content" 'plugin default[[:space:]]*<[[:space:]]*config\.toml[[:space:]]*<[[:space:]]*config\.local\.toml[[:space:]]*<[[:space:]]*customization' \
   || fail "FC-14: core/config-reader.md does not document the full plugin-default < config.toml < config.local.toml < customization/{agent}.toml [limits] chain"
 
-# --- Layered behavioural fixture: 4 tiers, only the top tier should win ---
+# --- Layered behavioural fixture: 4 distinct tier values, only the top present tier wins ---
 PLUGIN_DEFAULT=5
 CONFIG_TOML_VAL=3
 CONFIG_LOCAL_VAL=4
 CUSTOMIZATION_VAL=2
-# Sanity: all four tiers must be distinct so precedence is actually exercised
 vals=("$PLUGIN_DEFAULT" "$CONFIG_TOML_VAL" "$CONFIG_LOCAL_VAL" "$CUSTOMIZATION_VAL")
 for i in 0 1 2 3; do
   for j in 0 1 2 3; do
@@ -61,14 +61,34 @@ for i in 0 1 2 3; do
     fi
   done
 done
-EXPECTED_RESOLVED="$CUSTOMIZATION_VAL"
 
-# TODO(phase-7): once a single resolution function exists, feed it all four tiers above and
-# assert the resolved value equals $CUSTOMIZATION_VAL (2) -- proving the FULL chain, not just
-# a 2-tier comparison.
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc14.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+printf '[retry_limits]\nbuild_retries = %s\n' "$CONFIG_TOML_VAL" > "$TMP/config.toml"
+printf '[retry_limits]\nbuild_retries = %s\n' "$CONFIG_LOCAL_VAL" > "$TMP/config.local.toml"
+mkdir -p "$TMP/customization"
+printf '[limits]\nmax_build_retries = %s\n' "$CUSTOMIZATION_VAL" > "$TMP/customization/fixer.toml"
+
+# Case 1 (full 4-tier): top tier (customization) wins over all lower tiers.
+r_full="$(resolve_limit fixer "$TMP/config.toml" "$TMP/config.local.toml" "$TMP/customization" build_retries max_build_retries "$PLUGIN_DEFAULT")"
+[ "$r_full" = "$CUSTOMIZATION_VAL" ] || fail "FC-14: full-chain resolution '$r_full' != top tier $CUSTOMIZATION_VAL (customization/{agent}.toml [limits] must win)"
+
+# Case 2 (R3 tier-distinguishing): config.local sets the limit and there is NO customization
+# top tier -> config.local MUST win over config.toml. This is the case a 4-tier-with-top-tier
+# fixture masks; it proves config.local is a genuine, distinct contributing tier (design §2.4).
+r_local="$(resolve_limit fixer "$TMP/config.toml" "$TMP/config.local.toml" "" build_retries max_build_retries "$PLUGIN_DEFAULT")"
+[ "$r_local" = "$CONFIG_LOCAL_VAL" ] || fail "FC-14: with no customization tier, config.local ($CONFIG_LOCAL_VAL) must win over config.toml ($CONFIG_TOML_VAL); got '$r_local'"
+
+# Case 3: config.toml wins over plugin default when no higher tier present.
+r_conf="$(resolve_limit fixer "$TMP/config.toml" "" "" build_retries max_build_retries "$PLUGIN_DEFAULT")"
+[ "$r_conf" = "$CONFIG_TOML_VAL" ] || fail "FC-14: config.toml ($CONFIG_TOML_VAL) must win over plugin default ($PLUGIN_DEFAULT); got '$r_conf'"
+
+# Case 4: nothing set -> plugin default.
+r_def="$(resolve_limit fixer "" "" "" build_retries max_build_retries "$PLUGIN_DEFAULT")"
+[ "$r_def" = "$PLUGIN_DEFAULT" ] || fail "FC-14: with no tiers set, plugin default ($PLUGIN_DEFAULT) must apply; got '$r_def'"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: limits-precedence-chain -- exact chain string present in requirements.md; layered fixture is well-formed"
+  echo "PASS: limits-precedence-chain -- full chain + config.local tier + config.toml tier + default all resolve in documented order"
   exit 0
 fi
 exit 1

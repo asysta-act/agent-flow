@@ -18,6 +18,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -64,14 +65,21 @@ if [ -f "$FIXTURE" ]; then
   fixture_bytes="$(cat "$FIXTURE")"
   contains "$fixture_bytes" $'\r' || fail "fixture does not actually contain \\r-terminated lines (MSYS2 case not represented)"
 fi
+
+# --- Behavioural: PARSE the fixture with the reference resolver. strict=0 isolates the
+# optional-malformed degradation (required-section absence is FC-21). Must NOT crash: exit 0,
+# emit a [WARN] naming "metrics", and leave metrics.output unset so its default applies. ---
+parse_out="$(config_parse "$FIXTURE" 0 2>&1)"; parse_rc=$?
+config_parse "$FIXTURE" 0 >/dev/null 2>&1   # repopulate CR_CFG for the getter below
+[ "$parse_rc" -eq 0 ] || fail "FC-05: config_parse crashed / non-zero (rc=$parse_rc) on a malformed OPTIONAL section — must degrade, never crash"
+contains "$parse_out" "[WARN]" || fail "FC-05: no [WARN] emitted for the unterminated \"\"\" block"
+contains "$parse_out" "metrics" || fail "FC-05: the [WARN] does not name the malformed section 'metrics'"
+[ -z "$(config_get metrics.output)" ] || fail "FC-05: metrics.output should be unset (default applies) after the unterminated block was rejected"
+
 rm -rf "$FIXTURE_DIR" 2>/dev/null || true
 
-# TODO(phase-7): once a real pure-bash config reader exists (per design.md section 1.2),
-# replace the fixture-shape check above with an actual invocation over $FIXTURE and assert
-# exit code 0 AND a "[WARN]" line naming "metrics" AND the metrics default is applied.
-
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: toml-parser-malformed-warn -- malformed-optional + CRLF contract documented; fixture constructed"
+  echo "PASS: toml-parser-malformed-warn -- unterminated \"\"\" under [metrics] parsed: exit 0 + [WARN] metrics + default applied"
   exit 0
 fi
 exit 1

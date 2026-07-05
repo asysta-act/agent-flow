@@ -14,6 +14,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -33,19 +34,31 @@ READER="core/config-reader.md"
 reader_content=""; [ -f "$READER" ] && reader_content="$(cat "$READER")"
 contains "$reader_content" "config.local.toml" || fail "FC-12: core/config-reader.md does not mention config.local.toml (cannot document its absence as a no-op)"
 
-# --- Behavioural fixture: two "resolutions" (with vs without overlay) must be identical ---
-BASE_RESOLVED='issue_tracker.type=youtrack;retry.build_retries=3'
-WITH_ABSENT_OVERLAY_RESOLVED='issue_tracker.type=youtrack;retry.build_retries=3'
-if [ "$BASE_RESOLVED" != "$WITH_ABSENT_OVERLAY_RESOLVED" ]; then
-  fail "fixture sanity: base resolution and no-overlay resolution differ (should be byte-identical by construction)"
-fi
+# --- Behavioural: resolve the same config.toml twice -- once WITHOUT calling overlay merge,
+# once calling config_overlay_merge against an ABSENT config.local.toml -- and assert the two
+# resolved dumps are byte-identical (absent overlay is a strict no-op). ---
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc12.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+{
+  printf '[issue_tracker]\ntype = "youtrack"\ninstance = "i"\nproject = "P"\nbug_query = "q"\nstate_transitions = "a: b"\non_start_set = "x"\n\n'
+  printf '[source_control]\nremote = "o/r"\nbase_branch = "main"\nbranch_naming = "f"\n\n'
+  printf '[pr_rules]\nlabels = "bug"\n\n'
+  printf '[pr_description_template]\ntemplate = """\nS\n"""\n\n'
+  printf '[build_and_test]\nbuild_command = "make"\ntest_command = "pytest"\n\n'
+  printf '[retry_limits]\nbuild_retries = 3\n'
+} > "$TMP/config.toml"
 
-# TODO(phase-7): once a real resolver exists, run it twice against the same config.toml --
-# once with no config.local.toml on disk and once with the file explicitly absent-but-checked
-# -- and assert the two resulting resolved objects are byte-identical.
+config_parse "$TMP/config.toml" >/dev/null 2>&1
+base_dump="$(config_dump)"
+
+config_parse "$TMP/config.toml" >/dev/null 2>&1
+config_overlay_merge "$TMP/config.local.toml" >/dev/null 2>&1   # file does NOT exist -> no-op
+noop_dump="$(config_dump)"
+
+[ "$base_dump" = "$noop_dump" ] || fail "FC-12: resolved config changed after merging an ABSENT config.local.toml (should be byte-identical no-op)"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: config-local-absent-noop -- absent-overlay no-op contract documented"
+  echo "PASS: config-local-absent-noop -- absent overlay is a byte-identical no-op (resolved dumps match)"
   exit 0
 fi
 exit 1

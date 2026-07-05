@@ -25,6 +25,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -48,26 +49,29 @@ INJECTOR="core/agent-override-injector.md"
 injector_content=""; [ -f "$INJECTOR" ] && injector_content="$(cat "$INJECTOR")"
 contains_i "$injector_content" "single resolved" || fail "FC-13 (hidden/reviewer variant, prompt-injection channel): $INJECTOR does not consume a single pure-bash resolved value"
 
-# --- Distinct hidden fixture: reviewer / max_review_iterations, 5 -> 3 (NOT fixer/build_retries) ---
+# --- Distinct hidden fixture: reviewer / spec_iterations(config) -> max_review_iterations(overlay),
+# 5 -> 3 (genuinely distinct from the visible fixer/build_retries/3->2 fixture) ---
 CONFIG_REVIEW_ITERATIONS=5
 OVERLAY_MAX_REVIEW_ITERATIONS=3
-EXPECTED_RESOLVED=3
-if [ "$CONFIG_REVIEW_ITERATIONS" -eq "$OVERLAY_MAX_REVIEW_ITERATIONS" ]; then
-  fail "hidden-fixture sanity: config.toml value must differ from the overlay value"
-fi
-[ "$EXPECTED_RESOLVED" -eq "$OVERLAY_MAX_REVIEW_ITERATIONS" ] || fail "hidden-fixture sanity: expected resolved value must equal the top-tier (customization) value"
-# Distinctness guard: this fixture must not literally match the visible scenario's numbers,
-# proving it exercises a genuinely different agent/limit pairing.
+# Distinctness guard: must not collide with the visible scenario's numbers.
 if [ "$CONFIG_REVIEW_ITERATIONS" -eq 3 ] && [ "$OVERLAY_MAX_REVIEW_ITERATIONS" -eq 2 ]; then
-  fail "hidden-fixture sanity: values collide with the visible fixer/build_retries fixture (3 -> 2) -- must be genuinely distinct"
+  fail "hidden-fixture sanity: values collide with the visible fixer/build_retries fixture (3 -> 2)"
 fi
 
-# TODO(phase-7): once a single resolution function exists, run it against config.toml
-# (retry.max_review_iterations analog = 5) + customization/reviewer.toml ([limits]
-# max_review_iterations = 3), capture BOTH channels, and assert enforced == injected == 3.
+# --- Behavioural: resolve via core/lib/config-reader.sh for a DIFFERENT agent+limit pairing ---
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc13rev.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+printf '[retry_limits]\nspec_iterations = %s\n' "$CONFIG_REVIEW_ITERATIONS" > "$TMP/config.toml"
+mkdir -p "$TMP/customization"
+printf '[limits]\nmax_review_iterations = %s\n' "$OVERLAY_MAX_REVIEW_ITERATIONS" > "$TMP/customization/reviewer.toml"
+enforced="$(resolve_limit reviewer "$TMP/config.toml" "" "$TMP/customization" spec_iterations max_review_iterations 5)"
+injected="$(resolve_limit reviewer "$TMP/config.toml" "" "$TMP/customization" spec_iterations max_review_iterations 5)"
+[ "$enforced" = "3" ] || fail "FC-13 (reviewer) behavioural: loop-enforcement resolved to '$enforced', expected 3"
+[ "$injected" = "3" ] || fail "FC-13 (reviewer) behavioural: prompt-injection resolved to '$injected', expected 3"
+[ "$enforced" = "$injected" ] || fail "FC-13 (reviewer) behavioural: enforced ($enforced) != injected ($injected) -- channels diverged"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: limits-single-resolution-reviewer-variant -- section 2.4 fix holds for a distinct agent/limit pairing (reviewer/max_review_iterations)"
+  echo "PASS: limits-single-resolution-reviewer-variant -- enforced == injected == 3 for reviewer/max_review_iterations"
   exit 0
 fi
 exit 1

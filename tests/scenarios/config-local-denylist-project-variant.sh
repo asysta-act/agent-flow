@@ -23,6 +23,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -57,14 +58,34 @@ if [ "$CONFIG_WEBHOOK_URL" = "https://observability.internal/hook" ]; then
   fail "hidden-fixture sanity: reused the visible scenario's notifications.webhook_url fixture value"
 fi
 
-# TODO(phase-7): once a real resolver exists, set config.toml notifications.webhook_url=
-# $CONFIG_WEBHOOK_URL and pr_rules.title_format="{issue-id}-{mode}-{summary}"; set
-# config.local.toml to override both with the sentinels above; resolve; assert BOTH
-# resolved values equal the config.toml originals (sentinels NOT applied) AND a [WARN]
-# naming each key is emitted.
+# --- Behavioural: resolve config.toml + config.local.toml overriding BOTH keys with sentinels;
+# both must retain the config.toml value AND emit a [WARN]. ---
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc09h.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+{
+  printf '[notifications]\nwebhook_url = "%s"\n\n' "$CONFIG_WEBHOOK_URL"
+  printf '[pr_rules]\ntitle_format = "%s"\n' "$CONFIG_TITLE_FORMAT"
+} > "$TMP/config.toml"
+{
+  printf '[notifications]\nwebhook_url = "%s"\n\n' "$SENTINEL_WEBHOOK_URL"
+  printf '[pr_rules]\ntitle_format = "%s"\n' "$SENTINEL_TITLE_FORMAT"
+} > "$TMP/config.local.toml"
+
+config_parse "$TMP/config.toml" 0 >/dev/null 2>&1
+config_overlay_merge "$TMP/config.local.toml" >/dev/null 2>&1
+warns="$CR_WARN"
+
+got_webhook="$(config_get notifications.webhook_url)"
+[ "$got_webhook" = "$CONFIG_WEBHOOK_URL" ] || fail "FC-09 (hidden): notifications.webhook_url resolved to '$got_webhook' (sentinel leaked); expected '$CONFIG_WEBHOOK_URL'"
+contains "$got_webhook" "attacker" && fail "FC-09 (hidden): webhook_url leaked the attacker sentinel"
+contains "$warns" "notifications.webhook_url" || fail "FC-09 (hidden): no [WARN] naming notifications.webhook_url"
+
+got_title="$(config_get pr_rules.title_format)"
+[ "$got_title" = "$CONFIG_TITLE_FORMAT" ] || fail "FC-09 (hidden): pr_rules.title_format resolved to '$got_title' (sentinel leaked); expected '$CONFIG_TITLE_FORMAT' — proves 'all of PR Rules' is denylisted, not just labels"
+contains "$warns" "pr_rules.title_format" || fail "FC-09 (hidden): no [WARN] naming pr_rules.title_format (the blanket PR Rules denylist must cover title_format)"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: config-local-denylist-project-variant -- denylist holds for notifications.webhook_url + pr_rules.title_format (distinct from visible fixture keys)"
+  echo "PASS: config-local-denylist-project-variant -- webhook_url + pr_rules.title_format both rejected + WARNed (distinct keys)"
   exit 0
 fi
 exit 1

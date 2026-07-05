@@ -20,6 +20,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -57,24 +58,41 @@ if [ -f "$FIXTURE" ]; then
   contains "$fixture_bytes" '[error_handling]' || fail "hidden fixture missing the [error_handling] malformed section"
   contains "$fixture_bytes" 'unlimited but with trailing words' || fail "hidden fixture missing the garbage multi-word scalar"
 fi
-rm -rf "$FIXTURE_DIR" 2>/dev/null || true
-
-# Distinctness guard vs. the visible scenario (which targets [metrics] with an unterminated
-# triple-quote): this hidden variant targets [error_handling] with a garbage bare scalar.
-# Checks the fixture's actual CONTENT (not its temp-dir path, which could never contain
-# "metrics" and would make this guard permanently unable to fire).
+# Distinctness guard vs. the visible scenario (targets [error_handling], not [metrics]).
 if contains "$fixture_bytes" "metrics"; then
   fail "hidden-fixture sanity: accidentally reused the visible scenario's [metrics] target section"
 fi
 
-# TODO(phase-7): once a real pure-bash config reader exists, run it against $FIXTURE and
-# assert exit code 0, a [WARN] line naming "error_handling", the error_handling defaults
-# applied (on_block=comment, max_blocked_per_run=unlimited), AND that on_block's resolved
-# value is the clean string "comment" (the inline # comment after the closing quote must
-# be stripped without corrupting the quoted value).
+# --- Behavioural: PARSE the CRLF + garbage-scalar + inline-comment-after-quote fixture BEFORE
+# deleting it. strict=0 isolates optional-malformed handling. Must NOT crash (exit 0), WARN
+# naming error_handling, and resolve on_block to the CLEAN string "comment" (the inline # after
+# the closing quote must be stripped without corrupting the quoted value). ---
+parse_out="$(config_parse "$FIXTURE" 0 2>&1)"; parse_rc=$?
+config_parse "$FIXTURE" 0 >/dev/null 2>&1
+[ "$parse_rc" -eq 0 ] || fail "FC-05 (CRLF variant): config_parse non-zero (rc=$parse_rc) on garbage scalar — must degrade, never crash"
+contains "$parse_out" "[WARN]" || fail "FC-05 (CRLF variant): no [WARN] for the garbage bare scalar under [error_handling]"
+contains "$parse_out" "error_handling" || fail "FC-05 (CRLF variant): [WARN] does not name 'error_handling'"
+[ "$(config_get error_handling.on_block)" = "comment" ] || fail "FC-05 (CRLF variant): on_block resolved to '$(config_get error_handling.on_block)', expected clean 'comment' (inline # after closing quote must be stripped)"
+[ -z "$(config_get error_handling.max_blocked_per_run)" ] || fail "FC-05 (CRLF variant): garbage max_blocked_per_run should be unset (default applies)"
+
+rm -rf "$FIXTURE_DIR" 2>/dev/null || true
+
+# --- Explicit BOM case: a UTF-8 BOM on the first line must be tolerated (never crash) and the
+# first [section] header must still parse. ---
+BOM_DIR="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/toml-bom.$$")"; mkdir -p "$BOM_DIR"
+BOM_FIXTURE="$BOM_DIR/config.toml"
+{
+  printf '\xEF\xBB\xBF[issue_tracker]\r\n'
+  printf 'type = "github"\r\n'
+} > "$BOM_FIXTURE"
+bom_out="$(config_parse "$BOM_FIXTURE" 0 2>&1)"; bom_rc=$?
+config_parse "$BOM_FIXTURE" 0 >/dev/null 2>&1
+[ "$bom_rc" -eq 0 ] || fail "FC-05 (BOM): config_parse non-zero (rc=$bom_rc) on a UTF-8 BOM first line — must tolerate the BOM"
+[ "$(config_get issue_tracker.type)" = "github" ] || fail "FC-05 (BOM): issue_tracker.type='$(config_get issue_tracker.type)', expected 'github' (BOM must be stripped from the first [section] header line)"
+rm -rf "$BOM_DIR" 2>/dev/null || true
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: toml-parser-malformed-crlf-variant -- distinct malformed-section + CRLF + inline-comment-after-string fixture constructed"
+  echo "PASS: toml-parser-malformed-crlf-variant -- CRLF+garbage+inline-comment parsed clean (exit 0, WARN error_handling, on_block='comment'); BOM tolerated"
   exit 0
 fi
 exit 1

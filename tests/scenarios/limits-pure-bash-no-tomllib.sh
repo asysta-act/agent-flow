@@ -21,6 +21,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -49,20 +50,35 @@ if [ -f "$TOML_MERGE" ]; then
   contains_i "$toml_merge_content" "limits.*resolution.*single" && fail "FC-26: toml-merge.sh appears to have been modified to host limits single-resolution (NEVER-modify status violated)"
 fi
 
-# --- Host-regression behavioural fixture: simulate the 3.10 failure mode ---
-CONFIG_BUILD_RETRIES=3
-OVERLAY_MAX_BUILD_RETRIES=2
-EXPECTED_ON_310_HOST=2   # top tier must apply even when `import tomllib` fails
-if [ "$EXPECTED_ON_310_HOST" -eq "$CONFIG_BUILD_RETRIES" ]; then
-  fail "fixture sanity: expected top-tier value must differ from config.toml's value to prove no silent fallback"
-fi
+# --- The reference resolver itself must invoke NO interpreter / external TOML tooling ---
+resolver_src="$(cat core/lib/config-reader.sh)"
+contains "$resolver_src" "tomllib" && fail "FC-26: core/lib/config-reader.sh references tomllib"
+contains "$resolver_src" "import tomli" && fail "FC-26: core/lib/config-reader.sh imports tomli"
+contains "$resolver_src" "taplo" && fail "FC-26: core/lib/config-reader.sh shells to taplo"
+matches_re "$resolver_src" 'python3?[[:space:]]+-c' && fail "FC-26: core/lib/config-reader.sh invokes a python interpreter (python -c) on the resolution path"
 
-# TODO(phase-7): once the pure-bash limits resolver exists, run it in an environment where
-# `python3 -c "import tomllib"` fails (simulating 3.10) and assert the resolved+injected
-# value is 2 (top tier applied) -- i.e. it does NOT silently fall back to 3 or empty.
+# --- Host-regression behavioural fixture: simulate the Python-3.10 failure mode ---
+# resolve_limit is pure bash, so it never calls tomllib. To PROVE it, run it in a subshell whose
+# PATH exposes ONLY a python/python3 stub that exits non-zero (as `import tomllib` would on 3.10).
+# The top-tier value (2) MUST still apply -- no silent fallback to 3 or empty.
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc26.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+printf '[retry_limits]\nbuild_retries = 3\n' > "$TMP/config.toml"
+mkdir -p "$TMP/customization"
+printf '[limits]\nmax_build_retries = 2\n' > "$TMP/customization/fixer.toml"
+mkdir -p "$TMP/stubbin"
+printf '#!/bin/sh\nexit 1\n' > "$TMP/stubbin/python3";  chmod +x "$TMP/stubbin/python3"
+printf '#!/bin/sh\nexit 1\n' > "$TMP/stubbin/python";   chmod +x "$TMP/stubbin/python"
+
+resolved_310="$(
+  PATH="$TMP/stubbin:/usr/bin:/bin"
+  export PATH
+  resolve_limit fixer "$TMP/config.toml" "" "$TMP/customization" build_retries max_build_retries 5
+)"
+[ "$resolved_310" = "2" ] || fail "FC-26 behavioural: with tomllib unavailable, resolved '$resolved_310' != 2 (top tier must still apply, no silent fallback to config.toml's 3)"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: limits-pure-bash-no-tomllib -- limits path documented pure-bash, no tomllib/toml-merge.sh dependency"
+  echo "PASS: limits-pure-bash-no-tomllib -- limits path is pure-bash; top tier applies even when the interpreter fails (2)"
   exit 0
 fi
 exit 1

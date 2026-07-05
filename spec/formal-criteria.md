@@ -24,12 +24,20 @@ the *parse-into-config* path only — a read that merely **detects** a legacy in
 a migrate hint (REQ-11(d) / FC-17) is explicitly carved out and NOT a violation, so FC-02 and
 FC-17 are jointly satisfiable.
 Check: grep the config surface — `core/config-reader.md`, `skills/*/steps/*.md`,
-`skills/setup-agents/lib/*.sh`, and `skills/*/SKILL.md` **excluding
+`skills/setup-agents/lib/*.sh`, `skills/*/SKILL.md`, and `agents/*.md` **excluding
 `skills/check-setup/SKILL.md`** (whose detect-and-warn read is permitted) — for the
 removal-signature patterns and assert **zero** matches: `matches_re "$contents"
 'parse.*Automation Config.*table'` no match; `matches_re "$contents" 'fall ?back.*CLAUDE\.md'`
 no match; `contains "$contents" "claude_md_content"` false; `config-reader.md` contains no
-`overlay_source=md` and no dual-read branch. For `skills/check-setup/SKILL.md`, the only
+`overlay_source=md` and no dual-read branch. Because `agents/*.md` is now in scope, also assert
+the agent-body config-read-from-CLAUDE.md signature is absent: `matches_re "$contents"
+'Automation Config from .*CLAUDE\.md'` no match AND `matches_re "$contents"
+'[Rr]ead.*from.*CLAUDE\.md.*Automation Config'` no match — these catch a terminal agent (e.g.
+`agents/publisher.md`, `agents/test-engineer.md`) that reads its config out of `CLAUDE.md`
+instead of `.agent-flow/config.toml`, the exact gap the original FC-02 grep surface could not see.
+They do NOT fire on a legitimate coding-conventions read (`read CLAUDE.md and any
+customization/{agent}.toml overlay`) nor on scaffolder's pointer-writing prose. For
+`skills/check-setup/SKILL.md`, the only
 permitted CLAUDE.md read is the legacy-block **detection** that pairs with a `/onboard --migrate`
 hint (FC-17) — assert it does NOT map those tables into a config object
 (`matches_re` for `parse.*Automation Config.*table` still no match there). FAIL if any surviving
@@ -102,10 +110,13 @@ Check (behavioural): set `browser.base_url` in config.local.toml to a sentinel; 
 allowlist sections.
 
 **FC-11 — Non-allowlisted overlay key ignored + WARNed.** *(REQ-17)*
-A `config.local.toml` key outside the allowlist (e.g. `[retry_limits]` fixer_iterations) is not
-applied and emits a `[WARN]`.
-Check (behavioural): override `retry.fixer_iterations` in config.local.toml; assert resolved
-value == config.toml value AND `contains "$warns" "fixer_iterations"`.
+A `config.local.toml` key outside the general full-section overlay allowlist — using a
+non-limit section key such as `[metrics]` `output` — is not applied and emits a `[WARN]`. (A
+non-limit key is chosen deliberately: `[retry_limits]` keys are governed by the SEPARATE
+limits-resolution chain, which intentionally lets `config.local.toml` contribute limit values, so
+using a limit key here would contradict FC-14. See `core/config-reader.md` §overlay scope note.)
+Check (behavioural): override `metrics.output` in config.local.toml; assert resolved
+value == config.toml value AND `contains "$warns" "metrics.output"`.
 
 **FC-12 — Absent overlay is a no-op.** *(REQ-21)*
 With no `config.local.toml`, resolved config equals `config.toml` over plugin defaults.

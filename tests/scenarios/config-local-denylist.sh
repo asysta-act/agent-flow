@@ -18,6 +18,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -44,34 +45,47 @@ READER="core/config-reader.md"
 reader_content=""; [ -f "$READER" ] && reader_content="$(cat "$READER")"
 contains_i "$reader_content" "denylist" || fail "FC-09: core/config-reader.md does not document a denylist for config.local.toml"
 
-# --- Behavioural: for each denylisted key, construct config.toml value + a sentinel override ---
+# --- Behavioural: resolve config.toml + a config.local.toml that tries to override every
+# denylisted key with a sentinel. Each denylisted key MUST retain its config.toml value and
+# MUST emit a [WARN] naming it. ---
 declare -A CONFIG_VALUES=(
   ["source_control.remote"]="org/team-repo"
   ["source_control.base_branch"]="main"
   ["notifications.webhook_url"]="https://observability.internal/hook"
   ["issue_tracker.instance"]="https://tracker.internal"
   ["issue_tracker.project"]="TEAM"
+  ["pr_rules.labels"]="bug, automated"
 )
-for key in "${!CONFIG_VALUES[@]}"; do
-  config_val="${CONFIG_VALUES[$key]}"
-  sentinel="SENTINEL-${key//./-}"
-  # Sanity: the fixture pairing must be distinguishable (config value != sentinel)
-  if [ "$config_val" = "$sentinel" ]; then
-    fail "denylist fixture for '$key' has a colliding config/sentinel value"
-  fi
-done
-# [pr_rules] representative key
-pr_rules_config_val="bug, automated"
-pr_rules_sentinel="SENTINEL-pr-rules-labels"
-[ "$pr_rules_config_val" != "$pr_rules_sentinel" ] || fail "pr_rules.labels denylist fixture collides"
 
-# TODO(phase-7): once a real resolver exists, for each key above, write config.toml with
-# $config_val, config.local.toml with the same key set to its sentinel, resolve, and assert
-# (a) resolved value == $config_val (sentinel NOT applied) and (b) a [WARN] naming the key
-# is emitted. Repeat for every [pr_rules] key (labels, title_format).
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc09.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+{
+  printf '[source_control]\nremote = "org/team-repo"\nbase_branch = "main"\n\n'
+  printf '[notifications]\nwebhook_url = "https://observability.internal/hook"\n\n'
+  printf '[issue_tracker]\ninstance = "https://tracker.internal"\nproject = "TEAM"\n\n'
+  printf '[pr_rules]\nlabels = "bug, automated"\n'
+} > "$TMP/config.toml"
+{
+  printf '[source_control]\nremote = "SENTINEL-remote"\nbase_branch = "SENTINEL-base"\n\n'
+  printf '[notifications]\nwebhook_url = "SENTINEL-webhook"\n\n'
+  printf '[issue_tracker]\ninstance = "SENTINEL-instance"\nproject = "SENTINEL-project"\n\n'
+  printf '[pr_rules]\nlabels = "SENTINEL-labels"\n'
+} > "$TMP/config.local.toml"
+
+config_parse "$TMP/config.toml" 0 >/dev/null 2>&1
+config_overlay_merge "$TMP/config.local.toml" >/dev/null 2>&1
+warns="$CR_WARN"
+
+for key in "${!CONFIG_VALUES[@]}"; do
+  expected="${CONFIG_VALUES[$key]}"
+  got="$(config_get "$key")"
+  [ "$got" = "$expected" ] || fail "FC-09: denylisted '$key' resolved to '$got' (sentinel leaked); expected config.toml value '$expected'"
+  contains "$got" "SENTINEL" && fail "FC-09: denylisted '$key' contains a leaked SENTINEL override"
+  contains "$warns" "$key" || fail "FC-09: no [WARN] naming denylisted key '$key' was emitted"
+done
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: config-local-denylist -- all six denylisted key categories enumerated in spec; fixtures constructed"
+  echo "PASS: config-local-denylist -- all six denylisted keys retained config.toml value + WARNed (sentinels rejected)"
   exit 0
 fi
 exit 1

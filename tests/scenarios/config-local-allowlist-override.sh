@@ -15,6 +15,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -33,17 +34,31 @@ reader_content=""; [ -f "$READER" ] && reader_content="$(cat "$READER")"
 contains "$reader_content" "config.local.toml" || fail "FC-10: core/config-reader.md does not mention config.local.toml at all"
 contains_i "$reader_content" "allowlist" || fail "FC-10: core/config-reader.md does not document the allowlist gate"
 
-# --- Behavioural fixture: sentinel override of browser.base_url ---
+# --- Behavioural: an allowlisted [browser_verification] override MUST apply; and a
+# [local_deployment] override MUST apply too (both allowlisted sections). ---
 SENTINEL="http://sentinel-override.invalid:4242"
-overlay_line="base_url = \"${SENTINEL}\""
-contains "$overlay_line" "$SENTINEL" || fail "sentinel override fixture malformed"
+LD_SENTINEL="9999"
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc10.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+{
+  printf '[browser_verification]\nbase_url = "http://localhost:3000"\n\n'
+  printf '[local_deployment]\nports = "3000"\n'
+} > "$TMP/config.toml"
+{
+  printf '[browser_verification]\nbase_url = "%s"\n\n' "$SENTINEL"
+  printf '[local_deployment]\nports = "%s"\n' "$LD_SENTINEL"
+} > "$TMP/config.local.toml"
 
-# TODO(phase-7): once a real resolver exists, construct config.toml (browser_verification.base_url
-# = http://localhost:3000) + config.local.toml ([browser_verification] base_url = "$SENTINEL"),
-# resolve, and assert the resolved browser.base_url equals "$SENTINEL" (override applied).
+config_parse "$TMP/config.toml" 0 >/dev/null 2>&1
+config_overlay_merge "$TMP/config.local.toml" >/dev/null 2>&1
+
+got_url="$(config_get browser_verification.base_url)"
+[ "$got_url" = "$SENTINEL" ] || fail "FC-10: allowlisted browser_verification.base_url override did NOT apply (got '$got_url', expected '$SENTINEL')"
+got_ports="$(config_get local_deployment.ports)"
+[ "$got_ports" = "$LD_SENTINEL" ] || fail "FC-10: allowlisted local_deployment.ports override did NOT apply (got '$got_ports', expected '$LD_SENTINEL')"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: config-local-allowlist-override -- allowlist sections (Browser Verification, Local Deployment) documented for override"
+  echo "PASS: config-local-allowlist-override -- browser_verification + local_deployment overrides both applied"
   exit 0
 fi
 exit 1

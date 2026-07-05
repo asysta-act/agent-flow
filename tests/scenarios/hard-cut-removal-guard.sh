@@ -52,6 +52,31 @@ for f in "${SURFACE_FILES[@]}"; do
   contains "$content" "claude_md_content" && fail "FC-02: $f still names claude_md_content (hard-cut violation)"
 done
 
+# --- R5/FC-02 extension: agents/*.md is now part of the hard-cut surface. The terminal publisher
+# and test-engineer agents previously read their config out of CLAUDE.md instead of
+# .agent-flow/config.toml — a REQ-16 violation the original grep surface (config-reader.md + steps +
+# SKILL.md + setup-agents lib) structurally could not see. These agent files must be scanned PER
+# LINE: bash's [[ =~ ]] lets '.' span newlines, so a whole-file match of the order-sensitive
+# read-from-CLAUDE.md patterns would cross-line false-positive on a legitimate coding-conventions
+# read ("read CLAUDE.md and any customization/{agent}.toml overlay") combined with an unrelated
+# "Automation Config" section reference elsewhere in the same file. Per-line evaluation is the
+# grep-equivalent semantics FC-02 intends.
+AGENT_READ_PATTERNS=(
+  'Automation Config from .*CLAUDE\.md'
+  '[Rr]ead.*from.*CLAUDE\.md.*Automation Config'
+)
+for f in agents/*.md; do
+  [ -f "$f" ] || continue
+  while IFS= read -r line; do
+    matches_re "$line" 'parse.*Automation Config.*table' && fail "FC-02: $f contains a 'parse Automation Config table' signature (hard-cut violation): $line"
+    matches_re "$line" 'fall ?back.*CLAUDE\.md' && fail "FC-02: $f contains a CLAUDE.md fallback signature (hard-cut violation): $line"
+    contains "$line" "claude_md_content" && fail "FC-02: $f still names claude_md_content (hard-cut violation): $line"
+    for pat in "${AGENT_READ_PATTERNS[@]}"; do
+      matches_re "$line" "$pat" && fail "FC-02: $f reads config from CLAUDE.md instead of .agent-flow/config.toml (hard-cut violation): $line"
+    done
+  done < "$f"
+done
+
 READER="core/config-reader.md"
 if [ -f "$READER" ]; then
   reader_content="$(cat "$READER")"

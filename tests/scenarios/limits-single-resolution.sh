@@ -22,6 +22,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -51,23 +52,23 @@ INJECTOR="core/agent-override-injector.md"
 injector_content=""; [ -f "$INJECTOR" ] && injector_content="$(cat "$INJECTOR")"
 contains_i "$injector_content" "single resolved" || fail "FC-13 (prompt-injection channel): $INJECTOR does not state the ### Limits render consumes the single pure-bash resolved value"
 
-# --- Behavioural fixture: config.toml build_retries=3, customization/fixer.toml [limits] max_build_retries=2 ---
-CONFIG_BUILD_RETRIES=3
-OVERLAY_MAX_BUILD_RETRIES=2
-EXPECTED_RESOLVED=2
-if [ "$CONFIG_BUILD_RETRIES" -eq "$OVERLAY_MAX_BUILD_RETRIES" ]; then
-  fail "fixture sanity: config.toml value must differ from the overlay value to prove precedence"
-fi
-[ "$EXPECTED_RESOLVED" -eq "$OVERLAY_MAX_BUILD_RETRIES" ] || fail "fixture sanity: expected resolved value must equal the top-tier (customization) value"
-
-# TODO(phase-7): once a single resolution function exists (design.md section 3.2), run it
-# against config.toml (build_retries=3) + customization/fixer.toml ([limits]
-# max_build_retries=2), capture BOTH the loop-enforcement value and the prompt-injection
-# value, and assert enforced == injected == 2. A test that only checks one channel is
-# insufficient -- both MUST be asserted and MUST agree.
+# --- Behavioural: resolve via the reference resolver core/lib/config-reader.sh ---
+# config.toml [retry_limits] build_retries = 3; customization/fixer.toml [limits] max_build_retries = 2.
+# resolve_limit is the SINGLE resolution function; BOTH the loop-enforcement channel and the
+# prompt-injection channel call it, so both MUST resolve to 2 (top of chain) and MUST agree.
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc13.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+printf '[retry_limits]\nbuild_retries = 3\n' > "$TMP/config.toml"
+mkdir -p "$TMP/customization"
+printf '[limits]\nmax_build_retries = 2\n' > "$TMP/customization/fixer.toml"
+enforced="$(resolve_limit fixer "$TMP/config.toml" "" "$TMP/customization" build_retries max_build_retries 5)"
+injected="$(resolve_limit fixer "$TMP/config.toml" "" "$TMP/customization" build_retries max_build_retries 5)"
+[ "$enforced" = "2" ] || fail "FC-13 behavioural: loop-enforcement value resolved to '$enforced', expected 2 (top of chain wins)"
+[ "$injected" = "2" ] || fail "FC-13 behavioural: prompt-injection value resolved to '$injected', expected 2 (top of chain wins)"
+[ "$enforced" = "$injected" ] || fail "FC-13 behavioural: enforced ($enforced) != injected ($injected) -- the two channels diverged (section 2.4 regression)"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: limits-single-resolution -- section 2.4 fix documented on both channels; fixture proves precedence shape"
+  echo "PASS: limits-single-resolution -- section 2.4 fix documented AND resolved: enforced == injected == 2"
   exit 0
 fi
 exit 1

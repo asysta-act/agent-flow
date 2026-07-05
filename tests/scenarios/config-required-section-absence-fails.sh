@@ -17,6 +17,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -34,22 +35,54 @@ contains "$reader_content" ".agent-flow/config.toml" || fail "FC-21: $READER Fai
 contains "$reader_content" "[agent-flow]" || fail "FC-21: $READER does not use the standard Block Comment Template ([agent-flow] prefix)"
 contains_i "$reader_content" "required" || fail "FC-21: $READER does not distinguish required-section absence from optional malformation"
 
-# --- Behavioural fixture: config.toml missing [issue_tracker] entirely ---
-MISSING_REQUIRED_FIXTURE='[source_control]
+# --- Behavioural: parse (strict, default) a config.toml missing [issue_tracker] entirely.
+# Degradation is OPTIONAL-only, so a missing REQUIRED section must BLOCK (non-zero) with the
+# standard [agent-flow] Block Comment Template naming the missing section. ---
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc21.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+cat > "$TMP/config.toml" <<'EOF'
+[source_control]
 remote = "org/repo"
 base_branch = "main"
 branch_naming = "fix/{issue-id}-{description}"
-'
-if contains "$MISSING_REQUIRED_FIXTURE" "[issue_tracker]"; then
+EOF
+if contains "$(cat "$TMP/config.toml")" "[issue_tracker]"; then
   fail "fixture sanity: [issue_tracker] must be absent to exercise the required-section-missing path"
 fi
 
-# TODO(phase-7): once a real reader exists, parse the fixture above and assert a non-zero
-# exit / BLOCK outcome with the [agent-flow] Block Comment Template naming the missing
-# [issue_tracker] section -- distinct from the WARN+default path exercised by FC-05.
+block_out="$(config_parse "$TMP/config.toml" 2>&1)"; block_rc=$?
+[ "$block_rc" -ne 0 ] || fail "FC-21: config_parse returned 0 on a config missing the required [issue_tracker] section (must BLOCK, not silently default)"
+contains "$block_out" "[agent-flow]" || fail "FC-21: BLOCK output missing the standard [agent-flow] Block Comment Template"
+contains "$block_out" "issue_tracker" || fail "FC-21: BLOCK output does not name the missing [issue_tracker] section"
+
+# Contrast with FC-05: a well-formed required set + a malformed OPTIONAL section must NOT block.
+cat > "$TMP/ok.toml" <<'EOF'
+[issue_tracker]
+type = "github"
+instance = "i"
+project = "P"
+bug_query = "q"
+state_transitions = "a: b"
+on_start_set = "x"
+[source_control]
+remote = "o/r"
+base_branch = "main"
+branch_naming = "f"
+[pr_rules]
+labels = "bug"
+[pr_description_template]
+template = "S"
+[build_and_test]
+build_command = "make"
+test_command = "pytest"
+[metrics]
+output = garbage words here
+EOF
+config_parse "$TMP/ok.toml" >/dev/null 2>&1; ok_rc=$?
+[ "$ok_rc" -eq 0 ] || fail "FC-21: a complete required set with only a malformed OPTIONAL section must NOT block (rc=$ok_rc) — degradation is optional-only"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: config-required-section-absence-fails -- required-section BLOCK/FAIL contract documented, distinct from optional WARN+default"
+  echo "PASS: config-required-section-absence-fails -- missing required [issue_tracker] BLOCKs; optional malformation does not"
   exit 0
 fi
 exit 1

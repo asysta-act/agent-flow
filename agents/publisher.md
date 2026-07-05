@@ -21,11 +21,11 @@ Follow these steps exactly, in order:
 
 1. **Read Configuration**
 
-   Read project Automation Config from CLAUDE.md. You need these values:
-- **Source Control:** Remote (owner/repo), Base branch, Branch naming pattern
-- **PR Rules:** Labels, Title format
-- **PR Description Template:** the full template text
-- **Issue Tracker:** Type (determines which MCP server to use, default: youtrack), State transitions
+   Read project config from `.agent-flow/config.toml` (resolved by the config reader — see `../core/config-reader.md`). You need these values:
+- **`[source_control]`:** `source_control.remote` (owner/repo), `source_control.base_branch`, `source_control.branch_naming` (branch naming pattern)
+- **`[pr_rules]`:** `pr_rules.labels`, `pr_rules.title_format`
+- **`[pr_description_template]`:** `pr_rules.description_template` (the full template text)
+- **`[issue_tracker]`:** `issue_tracker.type` (determines which MCP server to use, default: youtrack), `issue_tracker.state_transitions`
 
 2. **Pre-Publish Safety Checks**
 
@@ -36,7 +36,7 @@ Follow these steps exactly, in order:
 
 3. **Create or Switch to Feature Branch**
 
-   - Generate branch name using naming pattern from Automation Config (e.g., `fix/{issue-id}-short-description`). Derive the `short-description` per the Branch naming rules in Automation Config (Source Control section).
+   - Generate branch name using the `source_control.branch_naming` pattern from `.agent-flow/config.toml` (e.g., `fix/{issue-id}-short-description`). Derive the `short-description` per the `source_control.branch_naming` rule.
 - If branch already exists (e.g., created by fixer), switch to it: `git checkout {branch}`
 - If branch does not exist, create it: `git checkout -b {branch}`
 
@@ -58,15 +58,15 @@ Follow these steps exactly, in order:
 
 6. **Create Pull Request**
 
-   - **Title:** Build the PR title per the **Title format** rule from PR Rules (Automation Config), using the issue ID, workflow-type keyword, and issue summary (from issue tracker) — NOT the branch name. If PR Rules does not define a Title format, fall back to `{issue-id} {Keyword}: {summary}` — the issue ID, the workflow-type keyword (`Fix` for bug-fix, `Feat` for feature — derived from the **Mode hint** input, not from the publish-flow Mode in the Inputs table), and the issue summary (so the keyword is always present even with no configured format).
-- **Description:** Use PR Description Template from Automation Config (always English). Fill in ALL template sections:
+   - **Title:** Build the PR title per the `pr_rules.title_format` rule from `.agent-flow/config.toml`, using the issue ID, workflow-type keyword, and issue summary (from issue tracker) — NOT the branch name. If `pr_rules.title_format` is not set, fall back to `{issue-id} {Keyword}: {summary}` — the issue ID, the workflow-type keyword (`Fix` for bug-fix, `Feat` for feature — derived from the **Mode hint** input, not from the publish-flow Mode in the Inputs table), and the issue summary (so the keyword is always present even with no configured format).
+- **Description:** Use `pr_rules.description_template` from `.agent-flow/config.toml` (always English). Fill in ALL template sections:
   - Build the PR body as a multi-line string with real line breaks between sections — follow `../core/mcp-body-formatting.md`.
   - Summary, Changes, Testing, Issue link
   - Bug-fix (Mode hint absent): include **Root Cause** section
   - Feature (Mode hint = `Mode: feature`): include **Objective** section (replaces Root Cause)
-- **Labels:** Add labels from PR Rules section only.
-  - **Label ID resolution:** Some MCP servers (e.g., Gitea) require numeric label IDs for PR creation but may not return IDs from the label listing tool. If the MCP label listing tool does not return IDs, retrieve them via a direct API call: `GET /api/v1/repos/{owner}/{repo}/labels` — each label object includes an `id` field. Use the Instance URL from Automation Config as the API base.
-- **Base branch:** From Automation Config (Source Control section)
+- **Labels:** Add labels from `pr_rules.labels` only.
+  - **Label ID resolution:** Some MCP servers (e.g., Gitea) require numeric label IDs for PR creation but may not return IDs from the label listing tool. If the MCP label listing tool does not return IDs, retrieve them via a direct API call: `GET /api/v1/repos/{owner}/{repo}/labels` — each label object includes an `id` field. Use `issue_tracker.instance` from `.agent-flow/config.toml` as the API base.
+- **Base branch:** From `source_control.base_branch` in `.agent-flow/config.toml`
 - Use the source control MCP server corresponding to the Remote format (e.g., Gitea API for gitea instances, GitHub API for github.com) for PR creation.
 
    **6a. Capture PR identity from the create response — never guess.**
@@ -93,7 +93,7 @@ Follow these steps exactly, in order:
    This step is the **sole tracker-mutation point** for the publish flow. Dispatching skills and commands (including `/agent-flow:publish`) MUST NOT independently set the issue state or post their own PR-link comment after invoking this agent — doing so duplicates this step and produces a double comment on the issue. This agent's Step 7 always owns the mutation; a dispatcher that also performs it has a contract bug in the dispatcher, not here.
 
    - When `mode` field in dispatch context indicates `pr-only-*`, skip tracker state transitions and tracker comments; PR creation proceeds normally.
-- For mode `full-publish`: Set issue state: "For Review" (or equivalent from Automation Config → State transitions); add comment to issue with PR link. After the status-set MCP call, follow `../core/status-verification.md` to verify the transition succeeded.
+- For mode `full-publish`: Set issue state: "For Review" (or equivalent from `issue_tracker.state_transitions` in `.agent-flow/config.toml`); add comment to issue with PR link. After the status-set MCP call, follow `../core/status-verification.md` to verify the transition succeeded.
 
 8. **Output**
 
@@ -119,9 +119,9 @@ Tracker row values by mode:
 |---------|--------|----------|
 | Mode (full-publish / pr-only-404 / pr-only-no-id) | dispatching skill prompt | yes |
 | Mode hint | dispatching skill (`Mode: feature` for feature workflows; absent in bug-fix mode) — same convention as `agents/fixer.md`, `agents/reviewer.md`, `agents/test-engineer.md` | no (defaults to bug-fix; scaffold pipeline never dispatches this agent — see Constraints) |
-| Source Control config | Automation Config (Remote, Base branch, Branch naming) | yes |
-| PR Rules + PR Description Template | Automation Config | yes |
-| Issue Tracker config (Type, State transitions) | Automation Config | yes (skipped only in pr-only-* modes) |
+| Source Control config | `.agent-flow/config.toml` `[source_control]` (remote, base_branch, branch_naming) | yes |
+| PR Rules + PR Description Template | `.agent-flow/config.toml` `[pr_rules]` + `[pr_description_template]` | yes |
+| Issue Tracker config (type, state_transitions) | `.agent-flow/config.toml` `[issue_tracker]` | yes (skipped only in pr-only-* modes) |
 
 ### Outputs
 

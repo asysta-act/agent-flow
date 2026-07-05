@@ -24,6 +24,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -40,34 +41,84 @@ contains_i "$skill_content" "half-written" || contains_i "$skill_content" "half 
   || fail "FC-20 (hidden/partial-malformed): $SKILL does not document the never-half-written guarantee"
 contains_i "$skill_content" "required" || fail "FC-20 (hidden/partial-malformed): $SKILL does not distinguish required-section-unextractable (abort) from optional-only malformation (skip+report)"
 
-# --- Fixture A: REQUIRED section unextractable (broken pipe table for Issue Tracker) ---
-REQUIRED_BROKEN_FIXTURE='### Issue Tracker
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc20pm.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+
+# --- Fixture A: a REQUIRED section (Issue Tracker) is malformed (rows missing the closing pipe).
+# config_migrate MUST abort: no config.toml written, CLAUDE.md untouched, [WARN] names it. ---
+cat > "$TMP/A.md" <<'EOF'
+# P
+## Automation Config
+
+### Issue Tracker
 | Key | Value
-|------|---------|
+|------|---------
 | Type | youtrack
-'
-if contains "$REQUIRED_BROKEN_FIXTURE" "| Key | Value |"; then
-  fail "fixture-A sanity: header row must be malformed (missing closing pipe) to exercise the abort path"
-fi
+EOF
+cp "$TMP/A.md" "$TMP/A.orig"
+a_out="$(config_migrate "$TMP/A.md" "$TMP/outA.toml" 2>&1)"; a_rc=$?
+[ "$a_rc" -ne 0 ] || fail "FC-20 (partial): a malformed REQUIRED section must abort (rc!=0), got rc=$a_rc"
+[ ! -f "$TMP/outA.toml" ] || fail "FC-20 (partial): config.toml was written despite a malformed required section (half-write forbidden)"
+diff -q "$TMP/A.md" "$TMP/A.orig" >/dev/null 2>&1 || fail "FC-20 (partial): CLAUDE.md was modified on abort (must be left untouched)"
+contains "$a_out" "issue_tracker" || contains "$a_out" "Issue Tracker" || fail "FC-20 (partial): abort [WARN] does not name the unextractable required section"
 
-# --- Fixture B: only an OPTIONAL section malformed (Metrics), required sections intact ---
-OPTIONAL_BROKEN_FIXTURE='### Metrics
+# --- Fixture B: all required sections well-formed; only an OPTIONAL section (Metrics) malformed.
+# config_migrate writes config.toml with the clean sections, skips Metrics with a [WARN], and the
+# produced config.toml passes config_validate (no half-write). ---
+cat > "$TMP/B.md" <<'EOF'
+# P
+## Automation Config
+
+### Issue Tracker
+| Key | Value |
+|-----|-------|
+| Type | youtrack |
+| Instance | i |
+| Project | P |
+| Bug query | q |
+| State transitions | a: b |
+| On start set | x |
+
+### Source Control
+| Key | Value |
+|-----|-------|
+| Remote | o/r |
+| Base branch | main |
+| Branch naming | f |
+
+### PR Rules
+| Key | Value |
+|-----|-------|
+| Labels | bug |
+
+### PR Description Template
+| Key | Value |
+|-----|-------|
+| Template | S |
+
+### Build & Test
+| Key | Value |
+|-----|-------|
+| Build command | make |
+| Test command | pytest |
+
+### Metrics
 | Key | Value
-|-----|-------
+|-----|------
 | Output | stdout
-'
-contains "$OPTIONAL_BROKEN_FIXTURE" "Metrics" || fail "fixture-B sanity: must target the Metrics optional section"
-
-# TODO(phase-7): once /onboard --migrate exists, run it against a CLAUDE.md containing
-# Fixture A and assert (a) NO config.toml is written, (b) CLAUDE.md is untouched (still has
-# the original tables, no pointer rewrite), and (c) a [WARN] names Issue Tracker as
-# unextractable. Separately, run it against a CLAUDE.md containing Fixture B (all 5
-# required sections well-formed, only Metrics malformed) and assert (a) config.toml IS
-# written with all required sections + any other clean optional sections, (b) Metrics is
-# skipped with a [WARN] naming it, and (c) config.toml passes /check-setup (no half-write).
+EOF
+b_out="$(config_migrate "$TMP/B.md" "$TMP/outB.toml" 2>&1)"; b_rc=$?
+[ "$b_rc" -eq 0 ] || fail "FC-20 (partial): optional-only malformation must still succeed (rc=$b_rc)"
+[ -f "$TMP/outB.toml" ] || fail "FC-20 (partial): config.toml not written when only an optional section is malformed"
+produced="$(cat "$TMP/outB.toml")"
+contains "$produced" "[issue_tracker]" || fail "FC-20 (partial): required [issue_tracker] missing from output"
+contains "$produced" "[metrics]" && fail "FC-20 (partial): malformed [metrics] was written (must be skipped, not half-written)"
+contains "$b_out" "metrics" || fail "FC-20 (partial): no [WARN] naming the skipped optional 'metrics' section"
+# No half-write: the produced config.toml must pass key-list validation.
+config_validate "$TMP/outB.toml" >/dev/null 2>&1 || fail "FC-20 (partial): produced config.toml fails config_validate (half-write leaked an invalid file)"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: onboard-migrate-partial-malformed -- required-abort vs optional-skip-and-report contract documented"
+  echo "PASS: onboard-migrate-partial-malformed -- required-broken aborts (no write, CLAUDE.md untouched); optional-broken skips+reports and stays valid"
   exit 0
 fi
 exit 1

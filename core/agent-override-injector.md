@@ -18,7 +18,7 @@ to Markdown, and NEVER blocks the pipeline on any failure.
 - **agent_name** (string, required): The agent's name as defined in its frontmatter
   (e.g., `reviewer`, `fixer`, `test-engineer`)
 - **override_path** (string, required): Path to the override directory read from
-  `## Automation Config` → `### Agent Overrides` → `Path` key (default: `customization/`)
+  `.agent-flow/config.toml` → `[agent_overrides]` → `agent_overrides.path` key (default: `customization/`)
 - **defaults_json** (string, required): Plugin default JSON for this agent (passed through to
   `resolve_overlay()` as the base tier)
 
@@ -28,7 +28,7 @@ to Markdown, and NEVER blocks the pipeline on any failure.
 
 ### Step 1 — Resolve overlay file via `lib/toml-merge.sh`
 
-Read `Agent Overrides → Path` from `## Automation Config` (default: `customization/`).
+Read `agent_overrides.path` from `.agent-flow/config.toml` `[agent_overrides]` (default: `customization/`).
 Source the library and call `resolve_overlay()` with the guarded assignment form that absorbs
 any non-zero return:
 
@@ -36,7 +36,7 @@ any non-zero return:
 # Source the library (read-only — NEVER modify lib/toml-merge.sh)
 source skills/setup-agents/lib/toml-merge.sh
 
-# Read override_path from Automation Config (default: customization/)
+# Read override_path from .agent-flow/config.toml [agent_overrides] (default: customization/)
 override_path="${agent_overrides_path:-customization/}"
 
 # Guarded call — absorbs non-zero return
@@ -279,5 +279,5 @@ does NOT emit a second `[WARN]` — Layer 2's `[ERROR]` to stderr is sufficient.
 - NEVER replicate the `.md`-only short-circuit into step files.
   This short-circuit lives EXCLUSIVELY in this file.
 - NEVER hardcode `customization/` as the override path in step files. Always use the
-  `{Agent Overrides path}` placeholder resolved from Automation Config at dispatch time.
+  `agent_overrides.path` value resolved from `.agent-flow/config.toml` at dispatch time.
 - NEVER create new `core/*.md` files (count must remain 17).

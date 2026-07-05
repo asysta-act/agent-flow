@@ -16,6 +16,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -31,24 +32,54 @@ contains_i "$skill_content" "unknown key" || fail "FC-16: $SKILL does not docume
 contains_i "$skill_content" "missing.*required" || matches_re "$skill_content" 'missing[[:space:]]+required' \
   || fail "FC-16: $SKILL does not document a 'missing required section' check"
 
-# --- Behavioural fixtures: unknown-key config.toml vs missing-required-section config.toml ---
-UNKNOWN_KEY_FIXTURE='[issue_tracker]
+# --- Behavioural: run the reference config_validate against two fixtures. ---
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc16.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+
+# Fixture A: complete valid required set + one UNKNOWN key -> [WARN], not [FAIL].
+cat > "$TMP/unknown.toml" <<'EOF'
+[issue_tracker]
 type = "github"
-totally_unknown_key = "x"'
-MISSING_REQUIRED_FIXTURE='[source_control]
-remote = "org/repo"'  # [issue_tracker] absent entirely
+instance = "i"
+project = "P"
+bug_query = "q"
+state_transitions = "a: b"
+on_start_set = "x"
+totally_unknown_key = "leak"
+[source_control]
+remote = "o/r"
+base_branch = "main"
+branch_naming = "f"
+[pr_rules]
+labels = "bug"
+[pr_description_template]
+template = "S"
+[build_and_test]
+build_command = "make"
+test_command = "pytest"
+EOF
+unknown_out="$(config_validate "$TMP/unknown.toml" 2>&1)"; unknown_rc=$?
+contains "$unknown_out" "[WARN]" || fail "FC-16: unknown-key config.toml did not yield a [WARN]"
+contains "$unknown_out" "totally_unknown_key" || fail "FC-16: the [WARN] does not name the unknown key"
+contains "$unknown_out" "[FAIL]" && fail "FC-16: an unknown key must NOT escalate to [FAIL]"
+[ "$unknown_rc" -eq 0 ] || fail "FC-16: unknown-key validation returned non-zero (rc=$unknown_rc); unknown keys are non-fatal"
 
-contains "$UNKNOWN_KEY_FIXTURE" "totally_unknown_key" || fail "unknown-key fixture malformed"
-if contains "$MISSING_REQUIRED_FIXTURE" "[issue_tracker]"; then
-  fail "missing-required-section fixture incorrectly contains [issue_tracker] (must be absent to exercise FAIL)"
+# Fixture B: missing a required section -> [FAIL].
+cat > "$TMP/missing.toml" <<'EOF'
+[source_control]
+remote = "o/r"
+base_branch = "main"
+branch_naming = "f"
+EOF
+if contains "$(cat "$TMP/missing.toml")" "[issue_tracker]"; then
+  fail "missing-required-section fixture incorrectly contains [issue_tracker]"
 fi
-
-# TODO(phase-7): once check-setup's key-list validator exists, run it against both fixtures
-# and assert the unknown-key fixture yields an exit/marker equivalent to [WARN] (not FAIL)
-# while the missing-required fixture yields [FAIL].
+missing_out="$(config_validate "$TMP/missing.toml" 2>&1)"; missing_rc=$?
+contains "$missing_out" "[FAIL]" || fail "FC-16: missing-required-section config.toml did not yield a [FAIL]"
+[ "$missing_rc" -ne 0 ] || fail "FC-16: missing-required-section validation returned 0 (must be fatal)"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: check-setup-key-list-validation -- unknown-key WARN / missing-required FAIL distinction documented"
+  echo "PASS: check-setup-key-list-validation -- unknown key -> [WARN] (rc 0); missing required section -> [FAIL] (rc!=0)"
   exit 0
 fi
 exit 1

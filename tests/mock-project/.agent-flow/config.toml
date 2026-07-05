@@ -1,0 +1,75 @@
+[issue_tracker]
+type = "youtrack"
+instance = "test.youtrack.cloud"
+project = "MOCK"
+bug_query = "project: MOCK State: Open Type: Bug"
+state_transitions = "In Progress: In Progress; Blocked: Blocked; For Review: For Review"
+on_start_set = "State: In Progress"
+
+[source_control]
+remote = "<your-gitea-host>/test/mock-project"
+base_branch = "main"
+branch_naming = "MOCK-{issue}-{short-description}"
+
+[pr_rules]
+labels = "ForReview"
+
+[pr_description_template]
+template = """
+## Summary
+{summary}
+
+## Root Cause
+{root_cause}
+
+## Changes
+{changes}
+
+## Testing
+{testing}
+
+Fixes {issue_link}
+"""
+
+[build_and_test]
+build_command = "python -c \"import app\""
+test_command = "python -m pytest tests/ -v"
+
+# --- Representative optional sections ---
+
+[retry_limits]
+fixer_iterations = 3
+test_attempts = 2
+build_retries = 2
+
+[hooks]
+pre_fix = "echo \"pre-fix hook\""
+post_fix = "echo \"post-fix hook\""
+
+[worktrees]
+batch_size = 2
+base_path = ".worktrees/"
+cleanup = "auto"
+
+[feature_workflow]
+feature_query = "project: MOCK State: Open Type: Feature"
+on_start_set = "State: In Progress"
+
+[decomposition]
+max_subtasks = 5
+fail_strategy = "fail-fast"
+commit_strategy = "squash"
+
+[[pipeline_profiles]]
+name = "fast"
+skip_stages = "triage, test-engineer-e2e"
+extra_stages = ""
+
+[[pipeline_profiles]]
+name = "ci"
+skip_stages = "analyst-impact, test-engineer-e2e"
+extra_stages = ""
+
+[metrics]
+output = "stdout"
+period = "30 days"

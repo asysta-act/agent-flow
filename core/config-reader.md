@@ -11,6 +11,14 @@ only bash builtins (`while IFS= read -r`, `case`, parameter expansion), needs **
 This is a hard cut: config lives in `.agent-flow/config.toml` only. There is no inline-Markdown
 config source, no dual-read, and no deprecation shim anywhere on the config-read path.
 
+> **Reference implementation.** `core/lib/config-reader.sh` is the executable pure-bash reference
+> implementation of this contract (precedent: `core/lib/stage-invariant.sh`). It exposes
+> `config_parse`, `config_get`/`config_list`/`config_map`, `config_overlay_merge`, `resolve_limit`
+> (the single limits-resolution point), `config_validate`, and `config_migrate`. The
+> `tests/scenarios/*.sh` harness sources it to assert the behaviours below (malformed→WARN,
+> denylist/allowlist, single-resolution, delimited scalars, required-section BLOCK, `/onboard
+> --migrate`). This prose remains the human contract; the `.sh` is what the tests execute.
+
 ## Input Contract
 
 - **config_toml_path** (string, required): Path to the committed `.agent-flow/config.toml` — the
@@ -151,6 +159,18 @@ The merge is **allowlist**-driven. Only keys in these two sections are eligible 
 
 Any key **outside** the allowlist is ignored (never applied) and emits exactly one `[WARN]`.
 
+> **Scope — this general overlay allowlist is SEPARATE from the limits-resolution chain.**
+> This section describes the **general, full-section per-developer overlay merge**; its allowlist is
+> exactly `{browser_verification, local_deployment}` (whole-section per-dev overrides), gated by the
+> denylist below. It is a **distinct mechanism** from the dedicated limits-resolution function (see
+> "Single limits-resolution point"). Consequently a `[retry_limits]` (limit) key placed in
+> `config.local.toml` is **not** eligible for *this* general overlay — it is ignored + `[WARN]`ed
+> here — **yet** `config.local.toml` MAY still contribute a limit **value** through the dedicated
+> single-resolution function's explicit precedence chain (the §2.4 fix; intentional). There is no
+> contradiction: the general overlay governs whole-section per-dev overrides; the limits chain
+> governs individual `[retry_limits]` keys via its own precedence. The two never evaluate the same
+> key through the same gate.
+
 Layered on top of the allowlist is an explicit, enumerated **denylist** — team-consistency /
 security-critical keys that MUST NOT be personally overridden even if someone tries. Each present
 denylisted key is never applied and emits one `[WARN]` naming it:
@@ -174,6 +194,16 @@ this precedence chain (lowest → highest):
 ```
 plugin default < config.toml < config.local.toml < customization/{agent}.toml [limits]
 ```
+
+This chain is **authoritative for `[retry_limits]` (limit) keys** and is a **separate, dedicated
+mechanism** from the general `config.local.toml` overlay allowlist above. `config.local.toml`
+appearing as a tier here is **intentional** (the §2.4 fix): a developer's `config.local.toml`
+`[retry_limits]` value contributes to a limit through *this* function, even though the general
+whole-section overlay allowlist (`{browser_verification, local_deployment}`) does not admit
+`[retry_limits]` as a full-section per-dev override. The reference implementation is
+`core/lib/config-reader.sh` (`resolve_limit`); its precedence tests are
+`tests/scenarios/limits-precedence-chain.sh` (including the config.local-only tier case) and
+`tests/scenarios/limits-single-resolution*.sh`.
 
 The single resolved value feeds **both** channels — the orchestrator's **loop enforcement**
 (fixer↔reviewer, test attempts, build retries, spec iterations, root-cause iterations) **and** the

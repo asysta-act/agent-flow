@@ -15,6 +15,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -29,31 +30,54 @@ skill_content=""; [ -f "$SKILL" ] && skill_content="$(cat "$SKILL")"
 contains "$skill_content" "--migrate" || fail "FC-20: $SKILL does not document --migrate at all"
 contains_i "$skill_content" "already exists" || fail "FC-20: $SKILL does not document the 'config.toml already exists' idempotence guard"
 
-# --- Behavioural fixture: simulate a config.toml that already exists ---
-TMP_DIR="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/onboard-migrate-idem.$$")"
-mkdir -p "$TMP_DIR/.agent-flow"
-FIRST_CONTENT='[issue_tracker]
-type = "youtrack"
-'
-printf '%s' "$FIRST_CONTENT" > "$TMP_DIR/.agent-flow/config.toml"
-before_hash="$(cat "$TMP_DIR/.agent-flow/config.toml" 2>/dev/null | wc -c)"
-# Simulate a naive (non-idempotent) re-migration attempt appending instead of overwriting --
-# this is the failure mode the spec forbids; the fixture proves the byte-count would change
-# if a real migration silently appended without the guard.
-printf '%s' "$FIRST_CONTENT" >> "$TMP_DIR/.agent-flow/config.toml"
-after_hash="$(cat "$TMP_DIR/.agent-flow/config.toml" 2>/dev/null | wc -c)"
-rm -rf "$TMP_DIR" 2>/dev/null || true
-if [ "$before_hash" -eq "$after_hash" ]; then
-  fail "idempotence fixture sanity: naive double-write should have changed the byte count (fixture construction bug)"
-fi
+# --- Behavioural: run config_migrate twice against the SAME legacy CLAUDE.md. The first run
+# writes config.toml; the second run (no --force) must NOT clobber -- it warns "already exists"
+# and returns non-zero, leaving config.toml byte-identical (idempotence / never-clobber). ---
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc20i.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+cat > "$TMP/CLAUDE.md" <<'EOF'
+# P
+## Automation Config
 
-# TODO(phase-7): once /onboard --migrate exists, invoke it twice against the same legacy
-# CLAUDE.md fixture and assert the SECOND run either (a) is a no-op with a warning, or
-# (b) requires explicit --overwrite/confirmation and does not silently double the config.toml
-# content or duplicate any [section].
+### Issue Tracker
+| Key | Value |
+|-----|-------|
+| Type | youtrack |
+
+### Source Control
+| Key | Value |
+|-----|-------|
+| Remote | o/r |
+
+### PR Rules
+| Key | Value |
+|-----|-------|
+| Labels | bug |
+
+### PR Description Template
+| Key | Value |
+|-----|-------|
+| Template | S |
+
+### Build & Test
+| Key | Value |
+|-----|-------|
+| Build command | make |
+EOF
+
+config_migrate "$TMP/CLAUDE.md" "$TMP/out.toml" >/dev/null 2>&1; first_rc=$?
+[ "$first_rc" -eq 0 ] || fail "FC-20 (idempotence): first migrate returned non-zero (rc=$first_rc)"
+[ -f "$TMP/out.toml" ] || fail "FC-20 (idempotence): first migrate did not write config.toml"
+before="$(cat "$TMP/out.toml")"
+
+second_out="$(config_migrate "$TMP/CLAUDE.md" "$TMP/out.toml" 2>&1)"; second_rc=$?
+[ "$second_rc" -ne 0 ] || fail "FC-20 (idempotence): second migrate returned 0 (must not silently overwrite an existing config.toml)"
+contains "$second_out" "already exists" || fail "FC-20 (idempotence): second migrate did not warn that config.toml already exists"
+after="$(cat "$TMP/out.toml")"
+[ "$before" = "$after" ] || fail "FC-20 (idempotence): config.toml changed on the second run (must be byte-identical — no clobber, no duplicate sections)"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: onboard-migrate-idempotence -- idempotence/overwrite-guard contract documented"
+  echo "PASS: onboard-migrate-idempotence -- second --migrate warns + refuses to clobber; config.toml byte-identical"
   exit 0
 fi
 exit 1

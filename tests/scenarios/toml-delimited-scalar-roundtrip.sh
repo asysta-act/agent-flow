@@ -19,6 +19,7 @@ REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$REPO_ROOT" ] || { echo "FAIL: cannot resolve REPO_ROOT via git" >&2; exit 1; }
 cd "$REPO_ROOT" || exit 1
 source "$REPO_ROOT/tests/lib/assert.sh"
+source "$REPO_ROOT/core/lib/config-reader.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -39,24 +40,45 @@ reader_content=""; [ -f "$READER" ] && reader_content="$(cat "$READER")"
 contains_i "$reader_content" "delimited" || fail "FC-27: core/config-reader.md does not document delimited-scalar splitting"
 contains "$reader_content" "state_transitions" || fail "FC-27: core/config-reader.md does not map issue_tracker.state_transitions from a delimited scalar"
 
-# --- Round-trip fixture: 4 cases constructed as literal TOML scalars ---
-labels_scalar='labels = "bug, automated"'
-state_scalar='state_transitions = "triage: In Progress; fixed: Fixed"'
-empty_scalar='on_events = ""'
-no_delim_scalar='ports = "3000"'
+# --- Behavioural: parse a config.toml with all 4 delimited-scalar cases and split via the
+# reference resolver (config_list / config_map). ---
+TMP="$(mktemp -d 2>/dev/null || printf '%s' "${TMPDIR:-/tmp}/fc27.$$")"; mkdir -p "$TMP"
+trap 'rm -rf "$TMP"' EXIT
+cat > "$TMP/config.toml" <<'EOF'
+[pr_rules]
+labels = "bug, automated"
+[issue_tracker]
+state_transitions = "triage: In Progress; fixed: Fixed"
+[notifications]
+on_events = ""
+[local_deployment]
+ports = "3000"
+EOF
+config_parse "$TMP/config.toml" 0 >/dev/null 2>&1
 
-contains "$labels_scalar" "bug, automated" || fail "labels list-encoding fixture malformed"
-contains "$state_scalar" "triage: In Progress; fixed: Fixed" || fail "state_transitions map-encoding fixture malformed"
-contains "$empty_scalar" '""' || fail "empty-string edge-case fixture malformed"
-contains "$no_delim_scalar" "3000" || fail "no-delimiter single-element fixture malformed"
+# Case 1: multi-element list -> exactly 2 elements "bug" and "automated".
+mapfile -t labels < <(config_list pr_rules.labels)
+[ "${#labels[@]}" -eq 2 ] || fail "FC-27: pr_rules.labels split to ${#labels[@]} elements, expected 2"
+[ "${labels[0]:-}" = "bug" ] || fail "FC-27: labels[0]='${labels[0]:-}', expected 'bug'"
+[ "${labels[1]:-}" = "automated" ] || fail "FC-27: labels[1]='${labels[1]:-}', expected 'automated' (trimmed)"
 
-# TODO(phase-7): once a real pure-bash config reader exists, replace the literal-fixture
-# sanity checks above with an actual split-and-assert: labels -> 2-element list containing
-# "bug" and "automated"; state_transitions -> 2-entry map {triage: "In Progress", fixed:
-# "Fixed"}; on_events -> empty list; ports -> a 1-element list ["3000"].
+# Case 2: multi-entry map -> {triage: "In Progress", fixed: "Fixed"}.
+mapfile -t stmap < <(config_map issue_tracker.state_transitions)
+[ "${#stmap[@]}" -eq 2 ] || fail "FC-27: state_transitions split to ${#stmap[@]} entries, expected 2"
+contains "${stmap[*]}" "triage=In Progress" || fail "FC-27: state_transitions missing 'triage=In Progress' (map value must keep its internal space)"
+contains "${stmap[*]}" "fixed=Fixed" || fail "FC-27: state_transitions missing 'fixed=Fixed'"
+
+# Case 3: empty string -> empty list.
+mapfile -t empty_list < <(config_list notifications.on_events)
+[ "${#empty_list[@]}" -eq 0 ] || fail "FC-27: empty on_events split to ${#empty_list[@]} elements, expected 0 (empty string -> empty list)"
+
+# Case 4: no-delimiter value -> single-element list.
+mapfile -t ports < <(config_list local_deployment.ports)
+[ "${#ports[@]}" -eq 1 ] || fail "FC-27: ports split to ${#ports[@]} elements, expected 1 (no-delimiter -> single element)"
+[ "${ports[0]:-}" = "3000" ] || fail "FC-27: ports[0]='${ports[0]:-}', expected '3000'"
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: toml-delimited-scalar-roundtrip -- delimited-scalar list/map encoding documented for all 4 cases"
+  echo "PASS: toml-delimited-scalar-roundtrip -- list(2)/map(2)/empty(0)/single(1) all split correctly via the reference resolver"
   exit 0
 fi
 exit 1
