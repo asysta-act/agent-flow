@@ -43,13 +43,13 @@ If guard does not trigger:
 - `tracker_effective_status != "ready"`
 - `tracker_write_available == false`
 - No back-reference comments in `spec/epics/*.md`
-- `State transitions` in Automation Config does not contain a `Done` mapping → display `WARN: State transitions missing 'Done'. Skipping closure.`
+- `issue_tracker.state_transitions` in `.agent-flow/config.toml` does not contain a `Done` mapping → display `WARN: State transitions missing 'Done'. Skipping closure.`
 
 If guard does not trigger:
 1. Read all `spec/epics/*.md`. Extract epic and story issue IDs from back-reference comments.
 2. Determine which epics are fully completed (no blocked subtasks from Step 05 block handler).
 3. For each fully-completed epic:
-   a. Transition epic issue to Done (using `State transitions → Done` from Automation Config). Follow `../../../core/status-verification.md` to verify transition.
+   a. Transition epic issue to Done (using the `Done` mapping in `issue_tracker.state_transitions` from `.agent-flow/config.toml`). Follow `../../../core/status-verification.md` to verify transition.
    b. For each story sub-issue: transition individually to Done. Verify each.
    c. If story issue already in Done state: treat as success (no warning).
    d. On failure: `WARN: Could not transition {issue_id} to Done: {error}`, continue.

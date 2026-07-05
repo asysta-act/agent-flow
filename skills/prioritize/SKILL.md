@@ -11,15 +11,15 @@ Input: `$ARGUMENTS` = optional `--limit <N>` (default: 50 — matches priority-e
 
 ## Configuration
 
-Read Automation Config from CLAUDE.md section `## Automation Config`:
-- Issue Tracker: Type, Instance, Project, Bug query
-- Optional: Feature Workflow → Feature query
-- Optional: Metrics → for historical data
+Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`):
+- `[issue_tracker]`: `issue_tracker.type`, `issue_tracker.instance`, `issue_tracker.project`, `issue_tracker.bug_query`
+- Optional: `feature.query`
+- Optional: `[metrics]` → for historical data
 
 ### 0. MCP pre-flight check
 
 Before any pipeline operation, verify MCP tool availability:
-- Read Type from Automation Config (Issue Tracker section)
+- Read `issue_tracker.type` from `.agent-flow/config.toml`
 - Check that at least one `mcp__*` tool matching the tracker type is accessible
 - If not accessible → STOP with: "Cannot connect to your {Type} issue tracker. Is the {Type} integration configured? Run `/agent-flow:check-setup` for diagnostics."
 

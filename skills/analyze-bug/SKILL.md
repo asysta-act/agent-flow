@@ -7,21 +7,21 @@ argument-hint: "<ISSUE-ID>"
 
 # Analyze Bug
 
-Analyze bug $ARGUMENTS. Read Automation Config from CLAUDE.md.
+Analyze bug $ARGUMENTS. Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`).
 
 This is a stateless, single-shot analysis surface, not a resumable pipeline: it never creates or updates `.agent-flow/{ISSUE-ID}/state.json` (that path is reserved for `/agent-flow:fix-bugs` runs on the same issue, and reused by its resume-detection). Before each analyst dispatch below, it writes only the minimal pre-dispatch fields the analyst's Step Completion Invariants require (`dispatched_at`, `dispatch_witness`, `status`, `stage_name`, `agent_name`) to a dedicated ephemeral file, `.agent-flow/{ISSUE-ID}/analyze-bug-state.json`, using the "orchestrator-injected state path" allowance in `agents/analyst.md`'s Step Completion Invariants. This stub carries no `pipeline`/`config`/`infrastructure` accumulator fields (contrast `state/schema.md`) and is never read by resume-detection.
 
 ### 0. MCP pre-flight check
 
 Before any pipeline operation, verify MCP tool availability:
-- Read Type from Automation Config (Issue Tracker section)
+- Read `issue_tracker.type` from `.agent-flow/config.toml`
 - Check that at least one `mcp__*` tool matching the tracker type is accessible
 - If not accessible → STOP with: "Cannot connect to your {Type} issue tracker. Is the {Type} integration configured? Run `/agent-flow:check-setup` for diagnostics."
 
 ## Steps
 
 1. If `$ARGUMENTS` is empty, display: "Usage: /agent-flow:analyze-bug <ISSUE-ID>" and stop.
-2. Verify that CLAUDE.md exists and contains an `## Automation Config` section with `Issue Tracker`. If not, report an error and stop.
+2. Verify that `.agent-flow/config.toml` exists and contains an `[issue_tracker]` section. If not, report an error and stop.
 3. Read issue content (title, description, comments) from the issue tracker via MCP. When passing this content to any agent, follow `../../core/external-input-sanitizer.md`: wrap each piece of external content in `--- EXTERNAL INPUT START ---` / `--- EXTERNAL INPUT END ---` markers.
    Before dispatch, check Agent Overrides: follow `../../core/agent-override-injector.md` for analyst overrides.
    Before dispatching, write pre-dispatch fields to `.agent-flow/{ISSUE-ID}/analyze-bug-state.json`:

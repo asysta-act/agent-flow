@@ -1,6 +1,6 @@
 # Step 05 — Smoke Check (post-fix)
 
-Run Build + Test commands from Automation Config to verify the codebase is sound after the
+Run `build.build_command` + `build.test_command` from `.agent-flow/config.toml` to verify the codebase is sound after the
 fixer-reviewer loop. This step catches regressions introduced during the fixer-reviewer iteration
 that the pre-reviewer Build (inside step 04) would not have caught.
 
@@ -20,10 +20,10 @@ Follow atomic write protocol from `../../../core/state-manager.md`.
 
 ## Smoke commands
 
-1. Run the Build command from Automation Config.
+1. Run the `build.build_command` from `.agent-flow/config.toml`.
    - Failure → proceed to Block handler (step X).
      Block context: agent = `smoke-check`, step = `post-review smoke check`, detail = build error output.
-2. Run the Test command from Automation Config (existing tests only — test-engineer has not run yet).
+2. Run the `build.test_command` from `.agent-flow/config.toml` (existing tests only — test-engineer has not run yet).
    - Failure → proceed to Block handler (step X).
      Block context: agent = `smoke-check`, step = `post-review smoke check`, detail = test error output.
 

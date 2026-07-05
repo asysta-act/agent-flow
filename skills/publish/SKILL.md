@@ -7,9 +7,9 @@ disable-model-invocation: true
 
 # Publish
 
-Publish current work: PR + (conditional) issue tracker state change. Read Automation Config from CLAUDE.md.
+Publish current work: PR + (conditional) issue tracker state change. Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`).
 
-`/publish` auto-detects the publishing **mode** from the current branch name and the Automation Config `Source Control → Branch naming` template. There are three success modes (`full-publish`, `pr-only-no-id`, `pr-only-404`) and one failure mode (`FAIL`). No flags. No new config keys. The "PR-only with valid tracker reference" use case is expressed by renaming the branch to one that does not match the configured `Branch naming` prefix (e.g., `chore/refactor-foo` instead of `fix/PROJ-123-foo`).
+`/publish` auto-detects the publishing **mode** from the current branch name and the `source_control.branch_naming` template from `.agent-flow/config.toml`. There are three success modes (`full-publish`, `pr-only-no-id`, `pr-only-404`) and one failure mode (`FAIL`). No flags. No new config keys. The "PR-only with valid tracker reference" use case is expressed by renaming the branch to one that does not match the configured `Branch naming` prefix (e.g., `chore/refactor-foo` instead of `fix/PROJ-123-foo`).
 
 > **Operator note (interactive-only):** `/publish` is interactive-only — it requires user confirmation flows in agent prose and may FAIL in environments without an MCP server configured (CI / cron). For headless / batch publishing, use `/agent-flow:autopilot`.
 
@@ -33,11 +33,11 @@ If `branch_name` is empty, the working tree is in a **detached HEAD** state. The
 
 `[ERROR]` (not `[INFO]`) is used deliberately: unlike the `[agent-flow][INFO]` lines in Steps 0b/0e below — which are non-fatal and let the pipeline continue in a PR-only mode — this condition is a hard, non-continuable stop. This is a pre-flight environment check — NOT a tracker-down failure — so it does NOT use the `[agent-flow] 🔴 Pipeline Block` template. No tracker comment is posted. No webhook event is fired. (Detached HEAD is treated as FAIL — exit non-zero — NOT as `pr-only-no-id`, because there is no branch to push or use as PR source.)
 
-**0b. Read `Source Control → Branch naming` from Automation Config.**
+**0b. Read `source_control.branch_naming` from `.agent-flow/config.toml`.**
 
-The template uses `{issue-id}` (and optionally `{description}`) as placeholders — for example `fix/{issue-id}-{description}` or `feature/{issue-id}` (per `docs/reference/automation-config.md` Branch naming row).
+The template uses `{issue-id}` (and optionally `{description}`) as placeholders — for example `fix/{issue-id}-{description}` or `feature/{issue-id}` (per `docs/reference/automation-config.md` `source_control.branch_naming` row).
 
-If the `Branch naming` key is **ABSENT** from Automation Config:
+If `source_control.branch_naming` is **ABSENT** from `.agent-flow/config.toml`:
 
 - `issue_id = null`
 - `tracker_needed = false`
@@ -163,7 +163,7 @@ Otherwise (`tracker_needed == true`), proceed to **Step 1**.
 
 This step ONLY runs when `tracker_needed == true`. PR-only modes never hit it.
 
-- Read `Type` from Automation Config (`Issue Tracker` section).
+- Read `issue_tracker.type` from `.agent-flow/config.toml`.
 - Verify that at least one `mcp__*` tool matching the tracker type is accessible.
 - If not accessible → emit the FAIL block per the **FAIL tier** template below (with `error_type = "unknown"` if classification cannot be made more specific) and EXIT non-zero.
 
@@ -171,7 +171,7 @@ This step ONLY runs when `tracker_needed == true`. PR-only modes never hit it.
 
 This step ONLY runs when `tracker_needed == true`. It verifies that `issue_id` actually exists in the tracker and decides between `full-publish`, `pr-only-404`, and `FAIL`.
 
-a. Read `tracker_type` from Automation Config (default: `youtrack`).
+a. Read `tracker_type` from `issue_tracker.type` in `.agent-flow/config.toml` (default: `youtrack`).
 
 b. Locate the single-issue fetch tool via prefix-scan per `../../core/mcp-detection.md:28-34` and `../../core/mcp-detection.md:38` ("Scan available tools for at least one tool matching the prefix"). **Do NOT hardcode tool names** — pick the `get_issue`-shaped tool from `mcp__{tracker_type}__*`.
 
@@ -199,9 +199,9 @@ If zero commits → STOP with INFO: `No changes to publish — branch has no com
 
 b. Check whether an open PR already exists for the current branch. If yes → STOP with INFO: `PR already exists: {PR URL}.`
 
-### Step 4 — Read Type from Automation Config (UNCHANGED)
+### Step 4 — Read issue_tracker.type from `.agent-flow/config.toml` (UNCHANGED)
 
-Read `Type` from Automation Config → `Issue Tracker` (default: `youtrack`).
+Read `issue_tracker.type` from `.agent-flow/config.toml` (default: `youtrack`).
 
 ### Step 4b — Pre-publish hook + custom agent (optional)
 
@@ -210,15 +210,15 @@ pipelines, so it honors the same pre-publish gate they do — mirroring
 `skills/fix-bugs/steps/10-pre-publish.md` and the "Pre-publish hook + custom agent" section of
 `skills/implement-feature/steps/08-publish.md`.
 
-**Skip condition:** if neither `Hooks → Pre-publish` nor `Custom Agents → Pre-publish agent` is set
-in Automation Config, skip this step entirely and proceed to Step 5.
+**Skip condition:** if neither `hooks.pre_publish` nor `custom_agents.pre_publish_agent` is set
+in `.agent-flow/config.toml`, skip this step entirely and proceed to Step 5.
 
-a. **Pre-publish Bash hook.** If `Hooks → Pre-publish` is set: run the configured command via Bash
+a. **Pre-publish Bash hook.** If `hooks.pre_publish` is set: run the configured command via Bash
    in the project root. Non-zero exit → emit the **Pre-publish gate FAIL tier** block (see Failure
    UX templates below) with `Step: Pre-publish hook` and `Detail` = last 1000 chars of combined
    stdout/stderr, then EXIT non-zero.
 
-b. **Pre-publish custom agent.** If `Custom Agents → Pre-publish agent` is set: read the agent
+b. **Pre-publish custom agent.** If `custom_agents.pre_publish_agent` is set: read the agent
    definition from the configured path and its frontmatter `model`. Before dispatch, check Agent
    Overrides: follow `../../core/agent-override-injector.md`. Invoke
    `Task(subagent_type=<custom-agent>, model=<model>)`. Output beginning with `BLOCK:` → emit the
@@ -247,15 +247,15 @@ independently setting issue state or posting its own PR-link comment (doing so w
 mutation and produce a double comment). The behavior below is what the publisher agent already did
 inside its own Step 5 dispatch — this section documents the outcome for orchestrator clarity only:
 
-- IF `mode == "full-publish"`: the publisher agent set the issue state per Automation Config
-  (`Issue Tracker → State transitions → For Review`) and posted a comment with the PR link.
+- IF `mode == "full-publish"`: the publisher agent set the issue state per `.agent-flow/config.toml`
+  (`issue_tracker.state_transitions → For Review`) and posted a comment with the PR link.
 - ELSE (mode in `{"pr-only-no-id", "pr-only-404"}`): the publisher agent skipped both. This skill
   logs (its own, non-mutating, local echo): `[agent-flow][INFO] PR-only mode ({mode}); tracker not updated.`
 
 ### Step 7 — Post-publish hook, custom agent, and webhook
 
-Follow `../../core/post-publish-hook.md` for `Hooks → Post-publish` command execution,
-`Custom Agents → Post-publish agent` dispatch, and the `pr-created` webhook. This is the same
+Follow `../../core/post-publish-hook.md` for `hooks.post_publish` command execution,
+`custom_agents.post_publish_agent` dispatch, and the `pr-created` webhook. This is the same
 delegation `skills/fix-bugs/steps/11-publish.md` and `skills/implement-feature/steps/08-publish.md`
 use, so a standalone `/publish` run fires identical post-publish hooks/webhooks to the
 pipeline-embedded publish step.
@@ -304,7 +304,7 @@ Recommendation:
   4. Once the tracker is reachable, re-run `/agent-flow:publish`.
 ```
 
-If `Notifications → Webhook URL` exists and `issue-blocked` is in `On events`, fire the
+If `notifications.webhook_url` exists and `issue-blocked` is in `notifications.on_events`, fire the
 `agent-flow-block` webhook using `../../core/block-handler.md` Step 6's `jq -nc --arg` structural
 construction (`event: "agent-flow-block"`, `agent: "publish"`, `issue_id`, `reason`, `timestamp`).
 This webhook call — not the comment text alone — is what makes the block machine-parseable by
@@ -315,7 +315,7 @@ continue to EXIT non-zero regardless.
 
 After emitting this block (and, if configured, the webhook above), EXIT non-zero. (`/agent-flow:check-setup` is the diagnostic skill; `/agent-flow:setup-mcp` is the configuration wizard.)
 
-### Pre-publish gate FAIL tier (`Hooks → Pre-publish` or `Custom Agents → Pre-publish agent` failure, Step 4b)
+### Pre-publish gate FAIL tier (`hooks.pre_publish` or `custom_agents.pre_publish_agent` failure, Step 4b)
 
 Same Skill-level Block Comment Template shape as the FAIL tier above, with `Step` set to whichever
 sub-step failed:
@@ -326,12 +326,12 @@ Skill: /agent-flow:publish
 Step: Pre-publish hook | Pre-publish custom agent
 Reason: The configured pre-publish gate failed; publish was stopped before any commit/push/PR call.
 Detail: {last 1000 chars of hook stdout+stderr, or the custom agent's BLOCK: reason}
-Recommendation: Fix the issue the hook/agent flagged, or unset Hooks → Pre-publish / Custom Agents →
-  Pre-publish agent in Automation Config if this gate should not apply to standalone /publish runs,
+Recommendation: Fix the issue the hook/agent flagged, or unset hooks.pre_publish /
+  custom_agents.pre_publish_agent in .agent-flow/config.toml if this gate should not apply to standalone /publish runs,
   then re-run /agent-flow:publish.
 ```
 
-If `Notifications → Webhook URL` exists and `issue-blocked` is in `On events`, fire the same
+If `notifications.webhook_url` exists and `issue-blocked` is in `notifications.on_events`, fire the same
 `agent-flow-block` webhook described in the FAIL tier above. After emitting this block (and, if
 configured, the webhook), EXIT non-zero. No PR has been created and no tracker mutation has
 occurred yet at this point (Step 4b runs before Steps 5/6), so there is nothing to roll back.

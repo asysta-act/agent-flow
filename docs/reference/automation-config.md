@@ -1,14 +1,14 @@
 # Automation Config Reference
 
-The Automation Config is the configuration block that connects agent-flow to your project. It lives in the `## Automation Config` section of your project's CLAUDE.md file.
+The Automation Config is the configuration that connects agent-flow to your project. It lives in your project's committed `.agent-flow/config.toml` file (resolved by the pure-bash `core/config-reader.md`), with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay. CLAUDE.md keeps only a 1-2 line pointer — config is no longer stored inline in CLAUDE.md.
 
 The **canonical specification** for all sections, keys, and defaults is in [CLAUDE.md](../../CLAUDE.md) (Config Contract section). This document provides extended examples, per-tracker guidance, validation rules, and a complete configuration example.
 
 ## Overview
 
-Automation Config uses a table format (`| Key | Value |`) for all sections. There are 5 required sections and 18 optional sections (referenced by 17 core contracts and consumed by 17 skills). Required sections must be present for the pipeline to run. Optional sections enable additional capabilities with sensible defaults.
+Automation Config uses TOML `[section]` tables in `.agent-flow/config.toml`. There are 5 required sections and 18 optional sections (referenced by 17 core contracts and consumed by 17 skills). Required sections must be present for the pipeline to run. Optional sections enable additional capabilities with sensible defaults.
 
-All skills read Automation Config at the start of execution. Skills contain zero project-specific logic — everything is driven by what you configure here.
+All skills read Automation Config from `.agent-flow/config.toml` (via `core/config-reader.md`) at the start of execution. Skills contain zero project-specific logic — everything is driven by what you configure here.
 
 **Quick reference:**
 
@@ -40,7 +40,10 @@ All skills read Automation Config at the start of execution. Skills contain zero
 
 ## Required Sections
 
-### Issue Tracker
+The 5 required sections map to these TOML tables in `.agent-flow/config.toml`: `[issue_tracker]`,
+`[source_control]`, `[pr_rules]`, `[pr_description_template]`, `[build_and_test]`.
+
+### Issue Tracker — `[issue_tracker]`
 
 Configures which issue tracker to use and how to interact with it.
 
@@ -175,7 +178,13 @@ The Verify command is optional. When present, it runs after PR merge. If verific
 
 ## Optional Sections
 
-### Module Docs
+The 18 optional sections map to these TOML tables in `.agent-flow/config.toml`: `[module_docs]`,
+`[retry_limits]`, `[hooks]`, `[custom_agents]`, `[notifications]`, `[worktrees]`, `[e2e_test]`,
+`[browser_verification]`, `[error_handling]`, `[feature_workflow]`, `[decomposition]`,
+`[[pipeline_profiles]]`, `[metrics]`, `[agent_overrides]`, `[local_deployment]`, `[sprint_planning]`,
+`[autopilot]`, `[pause_limits]`.
+
+### Module Docs — `[module_docs]`
 
 Points agents to per-module documentation files. When configured, analyst and architect read the corresponding module docs before analysis or design.
 
@@ -579,7 +588,7 @@ The `/agent-flow:check-setup` skill validates your Automation Config. Here is wh
 1. **Required sections present:** All 5 required sections (Issue Tracker, Source Control, PR Rules, PR Description Template, Build & Test) must exist
 2. **Required keys present:** Each required section must contain all its required keys
 3. **No placeholder values:** Keys must not contain `<TODO>`, `<...>`, or other placeholder patterns
-4. **Table format:** All sections must use `| Key | Value |` tables, not bullet-point lists
+4. **TOML format:** All sections must be valid TOML `[section]` tables in `.agent-flow/config.toml`; `.agent-flow/config.toml` must be tracked (not gitignored)
 5. **Tracker-specific validation:** Query syntax and state transition format are checked against the configured tracker Type
 6. **MCP server presence:** An MCP server matching the tracker Type must be available
 7. **Build/test commands:** Build and test commands execute successfully (unless `--skip-build`)

@@ -36,14 +36,14 @@ Explicit instruction:
    Batch grouping: features with no unmet dependencies in the same batch.
    Batch size: 2–3 features per batch."
 
-**Post-dispatch (COST-R2, COST-R3):** Defensive-read `result.usage`. Write `architect.completed_at`, `architect.tokens_used`, `architect.duration_ms`, `architect.tool_uses` (fallback `0`). Set `architect.status = "completed"`.
+**Post-dispatch (COST-R2, COST-R3):** Defensive-read `result.usage`. Write `architect.completed_at`, `architect.tokens_used`, `architect.duration_ms`, `architect.tool_uses` (default `0`). Set `architect.status = "completed"`.
 
 ## 04c. Decomposition Validation
 
-Read Decomposition config from generated CLAUDE.md:
-- Max subtasks (default scaffold: 5 — lower than implement-feature's 7 because spec-writer pre-decomposes)
-- Fail strategy (default: fail-fast)
-- Commit strategy (default scaffold: individual)
+Read Decomposition config from the generated `.agent-flow/config.toml` `[decomposition]`:
+- `max_subtasks` (default scaffold: 5 — lower than implement-feature's 7 because spec-writer pre-decomposes)
+- `fail_strategy` (default: fail-fast)
+- `commit_strategy` (default scaffold: individual)
 
 Validate architect output:
 - Total subtasks ≤ Max subtasks

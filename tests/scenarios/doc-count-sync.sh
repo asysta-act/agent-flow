@@ -2,11 +2,21 @@
 # Covers: AC-CNT-1 (CLAUDE.md states 17 skills),
 #         AC-CNT-2 (README.md states 17 skills),
 #         AC-CNT-3 (all 5 count-bearing docs reference 17 core),
-#         AC-CNT-4 (no production claim of 22 skills or 16 core)
+#         AC-CNT-4 (no production claim of 22 skills or 16 core),
+#         AC-CNT-5 (FC-23, REWORKED for the .agent-flow/config.toml migration, per
+#           design.md section 5.3): the doc-count-drift sync set (CLAUDE.md, README.md,
+#           docs/reference/automation-config.md, docs/guides/installation.md,
+#           docs/architecture.md) all reference .agent-flow/config.toml as the config
+#           location -- these 5 docs "encode the config lives in CLAUDE.md assumption"
+#           per REQ-24 and must move together.
 # Note: Skill count corrected from 18 -> 17 for v1.0.0 public release.
+# Expected RED (AC-CNT-5, pre-impl): none of the 5 docs reference .agent-flow/config.toml
+#   yet -- they all still describe the inline CLAUDE.md Automation Config location.
 set -e
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+# shellcheck source=tests/lib/assert.sh
+source "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: v9-5-doc-count-sync — $1"; FAIL=1; }
@@ -57,7 +67,24 @@ else
   FAIL=1
 fi
 
+# AC-CNT-5 (FC-23): the doc-count-drift sync set all reference .agent-flow/config.toml
+CONFIG_LOCATION_DOCS=(
+  "CLAUDE.md"
+  "README.md"
+  "docs/reference/automation-config.md"
+  "docs/guides/installation.md"
+  "docs/architecture.md"
+)
+for f in "${CONFIG_LOCATION_DOCS[@]}"; do
+  content="$(cat "$REPO_ROOT/$f" 2>/dev/null || true)"
+  if contains "$content" ".agent-flow/config.toml"; then
+    echo "PASS: $f references .agent-flow/config.toml"
+  else
+    fail "$f does not reference .agent-flow/config.toml (doc-count-drift sync set, FC-23/REQ-24)"
+  fi
+done
+
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: v9-5-doc-count-sync — all 5 docs correctly reference 17 skills and 17 core"
+  echo "PASS: v9-5-doc-count-sync — all 5 docs correctly reference 17 skills, 17 core, and .agent-flow/config.toml"
 fi
 exit "$FAIL"

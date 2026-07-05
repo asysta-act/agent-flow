@@ -15,7 +15,7 @@ graph LR
     end
 
     subgraph Project["Your Project"]
-        Config["CLAUDE.md<br/><code>## Automation Config</code>"]
+        Config[".agent-flow/config.toml<br/>via core/config-reader.md"]
         MCP[".mcp.json<br/>API tokens"]
     end
 
@@ -195,7 +195,7 @@ Agent details, inputs, outputs, and example output: [Agents Reference](docs/refe
 
 ## Configuration
 
-Projects using this plugin need `## Automation Config` in their CLAUDE.md. Use `/agent-flow:onboard` to generate it interactively.
+Projects using this plugin keep their Automation Config in a committed `.agent-flow/config.toml` file (resolved by `core/config-reader.md`), with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay. Use `/agent-flow:onboard` to generate it interactively.
 
 ### Required Sections
 
@@ -209,25 +209,19 @@ Projects using this plugin need `## Automation Config` in their CLAUDE.md. Use `
 
 **18 optional config sections** cover retry limits, module docs, hooks, custom agents, notifications, worktrees, E2E testing, browser verification, local deployment, sprint planning, error handling, feature workflow, decomposition, pipeline profiles, metrics, agent overrides, autopilot, and pause limits.
 
-Minimal example:
+Minimal example (`.agent-flow/config.toml`):
 
-```markdown
-## Automation Config
+```toml
+[issue_tracker]
+type = "github"
+instance = "github.com"
+project = "my-org/my-repo"
+bug_query = "label:bug state:open"
 
-### Issue Tracker
-| Key | Value |
-|-----|-------|
-| Type | github |
-| Instance | github.com |
-| Project | my-org/my-repo |
-| Bug query | label:bug state:open |
-
-### Source Control
-| Key | Value |
-|-----|-------|
-| Remote | my-org/my-repo |
-| Base branch | main |
-| Branch naming | fix/{issue-id}-{slug} |
+[source_control]
+remote = "my-org/my-repo"
+base_branch = "main"
+branch_naming = "fix/{issue-id}-{slug}"
 ```
 
 Full specification with examples: [Automation Config Reference](docs/reference/automation-config.md). Canonical contract definition: [CLAUDE.md](CLAUDE.md).

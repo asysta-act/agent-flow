@@ -12,7 +12,7 @@ Generate a changelog from merged PRs since the last git tag. Write to `CHANGELOG
 ### 0. MCP pre-flight check
 
 This skill never touches the issue tracker — it reads merged-PR metadata from the **source control** host (Step 4). Verify that connectivity before any pipeline operation:
-- Read Source Control → Remote from Automation Config.
+- Read `source_control.remote` from `.agent-flow/config.toml`.
 - Resolve `trackers.md`: Glob `.claude/plugins/**/docs/reference/trackers.md` (prefer a path containing `.claude/plugins/` or `agent-flow/`); fallback `**/docs/reference/trackers.md`; last resort `docs/reference/trackers.md` relative to CWD.
 - Derive the SC host type by matching `git remote get-url origin` (or the remote matching `Remote`) against `trackers.md`'s MCP Server Detection table — e.g. a URL containing `github.com` → `github`, a URL containing `gitea` → `gitea`. This is the same lookup table `../../core/mcp-detection.md` uses.
 - Follow `../../core/mcp-detection.md` with `service_type: "sc"` and the derived type to determine the expected tool prefix, check that at least one `mcp__*` tool matching it is accessible, and verify read connectivity to `Remote`.
@@ -20,9 +20,9 @@ This skill never touches the issue tracker — it reads merged-PR metadata from 
 
 ## Steps
 
-1. Read Automation Config from CLAUDE.md:
-   - Source Control → Remote
-   If Automation Config is missing, derive the remote from `git remote get-url origin` instead.
+1. Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`):
+   - `source_control.remote`
+   If `.agent-flow/config.toml` is missing, derive the remote from `git remote get-url origin` instead.
 
 2. Find the last git tag:
    ```

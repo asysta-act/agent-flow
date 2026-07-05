@@ -1,6 +1,6 @@
 ---
 name: autopilot
-description: Headless dispatcher that reads Bug query / Feature query from Automation Config, classifies issues, and dispatches existing skills (fix-bugs / implement-feature). Lock-file protected. For cron / batch / CI invocation.
+description: Headless dispatcher that reads Bug query / Feature query from .agent-flow/config.toml, classifies issues, and dispatches existing skills (fix-bugs / implement-feature). Lock-file protected. For cron / batch / CI invocation.
 allowed-tools: mcp__*, Bash, Read, Write, Edit, Grep, Glob, Skill, Task
 disable-model-invocation: true
 argument-hint: "[--dry-run]"
@@ -8,7 +8,7 @@ argument-hint: "[--dry-run]"
 
 # Autopilot
 
-Headless dispatcher skill for unattended cron / batch / CI invocation. Reads `### Issue Tracker`, `### Feature Workflow` (optional) and `### Autopilot` (optional) from `## Automation Config`, classifies issues into bugs and features, enforces a portable `mkdir`-based lock, and dispatches `agent-flow:fix-bugs` or `agent-flow:implement-feature` per issue sequentially via a headless `claude -p` child-process invocation — NOT the Skill tool, which pipeline entry-point skills block via `disable-model-invocation: true` (see Step 6, item 2, for the full rationale).
+Headless dispatcher skill for unattended cron / batch / CI invocation. Reads `### Issue Tracker`, `### Feature Workflow` (optional) and `### Autopilot` (optional) from `.agent-flow/config.toml`, classifies issues into bugs and features, enforces a portable `mkdir`-based lock, and dispatches `agent-flow:fix-bugs` or `agent-flow:implement-feature` per issue sequentially via a headless `claude -p` child-process invocation — NOT the Skill tool, which pipeline entry-point skills block via `disable-model-invocation: true` (see Step 6, item 2, for the full rationale).
 
 Invoke typically as:
 
@@ -34,7 +34,7 @@ Reference: `docs/guides/autopilot.md` for operator onboarding, exit-code matrix,
 
 ## Configuration
 
-Follow `../../core/config-reader.md` for parsing `## Automation Config` from CLAUDE.md.
+Follow `../../core/config-reader.md` for reading config from `.agent-flow/config.toml`.
 
 This skill consumes the following sections:
 
@@ -67,10 +67,10 @@ The skill executes the following steps IN ORDER. Any STOP or exit terminates Aut
 
 ### Step 0: Preflight — config validation + MCP ping
 
-1. Parse `## Automation Config` via `../../core/config-reader.md`.
-2. If `## Automation Config` heading is missing → print to stderr and exit 1:
+1. Read config from `.agent-flow/config.toml` via `../../core/config-reader.md`.
+2. If `.agent-flow/config.toml` is missing → print to stderr and exit 1:
    ```
-   [autopilot][ERROR] Missing Automation Config section in CLAUDE.md. See docs/guides/autopilot.md.
+   [autopilot][ERROR] Missing .agent-flow/config.toml. See docs/guides/autopilot.md.
    ```
 3. If `### Issue Tracker.Bug query` is absent → print to stderr and exit 1:
    ```
@@ -253,7 +253,7 @@ This is an INFORMATIONAL line only. It does NOT detect cross-host contention. Th
 
 1. Read `Bug query` — required. Source: `### Issue Tracker.Bug query`. If absent, Step 0 would have already exited 1; this is a defensive re-check.
 2. Read `Feature query` (optional). Source: `### Feature Workflow.Feature query`.
-3. If `### Feature Workflow` section is ABSENT from Automation Config:
+3. If `### Feature Workflow` section is ABSENT from `.agent-flow/config.toml`:
    ```
    [autopilot][WARN] Feature Workflow section absent — running in bug-only mode.
    ```

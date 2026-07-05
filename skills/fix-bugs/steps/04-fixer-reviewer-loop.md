@@ -139,12 +139,12 @@ continue
 
 ## Build (post-fixer)
 
-Run the Build command from Automation Config. Retry limit = Build retries from config.
+Run the `build.build_command` from `.agent-flow/config.toml`. Retry limit = `retry.build_retries` from config.
 Failure after exhausting retries → proceed to Block handler (step X).
 
 ## Post-fix hooks
 
-If Hooks → Post-fix exists:
+If `hooks.post_fix` exists:
 - Run the command via Bash. Failure → Block handler (step X).
 
 If Custom Agents → Post-fix agent exists:
@@ -185,7 +185,7 @@ REQUEST_CHANGES → back to fixer. Iterations exhausted → Block handler (step 
 
 ## Smoke check (post-review)
 
-Run Build command and Test command from Automation Config after the loop completes:
+Run `build.build_command` and `build.test_command` from `.agent-flow/config.toml` after the loop completes:
 1. Run Build command. Failure → Block handler (step X).
 2. Run Test command (existing tests only). Failure → Block handler (step X).
 

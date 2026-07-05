@@ -73,7 +73,7 @@ Then restart your Claude Code session.
 After installing the plugin, you need to configure your specific project:
 
 1. Create `.mcp.json` in the project root — see [mcp-configuration.md](mcp-configuration.md)
-2. Add `## Automation Config` to the project's CLAUDE.md — see the example in the plugin README
+2. Create `.agent-flow/config.toml` in the project root — this committed, tracked file holds all Automation Config; see the example in the plugin README. Optionally add a gitignored `.agent-flow/config.local.toml` per-developer overlay for local-only overrides.
 3. Verify: `/agent-flow:check-setup`
 
 ## 4. Pipeline State and .gitignore
@@ -87,6 +87,7 @@ The plugin writes runtime state files to `.agent-flow/` in your project root. Th
 .agent-flow/state.json
 .agent-flow/pipeline.log
 .agent-flow/autopilot.log
+.agent-flow/config.local.toml
 ```
 
 **`pipeline-history.md` — operator choice:**

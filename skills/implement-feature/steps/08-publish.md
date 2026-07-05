@@ -115,7 +115,7 @@ catch it). The `stages.<stage>.overlay_source` field is the only signal that the
 This sub-step surfaces the mismatch where a `customization/<agent>.toml` exists for a stage's
 agent but the recorded `overlay_source` shows the overlay was NOT applied.
 
-Resolve the override directory from `### Agent Overrides → Path` in Automation Config (default
+Resolve the override directory from `agent_overrides.path` in `.agent-flow/config.toml` (default
 `customization/`). For each stage block in `state.json` `stages.<stage>`:
 
 1. Read `stages.<stage>.overlay_source`. If absent (legacy run) or equal to `toml`, skip (no anomaly).
@@ -170,10 +170,10 @@ Follow `../../../core/post-publish-hook.md` for hook execution and webhook firin
 
 ## Feature Verification (optional)
 
-Follow `../../../core/fix-verification.md`. If Build & Test → Verify exists in Automation Config:
+Follow `../../../core/fix-verification.md`. If `build.verify_command` exists in `.agent-flow/config.toml`:
 1. Wait for PR merge (query via MCP server, max 5 attempts with 30s interval).
    If PR not merged after 5 attempts → display warning and exit.
 2. Checkout base branch and pull: `git checkout {base_branch} && git pull`
-3. Run the Verify command from Automation Config.
+3. Run the `build.verify_command` from `.agent-flow/config.toml`.
 4. If OK → add a success comment to the issue.
-5. If FAIL → add a failure comment, re-open issue if State transitions supports it, display to user.
+5. If FAIL → add a failure comment, re-open issue if `issue_tracker.state_transitions` supports it, display to user.

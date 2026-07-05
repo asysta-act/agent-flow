@@ -10,12 +10,12 @@ pre-dispatch witness protocol.
 
 ## Skip condition
 
-If neither `Hooks → Pre-publish` nor `Custom Agents → Pre-publish agent` is configured in
-Automation Config → skip this entire step, continue to step 11.
+If neither `hooks.pre_publish` nor `custom_agents.pre_publish_agent` is configured in
+`.agent-flow/config.toml` → skip this entire step, continue to step 11.
 
 ## Pre-publish Bash hook
 
-If `Hooks → Pre-publish` is set in Automation Config:
+If `hooks.pre_publish` is set in `.agent-flow/config.toml`:
 - Run the configured command via Bash, in the project root.
 - Stream stdout/stderr to `.agent-flow/{ISSUE-ID}/pre-publish-hook.log`.
 - Failure (non-zero exit) → proceed to Block handler (step X).
@@ -23,9 +23,9 @@ If `Hooks → Pre-publish` is set in Automation Config:
 
 ## Pre-publish custom agent
 
-If `Custom Agents → Pre-publish agent` is set in Automation Config:
+If `custom_agents.pre_publish_agent` is set in `.agent-flow/config.toml`:
 
-Before dispatch, check Agent Overrides: follow `../../../core/agent-override-injector.md`. If `{Agent Overrides path}/<custom-agent>.toml` exists, append its rendered Markdown content to the agent's context as `## Project-Specific Instructions`.
+Before dispatch, check Agent Overrides: follow `../../../core/agent-override-injector.md`. If `{agent_overrides.path}/<custom-agent>.toml` exists, append its rendered Markdown content to the agent's context as `## Project-Specific Instructions`.
 
 1. Read the agent definition from the path in config (e.g., `customization/agents/security-review.md`).
 2. Read the agent's frontmatter to determine the model.

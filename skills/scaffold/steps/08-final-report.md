@@ -125,7 +125,7 @@ If no stage produced a mismatch, render NO block (clean run).
 {if tracker or SC not ready}
 1. Fill tokens in .mcp.json (copy from .mcp.json.example)
 2. Run `/agent-flow:setup-mcp` to configure MCP servers
-3. Run `/agent-flow:onboard --update` to complete Automation Config
+3. Run `/agent-flow:onboard --update` to complete your `.agent-flow/config.toml`
 4. Run `/agent-flow:check-setup` to validate configuration
 {else}
 1. Your project is ready. Try `/agent-flow:implement-feature` with a tracker issue.

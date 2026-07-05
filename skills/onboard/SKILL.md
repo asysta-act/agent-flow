@@ -2,22 +2,26 @@
 name: onboard
 description: Interactive wizard for generating Automation Config
 allowed-tools: Read, Glob, Write, Edit
-argument-hint: "[--fresh] [--update]"
+argument-hint: "[--fresh] [--update] [--migrate]"
 ---
 
 # Onboard
 
-Interactive wizard that collects parameters and generates the `## Automation Config` block.
+Interactive wizard that collects parameters and generates the project's committed
+`.agent-flow/config.toml`. CLAUDE.md keeps only a 1-2 line pointer to that file — Automation Config
+is no longer stored inline in CLAUDE.md.
 
-Input: `$ARGUMENTS` = (none) | `--fresh` | `--update`
+Input: `$ARGUMENTS` = (none) | `--fresh` | `--update` | `--migrate`
 
 - No arguments (default): auto-detect existing config and route accordingly
 - `--fresh`: force fresh mode, skip config detection
 - `--update`: force update mode, error if no config exists
+- `--migrate`: one-time transform of a legacy inline `## Automation Config` block in CLAUDE.md into
+  `.agent-flow/config.toml`, then rewrite that CLAUDE.md section to a pointer (see ## Migrate Mode)
 
 ## Scope
 
-Target directory = git repository root (detect via `git rev-parse --show-toplevel`).
+Target directory = the git repository root (detect the repo's top-level directory).
 If not in a git repo → use CWD.
 
 - Target file: `{target_dir}/CLAUDE.md`
@@ -28,11 +32,45 @@ If not in a git repo → use CWD.
   "You're in a subdirectory. CLAUDE.md exists at {parent}/CLAUDE.md.
    Write here ({CWD}) or there ({parent})? [here/THERE]"
 
+## Migrate Mode (`--migrate`)
+
+A one-time, local, side-effect-free transform (no network, no tracker calls) that moves a legacy
+inline `## Automation Config` block out of CLAUDE.md and into `.agent-flow/config.toml`. This is the
+ONLY migration path — there is deliberately no `/migrate-config` command.
+
+Transform steps (per the 23-section migration map in `docs/reference/automation-config.md`):
+
+1. Locate the `## Automation Config` heading in `{target_dir}/CLAUDE.md`, up to the next `##`.
+2. For each `### {Section}` table, emit the corresponding TOML `[section]` block into
+   `.agent-flow/config.toml`, converting each `| Key | Value |` row to a typed `key = value`
+   (quoted strings; bare ints/bools; a `"""` multi-line string for the PR Description Template;
+   `[[pipeline_profiles]]` array-of-tables for Pipeline Profiles; the delimited-scalar encoding for
+   list/map keys — e.g. `labels = "bug, automated"`, `state_transitions = "triage: In Progress; fixed: Fixed"`).
+3. Rewrite the `## Automation Config` section in CLAUDE.md down to a 1-2 line **pointer** at
+   `.agent-flow/config.toml` (no `| Key | Value |` rows remain).
+
+**Idempotence.** If `.agent-flow/config.toml` **already exists**, do NOT clobber it: warn and require
+an explicit `--overwrite` confirmation. A second `--migrate` run therefore never double-migrates or
+duplicates a `[section]`.
+
+**Partial / malformed input — never leave a half-written config.** If the inline block is malformed
+or missing sections, `--migrate` emits a `[WARN]` naming **each section it could not extract** and
+never silently drops a section. Concretely:
+- If any **required** section (`### Issue Tracker`, `### Source Control`, `### PR Rules`,
+  `### PR Description Template`, `### Build & Test`) is unextractable → **abort before writing**
+  `.agent-flow/config.toml`, leave CLAUDE.md **untouched**, and report exactly what to fix. No
+  half-written config.toml is produced.
+- If only **optional** sections are malformed → write the cleanly-extracted required + optional
+  sections and report the skipped optional ones for manual completion.
+- NEVER rewrite CLAUDE.md to the pointer unless a valid, `/check-setup`-passing `.agent-flow/config.toml`
+  was produced first (so the config is never lost to a half-written state).
+
 ## Step 0: Detection and Routing
 
 1. Determine the target directory per ## Scope rules above
 2. Read `{target_dir}/CLAUDE.md`
 3. Look for `## Automation Config` section
+3m. If `--migrate` in $ARGUMENTS → go to ## Migrate Mode (do not run the interactive wizard)
 4. If `--fresh` in $ARGUMENTS → skip detection, go to Fresh mode (step 1)
 5. If `--update` in $ARGUMENTS and no config exists → error: "No Automation Config found. Run without --update to create one."
 6. Route based on detection:
@@ -43,7 +81,7 @@ If not in a git repo → use CWD.
 | Config exists, current version (has Pipeline Profiles or Metrics) | Offer: "[1] Update existing config [2] Start fresh (overwrites)" |
 | Config exists, old version (no Pipeline Profiles and no Metrics) | "Detected older config format. Update it manually to match the current format in `docs/reference/automation-config.md`. Continue anyway? [y/N]" |
 
-In update mode: parse entire existing config into key→value structure per section. This provides default values throughout the wizard.
+In update mode: read the entire existing config into a key→value structure per section. This provides default values throughout the wizard.
 
 Then proceed to:
 - Fresh mode → step 1
@@ -68,7 +106,7 @@ Then proceed to:
   5. If user selects a template → Read `examples/configs/{stack-name}.md` and load it as pre-filled defaults
   6. Continue with steps 2-5 for adjustments
 
-**Empty-glob fallback:** If `examples/configs/*.md` returns zero results, skip directly to step 2 with the message: "No pre-built templates available — proceeding with classic wizard."
+**Empty-glob default:** If `examples/configs/*.md` returns zero results, skip directly to step 2 with the message: "No pre-built templates available — proceeding with classic wizard."
 
 **Heading-extraction contract:** Every config file in `examples/configs/*.md` MUST start with `# Stack Name` as the first line (single H1). See `examples/configs/README.md` for the contract.
 
@@ -121,7 +159,7 @@ Ask:
 
 **4a.** PR Rules:
 - Labels for PR (default: `ForReview`)
-- Title format (optional — press Enter to use the `{issue-id} {Mode}: {summary}` fallback). Example: `{issue-id}-{mode}-{summary}`. See `docs/reference/automation-config.md` → PR Rules → Title format for the placeholders and the English/ASCII normalization rules.
+- Title format (optional — press Enter to use the `{issue-id} {Mode}: {summary}` default). Example: `{issue-id}-{mode}-{summary}`. See `docs/reference/automation-config.md` → PR Rules → Title format for the placeholders and the English/ASCII normalization rules.
 
 **4b.** PR Description Template:
 1. Auto-generate a tracker-appropriate template with this structure:
@@ -208,8 +246,8 @@ Select sections to configure (comma-separated numbers):
 - Display profile table as preview before confirming
 
 **6e.** Feature Workflow — when asking about "On start set":
-- Show fallback: "Feature 'On start set' (default: same as Issue Tracker '{value}' — press Enter to keep)"
-- This matches the fallback in `/implement-feature`
+- Show default: "Feature 'On start set' (default: same as Issue Tracker '{value}' — press Enter to keep)"
+- This matches the default used in `/implement-feature`
 
 **6f.** For each remaining selected section, ask for its key values using defaults from `docs/reference/automation-config.md`:
 - Retry Limits: Fixer iterations (default: 5), Test attempts (default: 3), Build retries (default: 3), Spec iterations (default: 5), Root cause iterations (default: 3)
@@ -233,29 +271,35 @@ Select sections to configure (comma-separated numbers):
 - Autopilot: Max issues per run (default: `1`), Lock timeout (default: `120`), Log file (default: `.agent-flow/autopilot.log`), Bug limit (default: `0`), Feature limit (default: `0`), On error (default: `skip`), Dry run (default: `false`)
 - Pause Limits: Pause timeout (default: `30 days`)
 
-### Step 7: Generate Automation Config
+### Step 7: Generate `.agent-flow/config.toml`
 
-Generate the Automation Config block from collected answers.
+Generate the `.agent-flow/config.toml` contents from collected answers, one `[section]` per
+Automation Config section (snake_case table names per `docs/reference/automation-config.md`).
 
 Language rules:
-1. All keys in English — exactly per `docs/reference/automation-config.md`
+1. All keys in English — exactly the snake_case TOML keys per `docs/reference/automation-config.md`
 2. All identifier values in English (State transitions, Branch naming, Labels, Profile names)
 3. User-provided values preserved as-is (URLs, project names, commands)
-4. Table format always (`| Key | Value |`) — never bullet-point lists
+4. TOML `[section]` format always — typed scalars (`key = "value"` / int / bool); a `"""` multi-line
+   string for the PR Description Template; `[[pipeline_profiles]]` array-of-tables; and the
+   delimited-scalar encoding for list/map keys (e.g. `labels = "bug, automated"`,
+   `state_transitions = "triage: In Progress; fixed: Fixed"`). Never inline `| Key | Value |` tables.
 5. PR Description Template section headings always in English
 
 ### Step 8: Output Options
 
 **Fresh mode:**
-- Option 1 (default): Print the block to chat — the user copies it manually
-- Option 2: Write directly into CLAUDE.md
-  - If `## Automation Config` already exists → warn and offer overwrite or cancel
-  - If it does not exist → create CLAUDE.md in the target directory, append config
-  - Display absolute path before writing: "Will write to: {absolute_path}/CLAUDE.md"
+- Option 1 (default): Print the `.agent-flow/config.toml` contents to chat — the user saves it manually
+- Option 2: Write directly to `{target_dir}/.agent-flow/config.toml`
+  - If `.agent-flow/config.toml` already exists → warn and offer overwrite or cancel
+  - If it does not exist → create `.agent-flow/config.toml` in the target directory
+  - Also ensure the target CLAUDE.md's `## Automation Config` section is a 1-2 line **pointer** to
+    `.agent-flow/config.toml` (create the pointer if absent); never write inline config tables into CLAUDE.md
+  - Display absolute path before writing: "Will write to: {absolute_path}/.agent-flow/config.toml"
 
 **Update mode:**
 - Display diff (before → after, only changed sections)
-- Option 1 (default): Write changes to CLAUDE.md
+- Option 1 (default): Write changes to `.agent-flow/config.toml`
 - Option 2: Print to chat only
 
 Safety: Never delete existing sections/keys that the wizard does not recognize. Preserve custom additions.
@@ -294,7 +338,7 @@ Detected existing Automation Config:
 
   Issue Tracker: {type} @ {instance} — {project}
   Source Control: {remote} — {base branch}
-  PR Rules: Labels = {labels}; Title format = {title_format or '(fallback)'}
+  PR Rules: Labels = {labels}; Title format = {title_format or '(default)'}
   Build & Test: {build command} / {test command}
   Optional: {list of present optional sections}
   Missing optional: {list of absent optional sections}
@@ -330,11 +374,11 @@ After going through existing sections:
 ## Rules
 
 - All wizard text (questions, prompts, explanations) in English
-- All generated output (Automation Config block) in English
+- All generated output (the `.agent-flow/config.toml` contents) in English
 - Do not validate answers — validation belongs in `/check-setup`
 - Offer defaults, but the user can change them
 - Skip optional sections if the user says no
-- Output always in table format (`| Key | Value |`)
+- Output always as TOML `[section]`s in `.agent-flow/config.toml` — never inline `| Key | Value |` tables in CLAUDE.md
 - Feature query is always emitted in `### Feature Workflow` section, never in Issue Tracker
 - In update mode: never delete sections/keys the wizard does not recognize
 - Cancellation is safe: no changes are written until step 8 (fresh) or U3 (update)

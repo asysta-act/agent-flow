@@ -43,24 +43,24 @@ if [ -z "$FORMAT" ]; then
 fi
 ```
 
-- `--period N` → period in days (default: 30, unless overridden by Automation Config — see Configuration → Precedence)
-- `--output path` → output file (default: stdout, unless overridden by Automation Config — see Configuration → Precedence)
-- `--format md|json|html` → output format (default: md with interactive prompt; Format has no Automation Config equivalent — CLI-only)
+- `--period N` → period in days (default: 30, unless overridden by `.agent-flow/config.toml` — see Configuration → Precedence)
+- `--output path` → output file (default: stdout, unless overridden by `.agent-flow/config.toml` — see Configuration → Precedence)
+- `--format md|json|html` → output format (default: md with interactive prompt; Format has no `.agent-flow/config.toml` equivalent — CLI-only)
 
 ## Configuration
 
-Read Automation Config from CLAUDE.md section `## Automation Config`:
-- Issue Tracker: Type, Instance, Project, Bug query, State transitions
-- Source Control: Remote
-- Optionally: Feature Workflow → Feature query
-- Optionally: Metrics → Output, Period
+Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`):
+- `[issue_tracker]`: `issue_tracker.type`, `issue_tracker.instance`, `issue_tracker.project`, `issue_tracker.bug_query`, `issue_tracker.state_transitions`
+- `[source_control]`: `source_control.remote`
+- Optionally: `feature.query`
+- Optionally: `metrics.output`, `metrics.period`
 
-**Precedence (highest to lowest):** an explicit `--period` / `--output` CLI flag always wins over Automation Config. Concretely: if `PERIOD_EXPLICIT=0` (no `--period` flag) and Metrics → Period is set, apply the config value to `PERIOD` now; if `OUTPUT_EXPLICIT=0` (no `--output` flag) and Metrics → Output is set, apply the config value to `OUTPUT` now. If neither a flag nor a matching config key is present, the hardcoded Flag-parsing defaults stand (`PERIOD=30`, `OUTPUT=""` i.e. stdout).
+**Precedence (highest to lowest):** an explicit `--period` / `--output` CLI flag always wins over `.agent-flow/config.toml`. Concretely: if `PERIOD_EXPLICIT=0` (no `--period` flag) and `metrics.period` is set, apply the config value to `PERIOD` now; if `OUTPUT_EXPLICIT=0` (no `--output` flag) and `metrics.output` is set, apply the config value to `OUTPUT` now. If neither a flag nor a matching config key is present, the hardcoded Flag-parsing defaults stand (`PERIOD=30`, `OUTPUT=""` i.e. stdout).
 
 ### 0. MCP pre-flight check
 
 Before any pipeline operation, verify MCP tool availability:
-- Read Type from Automation Config (Issue Tracker section)
+- Read `issue_tracker.type` from `.agent-flow/config.toml`
 - Check that at least one `mcp__*` tool matching the tracker type is accessible
 - If not accessible → STOP with: "Cannot connect to your {Type} issue tracker. Is the {Type} integration configured? Run `/agent-flow:check-setup` for diagnostics."
 
@@ -383,7 +383,7 @@ When `$FORMAT == "md"` or `$FORMAT == "json"` AND `$OUTPUT` is non-empty:
 
 When `$NO_FORMAT_FLAG == 1`:
 
-After the markdown report is displayed on stdout, present the following prompt to the user as a question requiring a response. This is a generic, project-agnostic plugin skill with no locale/language config key in Automation Config — the prompt is always presented in English, regardless of the consuming project's own language:
+After the markdown report is displayed on stdout, present the following prompt to the user as a question requiring a response. This is a generic, project-agnostic plugin skill with no locale/language config key in `.agent-flow/config.toml` — the prompt is always presented in English, regardless of the consuming project's own language:
 
 > Save output? [1] No [2] JSON → stdout [3] HTML → ./metrics.html
 

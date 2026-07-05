@@ -15,10 +15,10 @@ In `--yolo` mode: skip this step entirely (no acceptance-gate prompt regardless 
 
 ## Pre-dispatch hooks
 
-If Hooks → Pre-publish exists in Automation Config:
+If `hooks.pre_publish` exists in `.agent-flow/config.toml`:
 - Run the command via Bash. Failure → Block handler (step X).
 
-If Custom Agents → Pre-publish agent exists:
+If `custom_agents.pre_publish_agent` exists:
 - Run as Task. BLOCK → Block handler (step X).
 
 ## Pre-dispatch state write

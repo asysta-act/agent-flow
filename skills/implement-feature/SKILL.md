@@ -15,7 +15,7 @@ required: code_analysis, fixer_reviewer, test, publisher
 optional: smoke_check, acceptance_gate
 </stage_allowlist>
 
-You are a THIN CONTROLLER. Implement feature `$ARGUMENTS` from the issue tracker by dispatching specialist subagents via the Task tool. NEVER inline agent logic. Read `## Automation Config` from CLAUDE.md.
+You are a THIN CONTROLLER. Implement feature `$ARGUMENTS` from the issue tracker by dispatching specialist subagents via the Task tool. NEVER inline agent logic. Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`).
 
 ## Mode flag parsing
 
@@ -38,17 +38,17 @@ Mode semantics: default = supervised autopilot (pauses only on `NEEDS_CLARIFICAT
 
 ## Configuration
 
-Follow `../../core/config-reader.md`. Required sections: `Issue Tracker` (Type, State transitions, On start set), `Source Control` (Remote, Base branch, Branch naming), `PR Rules` (Labels), `PR Description Template`, `Build & Test` (Build, Test, Verify commands). Optional sections this skill also reads: `Feature Workflow` (Feature query, On start set — see Init step 4 for the On-start-set fallback), `Retry Limits`, `Module Docs`, `Hooks`, `Custom Agents`, `Notifications`, `Decomposition`, `Error Handling`, `Agent Overrides`, `Local Deployment`, `Pipeline Profiles`. Full key list in `docs/reference/automation-config.md`.
+Follow `../../core/config-reader.md`. Required sections: `[issue_tracker]` (`issue_tracker.type`, `issue_tracker.state_transitions`, `issue_tracker.on_start_set`), `[source_control]` (`source_control.remote`, `source_control.base_branch`, `source_control.branch_naming`), `[pr_rules]` (`pr_rules.labels`), `[pr_description_template]`, `[build_and_test]` (`build.build_command`, `build.test_command`, `build.verify_command`). Optional sections this skill also reads: `[feature_workflow]` (`feature.query`, `feature.on_start_set` — see Init step 4 for the On-start-set default), `[retry_limits]`, `[module_docs]`, `[hooks]`, `[custom_agents]`, `[notifications]`, `[decomposition]`, `[error_handling]`, `[agent_overrides]`, `[local_deployment]`, `[[pipeline_profiles]]`. Full key list in `docs/reference/automation-config.md`.
 
 ## MCP pre-flight
 
-Follow `../../core/mcp-preflight.md`. In `--description` + `--yolo` mode: BLOCK with context-specific error (cannot create tracker card; no interactive fallback). Otherwise STOP with setup guidance.
+Follow `../../core/mcp-preflight.md`. In `--description` + `--yolo` mode: BLOCK with context-specific error (cannot create tracker card; no interactive fall-through). Otherwise STOP with setup guidance.
 
 If the MCP server is unavailable, display: `Cannot connect to your issue tracker — MCP server unavailable. Please configure with /agent-flow:setup-mcp before retrying.`
 
 ### Step 0b: Config Validity Gate
 
-After `../../core/config-reader.md` parses the required sections, scan their raw text for unfilled scaffolding placeholders — `<!-- TODO:` markers or angle-bracket templates like `<your-value-here>` left over from onboarding. If any required section (`Issue Tracker`, `Source Control`, `PR Rules`, `PR Description Template`, `Build & Test`) still contains one, BLOCK using the template from `../../core/config-reader.md` Failure Handling, with `Detail` listing the offending key(s) and `Recommendation` pointing to `/agent-flow:onboard`. This placeholder scan is local to this skill — `config-reader.md`'s own Failure Handling only verifies that required sections are *present*, not that their values are filled in, and no other skill currently duplicates this check.
+After `../../core/config-reader.md` reads the required sections, scan their raw text for unfilled scaffolding placeholders — `<!-- TODO:` markers or angle-bracket templates like `<your-value-here>` left over from onboarding. If any required section (`Issue Tracker`, `Source Control`, `PR Rules`, `PR Description Template`, `Build & Test`) still contains one, BLOCK using the template from `../../core/config-reader.md` Failure Handling, with `Detail` listing the offending key(s) and `Recommendation` pointing to `/agent-flow:onboard`. This placeholder scan is local to this skill — `config-reader.md`'s own Failure Handling only verifies that required sections are *present*, not that their values are filled in, and no other skill currently duplicates this check.
 
 See `../../core/mcp-body-formatting.md` for newline-handling in MCP comment bodies.
 
@@ -80,7 +80,7 @@ After resume detection (when `RESUME_POINT == "FRESH"`):
 1. Create `.agent-flow/{ISSUE_ID}/` and initialize `state.json` via `../../core/state-manager.md` — top-level `status = "running"`, `pipeline = "implement-feature"`, `mode = "feature"`, empty `stages = {}` map, `run_id = <uuid>`.
 2. Check out the working branch per `Branch naming` in `Source Control` config.
 3. Fire `pipeline-started` webhook if configured (see `../../core/agent-states.md`).
-4. Apply the issue-start transition: use `Feature Workflow → On start set` when that key is configured; otherwise fall back to `Issue Tracker → On start set` (state + implicit self-assign — same protocol as the state-init step in `skills/fix-bugs/SKILL.md` Step Dispatch row 00).
+4. Apply the issue-start transition: use `feature.on_start_set` when that key is configured; otherwise use `issue_tracker.on_start_set` (state + implicit self-assign — same protocol as the state-init step in `skills/fix-bugs/SKILL.md` Step Dispatch row 00).
 
 ## Step dispatch
 
@@ -126,7 +126,7 @@ Before EVERY Task dispatch, follow `../../core/agent-override-injector.md` for T
 
 After each step completes, if `$GOT_STEP_MODE == true`: pause and display step-result summary, prompt `[step-mode] Step NN/08 completed. Continue? [c/s/a]`. `c` = continue; `s` = skip next step (write `status = "skipped"` to next stage's state.json record before resuming); `a` = abort (write `status = "paused"` and `last_completed_step` to state.json; exit 0; resume by re-invoking `/agent-flow:implement-feature <ISSUE-ID>`).
 
-**Near-miss WARN** (forward-looking guard — replacing step files via `customization/steps/` is not an implemented override mechanism today; only `{Agent Overrides path}/{agent}.toml` overlays are supported, per `../../core/agent-override-injector.md`): if a file exists at `customization/steps/implement-feature/{NN}-*.md`, log `[WARN] Unrecognized step override file: {filename} (step-file overrides are not yet supported — use a TOML agent overlay instead)` and continue.
+**Near-miss WARN** (forward-looking guard — replacing step files via `customization/steps/` is not an implemented override mechanism today; only `{agent_overrides.path}/{agent}.toml` overlays are supported, per `../../core/agent-override-injector.md`): if a file exists at `customization/steps/implement-feature/{NN}-*.md`, log `[WARN] Unrecognized step override file: {filename} (step-file overrides are not yet supported — use a TOML agent overlay instead)` and continue.
 
 ## Block handler
 

@@ -119,7 +119,13 @@ non-empty, render it to the following Markdown layout:
    The `{agent}` placeholder is substituted with the dispatched agent name.
 3. `### Process additions` renders as a numbered list: `(step: {step}) {instruction}` per entry.
 4. `### Constraints` renders as a bulleted list of literal `{rule}` values.
-5. `### Limits` renders as a bulleted list of `{key}: {value}` pairs (merged-JSON order).
+5. `### Limits` renders as a bulleted list of `{key}: {value}` pairs. **These values are the
+   single resolved limit values (§2.4 fix), NOT the raw `[limits]` overlay returned by
+   `resolve_overlay()`.** Each limit is computed exactly once by `core/config-reader.md`'s pure-bash
+   limits-resolution point through `plugin default < config.toml < config.local.toml <
+   customization/{agent}.toml [limits]`, and that same single resolved value is what the
+   orchestrator enforces in its retry/iteration loops — so loop enforcement and prompt injection
+   render identical numbers and can never diverge.
 6. `### Meta` renders as a bulleted list of `{meta_key}: {meta_value}` pairs.
 7. **Tier-1 scalars (`model`, `style`) DO NOT render here.** They affect dispatch model
    selection elsewhere.

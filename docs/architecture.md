@@ -1,6 +1,6 @@
 # Architecture
 
-agent-flow is a Claude Code plugin built as a 2-layer system: skills orchestrate WHAT to do, agents specialize in HOW to do it. The plugin is pure markdown plus shell + Python hooks, with zero third-party PACKAGE dependencies (requires bash + Python 3, stdlib only). All project-specific configuration lives outside the plugin in the consuming project's CLAUDE.md.
+agent-flow is a Claude Code plugin built as a 2-layer system: skills orchestrate WHAT to do, agents specialize in HOW to do it. The plugin is pure markdown plus shell + Python hooks, with zero third-party PACKAGE dependencies (requires bash + Python 3, stdlib only). All project-specific configuration lives outside the plugin in a committed `.agent-flow/config.toml` file (resolved by `core/config-reader.md`), with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay.
 
 **Current counts:** 17 agents · 17 skills · 18 optional config sections · 17 core contracts.
 
@@ -50,7 +50,7 @@ graph TD
         HIST[".agent-flow/pipeline-history.md"]
     end
 
-    CONFIG["Automation Config<br/>(project CLAUDE.md)"]
+    CONFIG["Automation Config<br/>(.agent-flow/config.toml)"]
     ISSUE_TRACKER["Issue Tracker<br/>(YouTrack / GitHub / Jira /<br/>Linear / Gitea / Redmine)"]
     SOURCE_CONTROL["Source Control<br/>(Git + PR API)"]
     MCP["MCP Servers"]
@@ -81,7 +81,7 @@ graph TD
 The diagram shows the complete information flow:
 
 - The **user** invokes a skill (e.g., `/agent-flow:fix-bugs PROJ-42`)
-- The **skill** reads Automation Config from the project's CLAUDE.md
+- The **skill** reads Automation Config from `.agent-flow/config.toml` via `core/config-reader.md`
 - The skill dispatches **agents** via Claude Code's Task tool; before each dispatch the skill reads the project's `customization/{agent-name}.toml` overlay (if present) and merges it with the agent's default prompt via 3-tier TOML merge (scalar override, array-of-tables append, table deep merge)
 - **Read-only agents** query external systems (issue tracker, source control) through MCP servers but never modify code; read-only inventory (9 agents): `analyst` (dispatched as `analyst --phase triage` / `analyst --phase impact`), `reviewer`, `spec-analyst`, `architect`, `priority-engine`, `spec-reviewer`, `acceptance-gate`, `backlog-creator`, `sprint-planner`
 - **Execution agents** modify code, create files, and mutate external state through MCP servers; execution inventory: `fixer`, `test-engineer` (supports `--e2e` flag for E2E flows), `publisher`, `scaffolder`, `rollback-agent`, `spec-writer`, `browser-agent` (dispatched as `browser-agent --phase reproduce` or `browser-agent --phase verify`), `deployment-verifier`
@@ -211,7 +211,7 @@ Key characteristics:
 - Mode selection (step 01-mode-select) applies `--yolo` / default / `--step-mode` across the entire scaffold pipeline; scaffold also has its own Interactive / YOLO-with-checkpoint / Full-YOLO progression separate from the mode flags
 - Spec-writer ↔ spec-reviewer loop refines the specification (max 5 iterations)
 - Scaffolder reads tech stack from spec/README.md (spec-first mode) or from skill-supplied stack flags (--no-implement)
-- After git init: auto-fill CLAUDE.md config, push to remote, create tracker issues
+- After git init: auto-fill `.agent-flow/config.toml`, push to remote, create tracker issues
 - Architect decomposes epics into dependency-aware batches
 - Features are implemented per-subtask with fixer/reviewer/test-engineer
 - E2E step uses `browser-agent --phase verify` (named-phase: `browser-agent-verify`) for Playwright-based verification
@@ -219,11 +219,11 @@ Key characteristics:
 
 ## Config Contract Design
 
-The Automation Config contract lives in the project's CLAUDE.md for a specific reason: **the majority of skills explicitly reference it** by reading `## Automation Config` from the current project's CLAUDE.md. Extracting it to a separate file would be a high-risk refactoring that touches the majority of skills.
+The Automation Config contract lives in a committed `.agent-flow/config.toml` file, with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay merged on top. Skills never parse config themselves: **the majority of skills reference config through a single pure-bash reader** (`core/config-reader.md`) rather than reading `## Automation Config` tables from the project's CLAUDE.md. Centralizing resolution in one reader keeps parsing consistent and lets the base file stay committed while per-developer values stay local and gitignored.
 
-### Table Format
+### File Format
 
-All config sections use the `| Key | Value |` table format. This is enforced by `/agent-flow:check-setup` validation. Bullet-point lists are not accepted because they are ambiguous to parse (is a nested bullet a continuation of the previous value or a new key?).
+All config sections use TOML tables in `.agent-flow/config.toml` (e.g. `[issue_tracker]`, `[source_control]`), resolved by `core/config-reader.md`. This is validated by `/agent-flow:check-setup`, which also verifies that `.agent-flow/config.local.toml` is gitignored.
 
 ### Required vs Optional
 

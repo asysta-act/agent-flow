@@ -39,14 +39,14 @@ For each batch in order:
     Check Agent Overrides: if `{Agent Overrides path}/fixer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
     You MUST invoke Task(subagent_type='agent-flow:fixer', model='opus'). DO NOT inline-execute.
-    Context: subtask scope + acceptance_criteria + architecture design + `Max build retries = {Build retries from CLAUDE.md, default 3}`.
+    Context: subtask scope + acceptance_criteria + architecture design + `Max build retries = {retry.build_retries from .agent-flow/config.toml, default 3}`.
 
-    After completion: run Build command from generated CLAUDE.md.
+    After completion: run Build command (`build.build_command`) from the generated `.agent-flow/config.toml`.
 
     **Post-dispatch (COST-R2, COST-R3, COST-R5):** Accumulate cumulatively:
     `fixer_reviewer.tokens_used += iteration_tokens`, `fixer_reviewer.duration_ms += iteration_duration_ms`, `fixer_reviewer.tool_uses += iteration_tool_uses`.
 
-    If build fails → fixer fixes (max Build retries from CLAUDE.md, default 3). If still fails → Block handler.
+    If build fails → fixer fixes (max Build retries from `.agent-flow/config.toml`, default 3). If still fails → Block handler.
 
     **NEEDS_CLARIFICATION detection (after fixer dispatch):** If fixer output contains `## NEEDS_CLARIFICATION`:
     ```bash
@@ -79,7 +79,7 @@ For each batch in order:
     Check Agent Overrides: if `{Agent Overrides path}/reviewer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
     You MUST invoke Task(subagent_type='agent-flow:reviewer', model='opus'). DO NOT inline-execute.
-    Context: diff from fixer + acceptance_criteria + `Max fixer iterations = {Fixer iterations from CLAUDE.md, default 5}`.
+    Context: diff from fixer + acceptance_criteria + `Max fixer iterations = {retry.fixer_iterations from .agent-flow/config.toml, default 5}`.
     Follow `../../../core/fixer-reviewer-loop.md`.
 
     **Post-dispatch (COST-R2, COST-R3, COST-R5):** Accumulate cumulatively on `fixer_reviewer.*`.
@@ -117,5 +117,5 @@ For each batch in order:
     4. If fail-fast → write pipeline accumulator (COST-R6), fire `pipeline-completed` with `outcome: "blocked"`, STOP → jump to Step 08.
     5. If continue strategy → skip subtask, proceed to next in batch.
 
-  **After each batch:** Run full test suite (Test command from CLAUDE.md).
+  **After each batch:** Run full test suite (Test command from `.agent-flow/config.toml`).
   If failure → fixer repairs (max Build retries). If still failing → STOP → jump to Step 08 (report).

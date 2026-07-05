@@ -149,12 +149,22 @@ Effective `process_additions` (3 entries, in this order):
 
 ### Tier 3 — Table Deep Merge
 
-The `[limits]` table is merged key-by-key: overlay keys override the corresponding plugin-default
-keys; **absent keys are inherited from the plugin default** unchanged (missing keys in the overlay
-inherit their value from the plugin default).
+The `[limits]` table is merged **key-by-key against the config-resolved value**, not against the
+raw plugin default. "config-resolved value" means the limit already resolved through
+`plugin default < config.toml < config.local.toml` by `core/config-reader.md`'s single
+limits-resolution point; the `customization/{agent}.toml` `[limits]` overlay is the top (highest
+precedence) tier layered on top of that config-resolved value. For each key: the overlay key
+overrides the config-resolved value; keys **absent from the overlay are inherited from the
+config-resolved value** unchanged (so a limit set in `config.toml` still applies even when the
+customization overlay omits it).
 
-The `[limits]` table is merged **key-by-key**: overlay keys override the corresponding plugin-default
-keys; keys absent from the overlay are **inherited from the plugin default** unchanged.
+This is the §2.4 fix: because the overlay merges against the config-resolved value — and that same
+single resolved value is what the orchestrator enforces in its loops and what
+`core/agent-override-injector.md` injects into the agent prompt — loop enforcement and prompt
+injection can never disagree. The two previously-divergent sites,
+`docs/guides/toml-overlay-syntax.md:150-157` (this section) and
+`core/agent-override-injector.md:102-105` (the `### Limits` render), now both consume the one
+config-resolved value.
 
 **Example — reducing max iterations for reviewer:**
 

@@ -6,7 +6,7 @@ After the fixer ↔ reviewer loop approves the change, verify that the codebase 
 
 ## Gate
 
-If neither `Build command` nor `Test command` is configured in Automation Config (`Build & Test` section):
+If neither `build.build_command` nor `build.test_command` is configured in `.agent-flow/config.toml` (`[build_and_test]` section):
 
 - Write `state.json[stages.smoke_check].status = "skipped"`, `stage_name = "smoke_check"`, `agent_name = null`, `dispatched_at = <now>`, `prompt_head_128 = null`, `overlay_source = null`, `overlay_digest = null`, `dispatch_witness = null` per `../../../core/state-manager.md` atomic write protocol.
 - Skip the `step-completed` webhook for skipped stages.

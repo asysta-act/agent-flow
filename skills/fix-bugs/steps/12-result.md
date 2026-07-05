@@ -111,7 +111,7 @@ catch it). The `stages.<stage>.overlay_source` field is the only signal that the
 This sub-step surfaces the mismatch where a `customization/<agent>.toml` exists for a stage's
 agent but the recorded `overlay_source` shows the overlay was NOT applied.
 
-Resolve the override directory from `### Agent Overrides → Path` in Automation Config (default
+Resolve the override directory from `agent_overrides.path` in `.agent-flow/config.toml` (default
 `customization/`). For each stage block in `.agent-flow/{ISSUE-ID}/state.json` `stages.<stage>`:
 
 1. Read `stages.<stage>.overlay_source`. If it is absent (legacy run) or equals `toml`, skip the

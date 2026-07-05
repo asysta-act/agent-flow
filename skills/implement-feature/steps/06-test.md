@@ -114,7 +114,7 @@ After dispatch: write `deployment.*` state fields. Follow atomic write protocol 
 If stage `test-engineer-e2e` is in the profile's Skip stages → skip, record "[SKIP] test-engineer-e2e". Skip
 the `step-completed` webhook for skipped stages.
 
-If the E2E Test section exists in Automation Config OR the profile's `Extra stages` contains `test-engineer-e2e`:
+If the `[e2e_test]` section exists in `.agent-flow/config.toml` OR the profile's `Extra stages` contains `test-engineer-e2e`:
 
 Before dispatching test-engineer with --e2e flag: write `e2e_test.started_at`, `e2e_test.model`,
 `e2e_test.status: "in_progress"`, and initialize `e2e_test.tokens_used: 0`, `e2e_test.duration_ms: 0`,

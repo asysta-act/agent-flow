@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A Claude Code plugin (`agent-flow`) that automates bug-fix workflows, feature implementation, and project scaffolding. It provides specialized agents that are orchestrated by commands to take an issue from triage through fix, review, test, and publish — or to scaffold a new project from scratch. The plugin is generic — all project-specific configuration lives in the consuming project's CLAUDE.md under `## Automation Config`.
+A Claude Code plugin (`agent-flow`) that automates bug-fix workflows, feature implementation, and project scaffolding. It provides specialized agents that are orchestrated by commands to take an issue from triage through fix, review, test, and publish — or to scaffold a new project from scratch. The plugin is generic — all project-specific configuration lives in the consuming project's committed `.agent-flow/config.toml` (resolved by `core/config-reader.md`), with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay; CLAUDE.md keeps only a pointer.
 
 **Author:** Filip Sabacky
 **Installation:** `claude plugin marketplace add <path-to-repo>`, then `claude plugin install agent-flow@agent-flow`
@@ -31,7 +31,7 @@ No build system; zero third-party PACKAGE dependencies — requires bash + Pytho
 **Skills** (orchestration — WHAT to do): `/analyze-bug`, `/autopilot`, `/changelog`, `/check-setup`, `/create-backlog`, `/discuss`, `/fix-bugs`, `/implement-feature`, `/metrics`, `/onboard`, `/prioritize`, `/publish`, `/scaffold`, `/setup-agents`, `/setup-mcp`, `/sprint-plan`, `/version-check`
 **Agents** (specialists — HOW to do it): acceptance-gate, analyst, architect, backlog-creator, browser-agent, deployment-verifier, fixer, priority-engine, publisher, reviewer, rollback-agent, scaffolder, spec-analyst, spec-reviewer, spec-writer, sprint-planner, test-engineer
 
-Skills read `## Automation Config` from the project's CLAUDE.md and dispatch agents. Skills contain zero project-specific logic.
+Skills read Automation Config from the project's `.agent-flow/config.toml` (resolved by `core/config-reader.md`) and dispatch agents. Skills contain zero project-specific logic.
 
 ## Bug-Fix Pipeline
 
@@ -132,7 +132,7 @@ You are a [Role] specializing in [domain].
 
 ## Automation Config
 
-Projects using this plugin must have `## Automation Config` in their CLAUDE.md with **18 optional config sections in total** (plus the required sections). All sections use table format (`| Key | Value |`); no bullet-point lists.
+Projects using this plugin must have a committed `.agent-flow/config.toml` with **18 optional config sections in total** (plus the required sections); CLAUDE.md keeps only a 1-2 line pointer to it. All sections are TOML `[section]` tables (resolved by `core/config-reader.md`); list/map keys use the delimited-scalar encoding. Optional per-developer overrides go in the gitignored `.agent-flow/config.local.toml`.
 
 **Required sections** (must be present in every consumer CLAUDE.md):
 

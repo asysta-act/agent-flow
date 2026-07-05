@@ -76,10 +76,10 @@ If Hooks → Post-publish exists:
 
 Follow `../../../core/fix-verification.md` for post-merge verification.
 
-If Build & Test → Verify exists in Automation Config:
+If `build.verify_command` exists in `.agent-flow/config.toml`:
 1. Wait for PR merge (max 5 attempts, 30s interval). Not merged → warn, skip.
 2. Checkout base branch and pull.
-3. Run the Verify command.
+3. Run the `build.verify_command`.
 4. OK → add comment: `[agent-flow] ✅ Fix verified. Verify command: {command}. Output: {first 500 chars}.`
 5. FAIL → add comment, re-open issue.
 

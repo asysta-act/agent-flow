@@ -6,8 +6,8 @@ code and confirm the bug is resolved at the UI level. This step is CONDITIONAL.
 ## Skip conditions
 
 Skip this entire step if ANY of the following is true:
-- `browser_verification_enabled = false` (Browser Verification section absent from Automation Config)
-- `browser_verify = false` (`On events` in Browser Verification config does NOT contain `verify`)
+- `browser_verification_enabled = false` (`[browser_verification]` section absent from `.agent-flow/config.toml`)
+- `browser_verify = false` (`browser.on_events` in `[browser_verification]` config does NOT contain `verify`)
 - Stage `browser-agent-verify` is in the profile's Skip stages
 
 When skipping: log `[SKIP] browser verification ({reason})`, set

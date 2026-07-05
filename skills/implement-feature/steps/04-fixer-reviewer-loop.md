@@ -133,8 +133,8 @@ does not write to the `smoke_check` state.json stage — that stage is owned exc
 (`steps/05-smoke.md`), which performs the one feature-level Build+Test gate after all subtasks in the loop
 have completed.
 
-1. Read `Build command` and `Test command` from Automation Config.
-2. Run Build command via Bash. If it fails → Block handler (step X) with
+1. Read `build.build_command` and `build.test_command` from `.agent-flow/config.toml`.
+2. Run `build.build_command` via Bash. If it fails → Block handler (step X) with
    `agent = smoke-check, Step = 04e, Reason = Build command failed after fixer↔reviewer approval of subtask {subtask-id}`.
 3. Run Test command via Bash. If it fails → Block handler (step X) with
    `agent = smoke-check, Step = 04e, Reason = Existing tests failed after fixer↔reviewer approval of subtask {subtask-id}`.

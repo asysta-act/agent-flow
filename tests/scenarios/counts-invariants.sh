@@ -1,32 +1,38 @@
 #!/usr/bin/env bash
 # ===========================================================================
 # Test:        v10-counts-invariants.sh
-# FC mapped:   FC-7 (5 count invariants)
+# FC mapped:   FC-06 (config surface documents 23 [section]s: 5 required + 18 optional)
+#              [also gates FC-7's original 4 repo-shape count invariants]
 # What it checks:
 #   1) skills/ direct-child dirs == 17
 #   2) core/ top-level *.md (maxdepth 1) == 17
 #   3) agents/*.md == 17
 #   4) docs/reference/*.md == 11
-#   5) Automation Config H3 sub-section count == 18.
-#      Spec says "sections under `## Automation Config` in CLAUDE.md
-#      AND docs/reference/automation-config.md (must MATCH)". This release adds
-#      `## Automation Config` headings to BOTH; the assertion accepts either file
-#      so long as one of them yields exactly 18 H3 sub-sections AND the other
-#      yields the same count.
+#   5) [REWORKED for the .agent-flow/config.toml migration, per design.md section 5.3]
+#      The config surface documents exactly 23 TOML `[section]`s (5 required +
+#      18 optional), per FC-06. Retargeted AWAY from the OLD Markdown-table
+#      `## Automation Config` H3 sub-section count (that heading's inline tables are
+#      REMOVED by the hard-cut migration -- CLAUDE.md becomes a 1-2 line pointer, REQ-02)
+#      and ONTO counting TOML `[section]` / `[[pipeline_profiles]]` bracket-token
+#      references documented within docs/reference/automation-config.md's
+#      "## Required Sections" and "## Optional Sections" reference blocks.
 # Expected RED phase status:
 #   - assertions 1-4 already pass on current repo (counts already at 17/17/17/11).
 #     These act as regression gates against future bloat.
-#   - assertion 5 will FAIL on current repo because CLAUDE.md uses the heading
-#     '## Config Contract (for consuming projects)' not '## Automation Config',
-#     so the H3-section-under-Automation-Config sub-count yields 0 ≠ 18 today.
-#     This makes the test currently RED on assertion #5, with assertions #1-4
-#     gating against regression.
-# Expected GREEN phase (post-impl): PASS for all 5.
+#   - assertion 5 FAILS on current repo: docs/reference/automation-config.md's Required/
+#     Optional Sections blocks currently document sections via `### {Section Name}`
+#     Markdown headings with prose key lists -- they do not yet annotate each section
+#     with its TOML `[section]` table name, so both counts read 0 today (correct red
+#     state for a not-yet-migrated config surface).
+# Expected GREEN phase (post-impl): PASS for all 5 (5 required [section]s + 18 optional
+#   [section]s = 23 total).
 # ===========================================================================
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT" || { echo "FAIL: cannot cd to REPO_ROOT=$REPO_ROOT" >&2; exit 1; }
+# shellcheck source=tests/lib/assert.sh
+source "$REPO_ROOT/tests/lib/assert.sh"
 
 FAIL=0
 fail() { echo "FAIL: $1" >&2; FAIL=1; }
@@ -55,27 +61,40 @@ if [ "$n" -ne 11 ]; then
   fail "FC-7.4: docs/reference/*.md count = ${n} (expected 11)"
 fi
 
-# 5) Automation Config H3 sections == 18.
-# Read from CLAUDE.md AND docs/reference/automation-config.md; assertion is
-# satisfied iff BOTH files have a '## Automation Config' section AND their H3
-# sub-section count is exactly 18 in each (per spec "must MATCH" clause).
-sec_claude=$(awk '/^## Automation Config[[:space:]]*$/{f=1;next} /^## /&&f{exit} f' CLAUDE.md 2>/dev/null | grep -c '^### ' || true)
-[ -z "$sec_claude" ] && sec_claude=0
-sec_docref=$(awk '/^## Automation Config[[:space:]]*$/{f=1;next} /^## /&&f{exit} f' docs/reference/automation-config.md 2>/dev/null | grep -c '^### ' || true)
-[ -z "$sec_docref" ] && sec_docref=0
+# 5) FC-06: config surface documents exactly 23 TOML [section]s (5 required + 18
+# optional). Count occurrences of the 23 CANONICAL Automation Config TOML table names
+# (design.md section 4's migration map) within docs/reference/automation-config.md's
+# "## Required Sections" and "## Optional Sections" blocks -- NOT a bare `[a-z_]+`
+# bracket regex, which would also match unrelated TOML overlay-example tokens like
+# [[process_additions]] / [limits] / [meta] that appear in the Agent Overrides example.
+REQUIRED_TABLES='issue_tracker source_control pr_rules pr_description_template build_and_test'
+OPTIONAL_TABLES='retry_limits module_docs hooks custom_agents notifications worktrees e2e_test browser_verification error_handling feature_workflow decomposition pipeline_profiles metrics agent_overrides local_deployment sprint_planning autopilot pause_limits'
 
-if [ "$sec_claude" -ne 18 ]; then
-  fail "FC-7.5a: CLAUDE.md '## Automation Config' section H3 sub-count = ${sec_claude} (expected 18)"
+req_block="$(awk '/^## Required Sections[[:space:]]*$/{f=1;next} /^## /&&f{exit} f' docs/reference/automation-config.md 2>/dev/null || true)"
+opt_block="$(awk '/^## Optional Sections[[:space:]]*$/{f=1;next} /^## /&&f{exit} f' docs/reference/automation-config.md 2>/dev/null || true)"
+
+req_sections=0
+for name in $REQUIRED_TABLES; do
+  matches_re "$req_block" "\[${name}\]" && req_sections=$((req_sections + 1))
+done
+opt_sections=0
+for name in $OPTIONAL_TABLES; do
+  matches_re "$opt_block" "\[${name}\]|\[\[${name}\]\]" && opt_sections=$((opt_sections + 1))
+done
+total_sections=$((req_sections + opt_sections))
+
+if [ "$req_sections" -ne 5 ]; then
+  fail "FC-06.a: docs/reference/automation-config.md 'Required Sections' block documents ${req_sections} TOML [section] headers (expected 5)"
 fi
-if [ "$sec_docref" -ne 18 ]; then
-  fail "FC-7.5b: docs/reference/automation-config.md '## Automation Config' section H3 sub-count = ${sec_docref} (expected 18)"
+if [ "$opt_sections" -ne 18 ]; then
+  fail "FC-06.b: docs/reference/automation-config.md 'Optional Sections' block documents ${opt_sections} TOML [section] headers (expected 18)"
 fi
-if [ "$sec_claude" -ne "$sec_docref" ]; then
-  fail "FC-7.5c: Automation Config H3 sub-count mismatch: CLAUDE.md=${sec_claude}, docs/reference=${sec_docref} (must MATCH)"
+if [ "$total_sections" -ne 23 ]; then
+  fail "FC-06.c: total TOML [section] headers documented = ${total_sections} (expected 23 = 5 required + 18 optional)"
 fi
 
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: v10-counts-invariants — 17 skills / 17 core / 17 agents / 11 docs-ref / 18 config-sections (matched)"
+  echo "PASS: v10-counts-invariants — 17 skills / 17 core / 17 agents / 11 docs-ref / 23 config.toml [section]s (5 required + 18 optional)"
   exit 0
 fi
 exit 1

@@ -12,9 +12,9 @@ and once more as a full-suite sweep after all batches complete.
 Check Agent Overrides: if `{Agent Overrides path}/test-engineer.toml` exists, append its rendered Markdown content as `## Project-Specific Instructions` per `../../../core/agent-override-injector.md`.
 
 You MUST invoke Task(subagent_type='agent-flow:test-engineer', model='sonnet'). DO NOT inline-execute.
-Context: changed files + acceptance_criteria + `Max test attempts = {Test attempts from CLAUDE.md, default 3}`.
+Context: changed files + acceptance_criteria + `Max test attempts = {retry.test_attempts from .agent-flow/config.toml, default 3}`.
 
-After completion: run Test command from generated CLAUDE.md.
+After completion: run Test command (`build.test_command`) from the generated `.agent-flow/config.toml`.
 
 **Post-dispatch (COST-R2, COST-R3):** Defensive-read `result.usage`. Accumulate cumulatively across retry attempts:
 `test.tokens_used += iteration_tokens`, `test.duration_ms += iteration_duration_ms`, `test.tool_uses += iteration_tool_uses`.

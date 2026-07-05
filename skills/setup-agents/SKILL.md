@@ -45,35 +45,31 @@ else
 fi
 ```
 
-Then resolve the override directory from the project's `## Automation Config` →
-`### Agent Overrides` → `Path` key (default: `customization/`), matching the same key
+Then resolve the override directory from the project's `agent_overrides.path` key in
+`.agent-flow/config.toml` (default: `customization/`), matching the same key
 `../../core/agent-override-injector.md` reads at dispatch time. This is a narrow, read-only
-lookup of a single config value — it does NOT constitute general CLAUDE.md consumption
-and does not conflict with the "never read CLAUDE.md" intent for project-specific *logic*
-(see Constraints):
+lookup of a single config value:
 
 ```bash
 AGENT_OVERRIDES_PATH="customization/"
-if [ -f "${PROJECT_ROOT}/CLAUDE.md" ]; then
+if [ -f "${PROJECT_ROOT}/.agent-flow/config.toml" ]; then
   CONFIGURED_PATH=$(awk '
-    /^### Agent Overrides/ { in_section=1; next }
-    /^### / { in_section=0 }
-    in_section && /^\| *Path *\|/ {
+    /^\[/ { in_section = ($0 ~ /^\[agent_overrides\][[:space:]]*$/) }
+    in_section && /^[[:space:]]*path[[:space:]]*=/ {
       line=$0
-      sub(/^\| *Path *\| */, "", line)
-      sub(/ *\|.*$/, "", line)
-      gsub(/^[ \t`]+|[ \t`]+$/, "", line)
+      sub(/^[^=]*=[[:space:]]*/, "", line)
+      gsub(/^[ \t"`]+|[ \t"`]+$/, "", line)
       print line
       exit
     }
-  ' "${PROJECT_ROOT}/CLAUDE.md")
+  ' "${PROJECT_ROOT}/.agent-flow/config.toml")
   [ -n "$CONFIGURED_PATH" ] && AGENT_OVERRIDES_PATH="$CONFIGURED_PATH"
 fi
 # Normalize: strip any trailing slash before joining
 CUSTOMIZATION_DIR="${PROJECT_ROOT}/${AGENT_OVERRIDES_PATH%/}"
 ```
 
-If the `Agent Overrides` section or `Path` key is absent, `AGENT_OVERRIDES_PATH` stays at
+If the `[agent_overrides]` section or `path` key is absent, `AGENT_OVERRIDES_PATH` stays at
 its default `customization/`. Every other reference to `customization/` in this document
 describes that default; when a project configures a non-default `Path`, substitute
 `${CUSTOMIZATION_DIR}` throughout.
@@ -190,8 +186,8 @@ For each agent in `PlannedOverlays`:
 
 1. Determine target path: `${CUSTOMIZATION_DIR}/{agent}.toml`
 2. **Symlink escape guard**: resolve real path before writing. Primary resolver is
-   `python3 os.path.realpath()` (macOS-portable); if `python3` is unavailable, fall back to
-   GNU `readlink -f` (covers Linux/Git Bash hosts lacking `python3`). If NEITHER resolver is
+   `python3 os.path.realpath()` (macOS-portable); if `python3` is unavailable, use
+   GNU `readlink -f` instead (covers Linux/Git Bash hosts lacking `python3`). If NEITHER resolver is
    available, this is NOT treated as "no symlink" — the write is refused and the agent is
    skipped, so the Constraints NEVER-rule on symlink escapes cannot be silently bypassed by
    a minimal/degraded environment:
@@ -253,7 +249,7 @@ With `--yolo`: skip prompt; apply all writes silently.
 Scope isolation: NEVER modify files outside the resolved override directory
 (`${CUSTOMIZATION_DIR}`, default `customization/`). NEVER modify `agents/`, `skills/`,
 `docs/`, `plugin.json`, or any other project or plugin source files. NEVER write
-`CLAUDE.md` (see Constraints for the one narrow, read-only exception). All writes are
+`CLAUDE.md` (it is only referenced as a project-root marker; see Constraints). All writes are
 restricted to `${CUSTOMIZATION_DIR}/`.
 
 ### Legacy `.md` overlay coexistence
@@ -366,10 +362,11 @@ Print count: `{N} files written, {M} skipped.`
 - NEVER modify files outside the resolved override directory (`${CUSTOMIZATION_DIR}`,
   default `customization/`). All writes restricted to that directory.
 - NEVER modify `agents/`, `skills/`, `docs/`, or any plugin source files.
-- NEVER write to CLAUDE.md of the consuming project. The ONLY permitted read of CLAUDE.md
-  is the single `## Automation Config` → `### Agent Overrides` → `Path` key (Step 1), used
-  exclusively to resolve the override directory and project root; no other Automation Config
-  section is read or acted upon, and no project-specific logic is derived from it.
+- NEVER write to CLAUDE.md of the consuming project. CLAUDE.md is referenced ONLY as a
+  project-root marker (a `[ -f CLAUDE.md ]` existence check in Step 1); its content is never
+  consumed. The single override-directory config value (`agent_overrides.path`) is read from
+  `.agent-flow/config.toml` (Step 1), used exclusively to resolve the override directory; no
+  other config section is read or acted upon, and no project-specific logic is derived from it.
 - NEVER follow symbolic links for write operations when the link target lies outside
   `${CUSTOMIZATION_DIR}`. If the realpath resolution mechanism itself is unavailable (see
   Step 4 point 2), fail closed — skip the write with `[ERROR]` — rather than proceeding
@@ -387,7 +384,7 @@ Print count: `{N} files written, {M} skipped.`
   bash 3.2 and Git Bash (Windows).
 - Use `python3 os.path.realpath()` as the primary symlink resolution mechanism (macOS
   portability; GNU `readlink -f` is unavailable on macOS bash 3.2 without GNU coreutils).
-  When `python3` is absent, fall back to `readlink -f` (covers Linux/Git Bash hosts without
+  When `python3` is absent, use `readlink -f` instead (covers Linux/Git Bash hosts without
   `python3`); if neither resolves, fail closed per the symlink-escape constraint above —
   never skip the check silently.
 - Before writing, self-validate generated TOML content with

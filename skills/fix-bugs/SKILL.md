@@ -85,7 +85,7 @@ done
 if $GOT_YOLO && $GOT_STEP_MODE; then echo "[ERROR] --yolo and --step-mode are mutually exclusive" >&2; exit 1; fi
 if $GOT_DECOMPOSE && $GOT_NO_DECOMPOSE; then echo "[ERROR] --decompose and --no-decompose are mutually exclusive" >&2; exit 1; fi
 
-# Tracker-type-aware disambiguation: read Type from CLAUDE.md Issue Tracker section.
+# Tracker-type-aware disambiguation: read issue_tracker.type from .agent-flow/config.toml.
 # String trackers (youtrack|jira|linear): bare integer = batch count. Numeric trackers
 # (github|gitea|redmine): bare integer = single ISSUE_ID.
 if $GOT_BATCH; then
@@ -94,7 +94,8 @@ if $GOT_BATCH; then
 elif [ -z "$POSITIONAL" ]; then
   echo "[ERROR] Usage: /agent-flow:fix-bugs <ISSUE-ID> | --batch <N>" >&2; exit 1
 else
-  TRACKER_TYPE="$(grep -oE '^\| Type \| [A-Za-z][A-Za-z0-9_-]+' CLAUDE.md | head -1 | awk -F'| ' '{print $3}' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  # Extract the `type` scalar from the [issue_tracker] section of .agent-flow/config.toml.
+  TRACKER_TYPE="$(awk '/^\[/{i=($0~/^\[issue_tracker\][[:space:]]*$/)} i&&/^[[:space:]]*type[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/,"");sub(/[[:space:]].*$/,"");gsub(/"/,"");print tolower($0);exit}' .agent-flow/config.toml 2>/dev/null)"
   if [ -z "$TRACKER_TYPE" ]; then
     echo "[WARN] Tracker type not detected; assuming string-tracker semantics (youtrack)" >&2
     TRACKER_TYPE="youtrack"
@@ -139,12 +140,9 @@ Batch-mode invokes per-issue resume inside the per-issue loop, so the outer batc
 
 ## Configuration
 
-Read from `## Automation Config` in CLAUDE.md per `../../core/config-reader.md`. Required sections: Issue Tracker, Source Control,
-PR Rules, Build & Test, PR Description Template. Optional: Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees,
-Decomposition, Error Handling, Agent Overrides, Local Deployment, Browser Verification, Pipeline Profiles, Pause Limits, E2E Test.
-See `docs/reference/automation-config.md` for the full key contract.
+Read config from `.agent-flow/config.toml` per `../../core/config-reader.md`. Required: `[issue_tracker]` (`issue_tracker.type`, `issue_tracker.instance`, `issue_tracker.project`, `issue_tracker.bug_query`, `issue_tracker.state_transitions`, `issue_tracker.on_start_set`), `[source_control]` (`source_control.remote`, `source_control.base_branch`, `source_control.branch_naming`), `[pr_rules]` (`pr_rules.labels`), `[build_and_test]` (`build.build_command`, `build.test_command`), `[pr_description_template]`. Optional: `[retry_limits]`, `[module_docs]`, `[hooks]`, `[custom_agents]`, `[notifications]`, `[worktrees]`, `[decomposition]`, `[error_handling]`, `[agent_overrides]`, `[local_deployment]`, `[browser_verification]`, `[[pipeline_profiles]]`, `[pause_limits]`, `[e2e_test]`. See `docs/reference/automation-config.md` for the full key contract.
 
-Pipeline profile parsing: follow `../../core/profile-parser.md`. Stage names eligible for skip: `triage`, `analyst-impact`,
+Pipeline profile reading: follow `../../core/profile-parser.md`. Stage names eligible for skip: `triage`, `analyst-impact`,
 `test-engineer`, `test-engineer-e2e`, `browser-agent-reproduce`, `browser-agent-verify`. NEVER skip: `fixer`, `reviewer`, `publisher`
 (these stages CANNOT be skipped).
 
@@ -163,9 +161,9 @@ Before fixer dispatch, run both canonical advisory (non-blocking) checks: `core/
 ## Worktree / batch processing
 
 If `MODE = batch`:
-- If `Worktrees` config exists → parallel (batch_size, base_path, cleanup).
+- If `[worktrees]` config exists → parallel (batch_size, base_path, cleanup).
 - Else → sequential CWD.
-- Outer loop: query the tracker for N bugs via `Bug query` from Automation Config.
+- Outer loop: query the tracker for N bugs via `issue_tracker.bug_query` from `.agent-flow/config.toml`.
 - For each ticket: write per-issue `.agent-flow/{ISSUE-ID}/state.json`, then execute the
   dispatch table below per-issue.
 - "Parallel" means concurrent `Task()` dispatch only — per-issue `state.json` writes stay inside each ticket's own

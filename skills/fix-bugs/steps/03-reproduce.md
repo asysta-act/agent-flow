@@ -5,8 +5,8 @@ Dispatch `browser-agent --phase reproduce`. This step is CONDITIONAL — evaluat
 ## Skip conditions
 
 Skip this entire step if ANY of the following is true:
-- `browser_verification_enabled = false` (Browser Verification section absent from Automation Config)
-- `browser_reproduce = false` (`On events` in Browser Verification config does NOT contain `reproduce`)
+- `browser_verification_enabled = false` (`[browser_verification]` section absent from `.agent-flow/config.toml`)
+- `browser_reproduce = false` (`browser.on_events` in `[browser_verification]` config does NOT contain `reproduce`)
 - Stage `browser-agent-reproduce` is in the profile's Skip stages
 
 When skipping: log `[SKIP] browser reproduction ({reason})`, update state, continue to step 04.
@@ -18,7 +18,7 @@ own reproduction context internally).
 
 Before dispatching browser-agent: run Pre-fix hook if configured.
 
-If Hooks → Pre-fix exists in Automation Config:
+If `hooks.pre_fix` exists in `.agent-flow/config.toml`:
 - Run the command via Bash in the context of the given bug.
 - Failure → Block (issue comment per Block Comment Template, continue with next bug).
 

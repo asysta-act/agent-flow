@@ -14,15 +14,15 @@ If `$ARGUMENTS` contains `--yolo`, activate YOLO mode: auto-approve human gates.
 
 ## Configuration
 
-Read Automation Config from CLAUDE.md section `## Automation Config`. Follow `../../core/config-reader.md`.
+Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`).
 
 **Required:**
-- Issue Tracker: Type, Instance, Project
+- `[issue_tracker]`: `issue_tracker.type`, `issue_tracker.instance`, `issue_tracker.project`
 
 **Optional:**
-- Sprint Planning: Epic template (path to custom template file — overrides default Epic Card Template)
-- Agent Overrides: Path (default: `customization/`)
-- Decomposition: Max subtasks (default: 7), Create tracker subtasks (default: enabled) — both used only with `--decompose`
+- `[sprint_planning]`: `sprint_planning.epic_template` (path to custom template file — overrides default Epic Card Template)
+- `[agent_overrides]`: `agent_overrides.path` (default: `customization/`)
+- `[decomposition]`: `decomposition.max_subtasks` (default: 7), `decomposition.create_tracker_subtasks` (default: enabled) — both used only with `--decompose`
 
 ## Flag Parsing
 
@@ -40,7 +40,7 @@ Parse `$ARGUMENTS`:
 If `--dry-run`, skip MCP check (no tracker writes will occur).
 
 Otherwise, follow `../../core/mcp-preflight.md`:
-- Read Type from Automation Config (Issue Tracker section)
+- Read `issue_tracker.type` from `.agent-flow/config.toml`
 - Check that at least one `mcp__*` tool matching the tracker type is accessible
 - If not accessible → BLOCK with:
   ```
@@ -349,8 +349,8 @@ CATCH error:
 (result display) — `backlog.subtasks_created` MUST be finalized before Step 6 reports it and before
 top-level `status` is set to `"completed"`.
 
-**Gate:** Read `Decomposition → Create tracker subtasks` from Automation Config (default: `enabled`). If
-`disabled`: LOG "[SKIP] --decompose: Decomposition → Create tracker subtasks is disabled. No sub-issues
+**Gate:** Read `decomposition.create_tracker_subtasks` from `.agent-flow/config.toml` (default: `enabled`). If
+`disabled`: LOG "[SKIP] --decompose: decomposition.create_tracker_subtasks is disabled. No sub-issues
 will be created for any epic." and skip this entire step (proceed to Step 6 with `subtasks_created = 0`) —
 this mirrors the Triple Gate in `../../core/tracker-subtask-creator.md`, which also skips entirely
 (no WARN) when the same config key is disabled.
@@ -366,7 +366,7 @@ For each epic in `created_issues` (i.e., every epic successfully created in Step
 1. You MUST invoke `Task(subagent_type='agent-flow:architect', model='opus')`. DO NOT inline-execute.
    - Context: `Epic: {epic.title}\nSpec content:\n{epic.epic_card_content}\nParent tracker issue: {epic.tracker_id}`
    - Instructions: "Decompose this epic into subtasks for tracker issue creation. Max {max_subtasks}
-     subtasks." (where `max_subtasks` = Automation Config → Decomposition → Max subtasks, default 7 —
+     subtasks." (where `max_subtasks` = `decomposition.max_subtasks` from `.agent-flow/config.toml`, default 7 —
      same dispatch pattern as `skills/fix-bugs/steps/02-impact.md`). Architect enforces this cap
      internally — revising the task tree or Blocking if it still exceeds the cap after revision (see
      `agents/architect.md` Constraints) — this skill does not re-implement truncation.
@@ -381,7 +381,7 @@ For each epic in `created_issues` (i.e., every epic successfully created in Step
    `skills/implement-feature/steps/03-decomposition.md` Step 03a follows) — do NOT re-describe a divergent
    inline per-tracker loop here. Supply its Input Contract as:
    - `issue_id` = `epic.tracker_id`
-   - `tracker_type` / `tracker_project` = from Automation Config Issue Tracker section
+   - `tracker_type` / `tracker_project` = from `issue_tracker.type` / `issue_tracker.project` in `.agent-flow/config.toml`
    - `tracker_effective_status` = `"ready"` (already confirmed by the Step 0 MCP pre-flight check)
    - `decomposition_decision` = `"DECOMPOSE"` (this step only runs when `--decompose` was passed and the Gate above did not skip)
    - `create_tracker_subtasks_config` = the value read in the Gate above

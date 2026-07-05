@@ -68,7 +68,7 @@ if [ "$FIRST_TOKEN" = "resume" ]; then
   fi
   # ISSUE_ID is now resolved and stable (see Resume Detection below — never regenerate it
   # from a fresh timestamp). Remaining tokens (ARG_TOKENS[2:], or ARG_TOKENS[1:] if no
-  # explicit ID was consumed) are flags only — parse via Flag Parsing below exactly as in
+  # explicit ID was consumed) are flags only — read via Flag Parsing below exactly as in
   # the new-project flow, but SKIP the "no project description" validation in Flag
   # Validation (the description already exists in spec/ or state.json from the original
   # run) and proceed straight through Mode Resolution into Resume Detection.
@@ -119,7 +119,7 @@ If `--brainstorm` AND `--spec`:
 
 If `--infra` provided:
 - Single word `{ready|later}` → expand to `tracker:{value},sc:{value}`
-- Named pairs `tracker:{ready|later},sc:{ready|later}` (or reversed) → parse as-is
+- Named pairs `tracker:{ready|later},sc:{ready|later}` (or reversed) → read as-is
 - Old positional `{ready|later},{ready|later}` → Error: "--infra format changed. Use: --infra tracker:ready,sc:later"
 - Otherwise → Error: "Invalid --infra format. Expected: --infra tracker:ready,sc:later"
 
@@ -177,14 +177,14 @@ If `no_implement = true`: execute legacy flow (scaffolder (with stack flags) →
 |------|------|-------------|
 | 01 | `steps/01-mode-resolve.md` | State detection, infra declaration (0-INFRA), MCP verification (0-MCP), brainstorm |
 | 02 | `steps/02-spec-write-review.md` | spec-writer ↔ spec-reviewer loop + Spec Checkpoint |
-| 03 | `steps/03-scaffold.md` | scaffolder agent, validate, git init, auto-fill CLAUDE.md, push (4d), tracker issues (4e) |
+| 03 | `steps/03-scaffold.md` | scaffolder agent, validate, git init, emit `.agent-flow/config.toml` + CLAUDE.md pointer, push (4d), tracker issues (4e) |
 | 04 | `steps/04-architect.md` | architect agent, decomposition, AC coverage, Feature Plan Checkpoint |
 | 05 | `steps/05-fixer-reviewer-loop.md` | fixer ↔ reviewer per subtask/batch, NEEDS_CLARIFICATION handling |
 | 06 | `steps/06-test.md` | test-engineer per subtask + full-suite sweep |
 | 07 | `steps/07-spec-verify.md` | spec-reviewer --verify, post-impl tracker comments, close issues |
 | 08 | `steps/08-final-report.md` | pipeline accumulator, pipeline-completed webhook, final report |
 
-Each step receives: `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, all parsed flags and in-memory variables from prior steps.
+Each step receives: `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, all extracted flags and in-memory variables from prior steps.
 
 ## Resume Detection
 
@@ -199,7 +199,7 @@ Follow `../../core/resume-detection.md` for resume detection logic. Inputs:
   init alongside ISSUE_ID and reused (never regenerated) across resumes.
 - MODE=`single` (scaffold is always single-pipeline; no batch).
 - GOT_YOLO, GOT_STEP_MODE — from Mode Resolution section above.
-- Webhook_URL, On_events — from Automation Config Notifications section.
+- Webhook_URL, On_events — from `.agent-flow/config.toml` `[notifications]` (read via `../../core/config-reader.md`).
 - CLARIFICATION_TEXT — from `--clarification "<text>"` flag if provided on resume.
 
 Outputs: RESUME_POINT, RESTORED_CONTEXT, PIPELINE_TYPE.
@@ -232,7 +232,7 @@ The `add <component>` subcommand (Step 0 dispatch above) is single-shot and does
 - Agent Overrides: follow `../../core/agent-override-injector.md` before each agent dispatch
 - Block comments in scaffold context go to stdout, not issue tracker
 - Always generate skeleton into temp directory — move only after successful validation
-- In-memory infra values from Step 01 (tracker_type, sc_remote, etc.) must be passed to all downstream steps — NEVER re-read CLAUDE.md for these values (may still contain TODO markers)
+- In-memory infra values from Step 01 (tracker_type, sc_remote, etc.) must be passed to all downstream steps — NEVER re-read the generated `.agent-flow/config.toml` for these values (it may still contain TODO markers)
 - When running full pipeline (not --no-implement): spec/ is the single source of truth for all downstream agents
 
 ---
@@ -243,7 +243,7 @@ The `add <component>` subcommand (Step 0 dispatch above) is single-shot and does
 
 Collect infrastructure readiness before pipeline begins.
 
-**If `--infra` flag was provided**, parse named-key pairs:
+**If `--infra` flag was provided**, read named-key pairs:
 - `tracker:ready` or `tracker:later` — extract tracker preset (`tracker_preset`)
 - `sc:ready` or `sc:later` — extract sc preset (`sc_preset`)
 
@@ -591,7 +591,7 @@ as a `[WARN]` and continue (do NOT block — features are already committed).
 Authoritative procedure: `steps/07-spec-verify.md` §07c ("Close Tracker Issues") — keep both in sync
 when editing either. Agent dispatch is NOT required for this step (direct tracker calls only).
 
-**Guard:** check `tracker_effective_status` and `tracker_write_available` before any tracker calls; skip entirely if `tracker_effective_status != "ready"` OR `tracker_write_available == false` OR no back-reference comments (`<!-- {TrackerType}: ... -->`) found in `spec/epics/*.md`. If `State transitions` in Automation Config does not include a 'Done' mapping → `WARN: State transitions missing 'Done'. Skipping closure.`
+**Guard:** check `tracker_effective_status` and `tracker_write_available` before any tracker calls; skip entirely if `tracker_effective_status != "ready"` OR `tracker_write_available == false` OR no back-reference comments (`<!-- {TrackerType}: ... -->`) found in `spec/epics/*.md`. If `issue_tracker.state_transitions` in `.agent-flow/config.toml` does not include a 'Done' mapping → `WARN: State transitions missing 'Done'. Skipping closure.`
 
 If the guard does not trigger: determine which epics are fully completed by checking each against the blocked features list from Step 05's block handler (an epic with any blocked subtask is NOT fully completed). For each fully-completed epic: transition the epic issue to Done, then close each story sub-issue individually for ALL tracker types (no cascade assumption) — verify every transition via `../../core/status-verification.md`; a story already in Done state counts as success. Epics with blocked subtasks are skipped and left open for manual triage. Per-issue failure: `WARN: Could not transition {issue_id} to Done: {error}`, continue.
 
@@ -668,7 +668,7 @@ Input: `$COMPONENT` = component name validated by Step 0 dispatch (one of `claud
 
 | Component | What it generates | Agent |
 |-----------|-------------------|-------|
-| `claude-md` | CLAUDE.md with Automation Config | scaffolder |
+| `claude-md` | `.agent-flow/config.toml` + a CLAUDE.md pointer to it | scaffolder |
 | `ci` | CI/CD config (.gitea/workflows/ or .github/workflows/) | scaffolder |
 | `docker` | Dockerfile + .dockerignore + docker-compose.yml | scaffolder |
 | `tests` | Test setup (test config + 1 smoke test) | scaffolder |
@@ -676,7 +676,7 @@ Input: `$COMPONENT` = component name validated by Step 0 dispatch (one of `claud
 ### 0. MCP pre-flight check
 
 Before any pipeline operation, verify MCP tool availability:
-- Read Type from Automation Config (Issue Tracker section)
+- Read `issue_tracker.type` from `.agent-flow/config.toml` (via `../../core/config-reader.md`)
 - Check that at least one `mcp__*` tool matching the tracker type is accessible
 - If not accessible → STOP with: "Cannot connect to your {Type} issue tracker. Is the {Type} integration configured? Run `/agent-flow:check-setup` for diagnostics."
 
@@ -716,7 +716,7 @@ You MUST invoke `Task(subagent_type='agent-flow:scaffolder', model='sonnet')`. D
 #### 5. Validation
 
 Verify that newly generated files did not break the build:
-- Run build command (if it exists in CLAUDE.md or from auto-detect)
+- Run build command (from `build.build_command` in `.agent-flow/config.toml`, or from auto-detect)
 - Run test command (if it exists)
 - If Build/Test command does not exist, at least verify syntactic validity of generated configuration files (JSON/YAML parsing).
 
@@ -729,6 +729,6 @@ EXIT after step 6. The subcommand branch MUST NOT fall through to the new-projec
 ### Subcommand Rules
 
 - Never overwrite existing files without confirmation
-- For `claude-md`: if CLAUDE.md already exists → ask whether to overwrite or merge
+- For `claude-md`: if `.agent-flow/config.toml` (or the CLAUDE.md pointer) already exists → ask whether to overwrite or merge
 - Auto-detect looks in root first, then one level of subdirectories
 - If multiple matches (mixed-language repo) → ask the user for the primary stack

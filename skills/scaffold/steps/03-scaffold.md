@@ -1,7 +1,7 @@
 # Step 03: Scaffold Skeleton + Git Init
 
 Generates the project skeleton into a temp directory, validates it, moves to target,
-auto-fills CLAUDE.md, initializes git, and creates tracker issues.
+emits `.agent-flow/config.toml` and a CLAUDE.md pointer to it, initializes git, and creates tracker issues.
 
 ## 03a. Scaffolder Dispatch
 
@@ -17,19 +17,19 @@ Check Agent Overrides: if `{Agent Overrides path}/scaffolder.toml` exists, appen
 You MUST invoke Task(subagent_type='agent-flow:scaffolder', model='sonnet'). DO NOT inline-execute.
 Context: `spec/README.md` Tech Stack section + project description. Working directory: `$SCAFFOLD_TEMP`.
 Mode indicator: scaffold-spec-first (so scaffolder generates E2E Test config + Decomposition defaults).
-Scaffolder generates: all project files, CLAUDE.md (with Automation Config), docs/ARCHITECTURE.md, Module Docs config.
+Scaffolder generates: all project files, `.agent-flow/config.toml` (the committed config with `[e2e_test]` + `[decomposition]` defaults), a CLAUDE.md pointer to that config, docs/ARCHITECTURE.md, Module Docs config.
 
-**Post-dispatch (COST-R2, COST-R3):** Defensive-read `result.usage`. Write `scaffolder.completed_at`, `scaffolder.tokens_used`, `scaffolder.duration_ms`, `scaffolder.tool_uses` (fallback `0`). Set `scaffolder.status = "completed"`.
+**Post-dispatch (COST-R2, COST-R3):** Defensive-read `result.usage`. Write `scaffolder.completed_at`, `scaffolder.tokens_used`, `scaffolder.duration_ms`, `scaffolder.tool_uses` (default `0`). Set `scaffolder.status = "completed"`.
 
 ## 03b. Validation (max 3 retries)
 
 After scaffolder completes, independently verify the generated skeleton:
 
-1. **Read commands:** Parse Build command and Test command from generated CLAUDE.md in `$SCAFFOLD_TEMP`
+1. **Read commands:** Read `build.build_command` and `build.test_command` from the generated `.agent-flow/config.toml` in `$SCAFFOLD_TEMP` (via `../../../core/config-reader.md`)
 2. **Build check:** Run Build command in `$SCAFFOLD_TEMP`. If fails → pass error to scaffolder, increment retry counter
 3. **Test check:** Run Test command in `$SCAFFOLD_TEMP`. If fails → same retry loop
 4. **Lint check:** If linter configured, run it. Failure → same retry loop
-5. **CLAUDE.md check:** Verify all required Automation Config sections present (Issue Tracker, Source Control, PR Rules, PR Description Template, Build & Test)
+5. **Config check:** Verify all 5 required `[section]`s are present in `.agent-flow/config.toml` (`[issue_tracker]`, `[source_control]`, `[pr_rules]`, `[pr_description_template]`, `[build_and_test]`)
 
 If 3 retries exhausted (any check still failing) → delete `$SCAFFOLD_TEMP`, report which check failed + last error output, STOP.
 
@@ -55,15 +55,61 @@ EOF
 ```
 On failure: log `[WARN] Webhook delivery failed`, continue.
 
-## 03c. Auto-fill CLAUDE.md
+## 03c. Emit `.agent-flow/config.toml` + CLAUDE.md pointer
+
+The single source of truth for automation config is the committed `.agent-flow/config.toml`
+(consumed by `../../../core/config-reader.md`). The generated project's CLAUDE.md receives only a
+1-2 line **pointer** to that file — never an inline `## Automation Config` block and never any
+`| Key | Value |` config rows.
 
 **Required in-memory values from Step 01:** `tracker_type`, `tracker_instance`, `tracker_project`, `sc_remote`, `sc_base_branch`, `tracker_effective_status`, `sc_effective_status`.
-DO NOT re-read CLAUDE.md for these values — it may still contain TODO markers.
+DO NOT re-read the generated `.agent-flow/config.toml` for these values — it may still contain TODO markers.
 
-For services where `{service}_effective_status` is `"ready"`: fill Automation Config values automatically.
-For `"later"` or `"downgraded"` services: keep TODO markers in CLAUDE.md.
+Write `.agent-flow/config.toml` as TOML `[section]` tables. For services where
+`{service}_effective_status` is `"ready"`, fill the resolved values automatically; for `"later"` or
+`"downgraded"` services, leave a TODO comment on the affected key. Encode list- and map-valued keys
+using the delimited-scalar convention from `../../../core/config-reader.md` — commas delimit lists,
+`;` records + `:` key/value delimit maps. Minimum shape:
 
-Generate `.mcp.json.example` based on `tracker_type` (if declared). Read MCP Server Detection table from `{trackers_md_path}`. Add `.mcp.json` to `.gitignore`.
+```toml
+[issue_tracker]
+type = "youtrack"
+instance = "https://tracker.example.com"          # TODO if tracker_effective_status != "ready"
+project = "PROJ"                                    # TODO if tracker_effective_status != "ready"
+bug_query = "State: Open"
+state_transitions = "triage: In Progress; fixed: Fixed"   # delimited-scalar map
+on_start_set = "In Progress"
+
+[source_control]
+remote = "owner/repo"                               # TODO if sc_effective_status != "ready"
+base_branch = "main"
+branch_naming = "fix/{issue-id}"
+
+[pr_rules]
+labels = "bug, automated"                           # delimited-scalar list
+
+[pr_description_template]
+template = """
+## Summary
+...
+"""
+
+[build_and_test]
+build_command = "..."
+test_command = "..."
+```
+
+Then write the generated project's CLAUDE.md pointer (NOT an inline config table). Example pointer body:
+
+```markdown
+## Automation Config
+
+Automation config for agent-flow lives in [`.agent-flow/config.toml`](.agent-flow/config.toml)
+(read by `core/config-reader.md`). Edit that file to change tracker, source-control, PR, or
+build/test settings.
+```
+
+Generate `.mcp.json.example` based on `tracker_type` (if declared). Read MCP Server Detection table from `{trackers_md_path}`. Add `.mcp.json` to `.gitignore`. Ensure `.agent-flow/config.toml` is committed (it is NOT gitignored; only the optional per-developer `.agent-flow/config.local.toml` is).
 
 ## 03d. Git Init + Commit
 

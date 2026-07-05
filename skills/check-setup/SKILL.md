@@ -13,19 +13,47 @@ If $ARGUMENTS contains `--skip-build`, skip running build/test commands.
 
 ## Steps
 
-### Block 1: Automation Config (structural check)
+### Block 1: Automation Config — `.agent-flow/config.toml` (structural check)
 
-1. Read the current project's CLAUDE.md
-2. Verify the existence of the `## Automation Config` section → [OK] or [FAIL]
-3. Verify required sections and keys:
+Automation Config lives in the committed `.agent-flow/config.toml` (resolved by
+`core/config-reader.md`), not inline in CLAUDE.md.
 
-| Section | Required keys |
+1. **Exists** — confirm `.agent-flow/config.toml` is present in the project root → [OK], else
+   [FAIL] "No `.agent-flow/config.toml` found. Run `/agent-flow:onboard` to create it, or
+   `/onboard --migrate` if you still have a legacy inline config in CLAUDE.md."
+2. **Tracked, not gitignored** — run `git check-ignore .agent-flow/config.toml`:
+   - exits 0 (the file IS gitignored) → [FAIL] "`.agent-flow/config.toml` is gitignored — it MUST
+     be committed/tracked so the whole team shares one config. Remove the ignore rule."
+   - exits 1 (not ignored / tracked) → [OK] "`.agent-flow/config.toml` is tracked"
+3. Verify the required `[section]`s are present in `.agent-flow/config.toml` and their required keys
+   are filled — a missing required section or key is fatal:
+
+| `[section]` | Required keys |
 |---------|--------------|
-| Issue Tracker | Type (or default youtrack), Instance, Project, Bug query, State transitions, On start set |
-| Source Control | Remote, Base branch, Branch naming |
-| PR Rules | Labels (Title format optional) |
-| PR Description Template | (subsection present) |
-| Build & Test | Build command, Test command |
+| `[issue_tracker]` | type (or default youtrack), instance, project, bug_query, state_transitions, on_start_set |
+| `[source_control]` | remote, base_branch, branch_naming |
+| `[pr_rules]` | labels (title_format optional) |
+| `[pr_description_template]` | template (multi-line `"""` present) |
+| `[build_and_test]` | build_command, test_command |
+
+**Key-list validation** — compare every key in `.agent-flow/config.toml` against the documented key
+list for its `[section]` (see `docs/reference/automation-config.md`):
+   - a **missing required** section/key → [FAIL] naming the missing required section
+   - an **unknown key** (not in the documented list) → [WARN] "unknown key '{key}' in [{section}] — ignored"
+   (Rule: unknown key ⇒ [WARN]; missing required ⇒ [FAIL].)
+
+**`config.local.toml` accidental-commit guard** — if `.agent-flow/config.local.toml` exists, run
+`git check-ignore .agent-flow/config.local.toml`:
+   - exits 1 (NOT gitignored / tracked) → [WARN] "`.agent-flow/config.local.toml` is present but NOT
+     gitignored — the per-developer overlay should be gitignored so local overrides are never committed."
+   - exits 0 (gitignored) → [OK] (no warning)
+
+**Legacy inline config detection (DETECT-ONLY hint)** — read the project's CLAUDE.md and check
+*only for the presence* of a legacy inline `## Automation Config` heading. This is a bare
+presence/absence detection — it MUST NOT read the section's `### {Section}` rows into any config
+object (the resolved config comes solely from `.agent-flow/config.toml`). If the legacy heading is
+present → [WARN] "Legacy inline `## Automation Config` block detected in CLAUDE.md. Config now lives
+in `.agent-flow/config.toml` — run `/onboard --migrate` to convert it, then delete the inline block."
 
 ### 3a. Per-tracker validation
 
@@ -58,7 +86,8 @@ readiness, so check it separately from the required-key table in Step 3:
    - Empty or placeholder → [FAIL]
 
 5. Verify optional sections (if they exist, check the format). This is the full 18-section
-   canonical list from CLAUDE.md's Automation Config reference — keep this list in sync with it:
+   canonical list of `[section]`s from the `.agent-flow/config.toml` reference in
+   docs/reference/automation-config.md — keep this list in sync with it:
    - Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees, E2E Test, Browser Verification, Error Handling, Feature Workflow, Decomposition, Pipeline Profiles, Metrics, Agent Overrides, Local Deployment, Sprint Planning, Autopilot, Pause Limits
    - Exists and correct format → [OK]
    - Does not exist → [SKIP] (optional)
@@ -77,7 +106,7 @@ readiness, so check it separately from the required-key table in Step 3:
      - Found at {path} → [WARN] ".mcp.json found at {path}, but Claude Code loads from CWD ({cwd}). Copy or symlink it here."
      - Not found anywhere → [FAIL] "No .mcp.json found. Run /agent-flow:setup-mcp to create one."
 
-7. Compare MCP servers with Automation Config:
+7. Compare MCP servers with `.agent-flow/config.toml`:
    - Issue tracker MCP: reuse the trackers.md path resolved in Step 3a (do not Glob again).
      Read the MCP Server Detection table. Find the row matching Type.
      Search .mcp.json server names/URLs for the listed keywords.
@@ -104,7 +133,7 @@ readiness, so check it separately from the required-key table in Step 3:
 > rows (adapted here to also gate the curl confirmation probe). If a pattern is added or changed,
 > update `../../core/mcp-detection.md` first and mirror the change into both copies below.
 
-9. Run the Bug query from Automation Config via MCP (limit 1 result):
+9. Run the bug query (`issue_tracker.bug_query`) from `.agent-flow/config.toml` via MCP (limit 1 result):
    - Success → [OK] with the number of bugs found
    - On failure, classify the error in this order:
      1. **TLS error** (error contains any of: UNABLE_TO_VERIFY_LEAF_SIGNATURE, CERT_UNTRUSTED,
@@ -123,7 +152,7 @@ readiness, so check it separately from the required-key table in Step 3:
      3. **Any other error** →
         [FAIL] "Issue tracker — server not reachable — verify the server is running and URL is correct. If using a private CA (self-signed or corporate PKI), also try NODE_OPTIONS: --use-system-ca."
 10. Verify source control connectivity: fetch metadata for the configured Remote (owner/repo) via MCP
-    - Use MCP to fetch repository metadata for the Remote value from Automation Config
+    - Use MCP to fetch repository metadata for the `source_control.remote` value from `.agent-flow/config.toml`
     - Success → [OK] "Source control — {owner/repo} reachable"
     - On failure, classify the error in this order:
       1. **TLS error** (error contains any of: UNABLE_TO_VERIFY_LEAF_SIGNATURE, CERT_UNTRUSTED,
@@ -146,7 +175,7 @@ readiness, so check it separately from the required-key table in Step 3:
       2. **Auth error** (401/403) →
          [FAIL] "Source control — authentication failed. Token needs repository:read scope (Gitea), repo scope (GitHub), or read_repository scope (GitLab)."
       3. **Not found** (404) →
-         [FAIL] "Source control — repository {owner/repo} not found. Verify Remote in Automation Config."
+         [FAIL] "Source control — repository {owner/repo} not found. Verify source_control.remote in .agent-flow/config.toml."
       4. **Tool not found** (MCP server lacks repository metadata method) →
          [WARN] "Source control MCP: repository existence check not supported — skipping."
       5. **Any other error** →
@@ -198,10 +227,10 @@ Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUM
 > count toward the `{N} FAIL, {M} WARN` totals in the Result line.
 
 ```
-## Setup report — {Remote from Automation Config}
+## Setup report — {source_control.remote from .agent-flow/config.toml}
 
-### Automation Config
-[OK]   ## Automation Config found in CLAUDE.md
+### Config (.agent-flow/config.toml)
+[OK]   .agent-flow/config.toml found and tracked (not gitignored)
 [OK]   Issue Tracker — all keys filled (Type: {type})
 [OK]   Source Control — all keys filled
 [FAIL] PR Description Template — section missing
@@ -344,7 +373,7 @@ apply, and nothing surfaces it. This block catches that exact condition. The sam
 happens on TOML syntax errors and unknown-key validation failures, so present-but-unparseable
 overlays are validated end-to-end too.
 
-16. Resolve the override directory from `### Agent Overrides → Path` in Automation Config
+16. Resolve the override directory from the `[agent_overrides]` `path` key in `.agent-flow/config.toml`
     (default `customization/`). Set `$override_path` to the resolved value and run the probe:
 
 ```bash

@@ -10,7 +10,7 @@ argument-hint: "[--update] [--tracker-type <type>] [--tracker-instance <url>] [-
 Set up the developer environment for agent-flow pipeline. Generates `.mcp.json` (MCP server configuration) and `.claude/settings.json` (tool permissions).
 
 This command is the counterpart to `/agent-flow:onboard`:
-- **onboard** = project config (Automation Config in CLAUDE.md)
+- **onboard** = project config (`.agent-flow/config.toml`)
 - **setup-mcp** = developer environment (MCP servers, tokens, permissions)
 
 Input: `$ARGUMENTS` = (none) | `--update` | `--tracker-type <type>` | `--tracker-instance <url>` | `--sc-remote <owner/repo>` (flags may be combined)
@@ -31,8 +31,8 @@ Parse `$ARGUMENTS` for optional CLI flags:
 
 **If ANY of these flags is provided:**
 1. Validate `--tracker-type` (if provided) against the lookup table in `../../core/mcp-detection.md` Process step 1. Valid values: `youtrack`, `github`, `jira`, `linear`, `gitea`, `redmine`. If invalid → error: `"Invalid tracker type '{value}'. Valid types: youtrack, github, jira, linear, gitea, redmine."`
-2. Skip Step 1 (Automation Config read). Use flag values instead:
-   - **Type** = `cli_tracker_type` (if not provided, infer from `cli_sc_remote` hostname: `github.com` → `github`; otherwise → error: `"--tracker-type is required when CLAUDE.md is not available."`)
+2. Skip Step 1 (config read from `.agent-flow/config.toml`). Use flag values instead:
+   - **Type** = `cli_tracker_type` (if not provided, infer from `cli_sc_remote` hostname: `github.com` → `github`; otherwise → error: `"--tracker-type is required when .agent-flow/config.toml is not available."`)
    - **Instance** = `cli_tracker_instance` (if not provided, derive default:
      > **Path note:** `trackers.md` lives in the plugin installation directory. Resolve via Glob before reading defaults.
 
@@ -45,16 +45,16 @@ Parse `$ARGUMENTS` for optional CLI flags:
 
 **Composability with `--update`:** The 3 new flags compose with `--update`. Example: `--update --tracker-type gitea` updates an existing .mcp.json with a new/changed tracker type. The `--update` flag controls Step 2 behavior (preserve existing servers); the new flags control Step 1 behavior (value source).
 
-## Step 1: Read Automation Config
+## Step 1: Read config from `.agent-flow/config.toml`
 
 If Step 0 provided CLI overrides → skip this step entirely (values already set).
 
-Read Automation Config from CLAUDE.md. Extract:
-- **Type** from Issue Tracker (determines tracker MCP server)
-- **Instance** from Issue Tracker (determines server URL/env vars)
-- **Remote** from Source Control (determines SC MCP server and hostname)
+Read config from `.agent-flow/config.toml` (resolved by `../../core/config-reader.md`). Extract:
+- **`issue_tracker.type`** (determines tracker MCP server)
+- **`issue_tracker.instance`** (determines server URL/env vars)
+- **`source_control.remote`** (determines SC MCP server and hostname)
 
-If no Automation Config found → error: "No Automation Config found. Run `/agent-flow:onboard` first."
+If no `.agent-flow/config.toml` found → error: "No `.agent-flow/config.toml` found. Run `/agent-flow:onboard` first."
 
 ## Step 1b: Detect .mcp.json.example
 
@@ -145,7 +145,7 @@ If user pastes a token → use it in Step 6.
 If user skips → keep `<YOUR_*>` placeholder in generated `.mcp.json`.
 
 For extra env vars (Instance URL, email):
-- Auto-fill from Automation Config where possible (Instance → base URL)
+- Auto-fill from `.agent-flow/config.toml` where possible (`issue_tracker.instance` → base URL)
 - Ask for remaining (e.g. ATLASSIAN_EMAIL for Jira)
 
 If shared server detected:
@@ -276,7 +276,7 @@ No path collection is needed — uvx handles the package download and execution 
 Load the appropriate template from `examples/mcp-configs/{type}.json`.
 
 - Replace placeholder tokens with user-provided values (or keep `<YOUR_*>` if skipped)
-- Replace placeholder URLs with values from Automation Config
+- Replace placeholder URLs with values from `.agent-flow/config.toml`
 - **For gitea-mcp specifically:** overwrite the template's bare `command` value (`gitea-mcp` / `gitea-mcp.exe`) with the absolute path resolved in Step 5 — either `~/.claude/bin/{binary_name}` (auto-download / Go install / wget / PowerShell fallback) or the manually-collected path (manual path collection fallback). Do NOT leave the bare binary name in `.mcp.json`; it only works if the binary happens to already be on the user's PATH, which auto-download does not guarantee.
 - Other stdio servers (`redmine`'s `uvx`, the YouTrack legacy fallback's `npx`) intentionally keep their bare command name as-is — those tools are expected to already be on PATH (verified by the lazy prereq checks in Step 5/Step 3) and never go through path collection.
 - If update mode: merge into existing `.mcp.json` (preserve unrelated servers)
@@ -391,9 +391,9 @@ Tip: You can re-run /agent-flow:setup-mcp --update anytime to update your setup.
 
 ## Rules
 
-- NEVER write tokens into CLAUDE.md — only into .mcp.json
+- NEVER write tokens into `.agent-flow/config.toml` (committed) — only into .mcp.json (gitignored)
 - NEVER commit .mcp.json to git — always add to .gitignore
 - In update mode: preserve existing non-agent-flow MCP servers in .mcp.json
 - In update mode: preserve existing permissions in .claude/settings.json
-- Auto-fill from Automation Config where possible — minimize questions
+- Auto-fill from `.agent-flow/config.toml` where possible — minimize questions
 - All wizard text in English
