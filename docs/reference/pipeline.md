@@ -36,7 +36,7 @@ responsible for:
 1. **Argument parsing** — extract issue IDs, `--yolo`, `--step-mode`, `--profile`, `--dry-run`,
    and other pipeline-specific flags. Mode flag parsing MUST follow the explicit-boolean pattern
    (see [Mode flag dispatch](#mode-flag-dispatch)).
-2. **Configuration loading** — read `## Automation Config` from `CLAUDE.md` via
+2. **Configuration loading** — read `.agent-flow/config.toml` via
    `core/config-reader.md` + `core/mcp-preflight.md` + `core/profile-parser.md`.
 3. **Issue-ID validation** (for tracker-based pipelines) — path-traversal defense:
    ```bash

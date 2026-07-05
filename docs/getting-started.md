@@ -52,7 +52,7 @@ The wizard will ask you about your project setup:
 6. **Build and test commands** — The commands to build and test your project
 7. **PR configuration** — Labels and description template for pull requests
 
-The wizard generates an `## Automation Config` block with all required sections. It will offer to add this block to your project's CLAUDE.md. If your project does not have a CLAUDE.md yet, the wizard creates one.
+The wizard generates a `.agent-flow/config.toml` file with all required sections and adds a 1–2 line pointer to it in your project's CLAUDE.md. If your project does not have a CLAUDE.md yet, the wizard creates one.
 
 Here is a minimal example of what the generated config looks like:
 

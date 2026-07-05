@@ -132,7 +132,7 @@ The `--proto "=http,https"` flag restricts the transport to HTTP/HTTPS only. Thi
 
 ### On events Filter
 
-Project CLAUDE.md Automation Config "Notifications" section supports these `On events` tokens (CSV):
+The project's `.agent-flow/config.toml` `[notifications]` section supports these `On events` tokens (CSV):
 - `pr-created`, `issue-blocked`
 - `pipeline-started`, `step-completed`, `pipeline-completed`
 - `pipeline-paused`

@@ -271,7 +271,7 @@ The issue tracker is only written to in `full-publish` mode — the other two su
 - `--fresh` — Force fresh mode: skip existing-config detection and start the wizard from scratch
 - `--update` — Force update mode: walk through the existing config and change only what you select. Errors if no `## Automation Config` section exists yet
 
-**What it does:** Launches an interactive wizard that asks about your project setup: issue tracker type, instance URL, project key, source control remote, build/test commands, and more. Generates a complete Automation Config block that can be added to your project's CLAUDE.md. Supports all 6 tracker types (YouTrack, GitHub, Jira, Linear, Gitea, Redmine). With no flags, it auto-detects whether a config already exists and routes to fresh or update mode accordingly.
+**What it does:** Launches an interactive wizard that asks about your project setup: issue tracker type, instance URL, project key, source control remote, build/test commands, and more. Generates a complete `.agent-flow/config.toml` and a 1–2 line pointer to it in your project's CLAUDE.md. Supports all 6 tracker types (YouTrack, GitHub, Jira, Linear, Gitea, Redmine). With no flags, it auto-detects whether a config already exists and routes to fresh or update mode accordingly.
 
 **Example:**
 
