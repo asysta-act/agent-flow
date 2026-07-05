@@ -105,7 +105,7 @@ Then write the generated project's CLAUDE.md pointer (NOT an inline config table
 ## Automation Config
 
 Automation config for agent-flow lives in [`.agent-flow/config.toml`](.agent-flow/config.toml)
-(read by `core/config-reader.md`). Edit that file to change tracker, source-control, PR, or
+(read by `../../../core/config-reader.md`). Edit that file to change tracker, source-control, PR, or
 build/test settings.
 ```
 

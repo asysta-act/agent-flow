@@ -122,7 +122,7 @@ testing setup, linter/formatter configuration, `.agent-flow/config.toml` automat
    - File should be 80-150 lines — concise but useful for downstream agents
 
 3. `.agent-flow/config.toml` generation — follow Config Contract checklist. The committed
-   `.agent-flow/config.toml` is the single source of truth (consumed by `core/config-reader.md`);
+   `.agent-flow/config.toml` is the single source of truth (consumed by `../core/config-reader.md`);
    CLAUDE.md receives only a 1-2 line pointer to it, never an inline config block.
    **Required `[section]`s (ALL must be present):**
    - [ ] `[issue_tracker]` — type, instance, project, bug_query, state_transitions (delimited-scalar map, e.g. `state_transitions = "triage: In Progress; fixed: Fixed"`), on_start_set
@@ -136,14 +136,14 @@ testing setup, linter/formatter configuration, `.agent-flow/config.toml` automat
    - [ ] `[retry_limits]` — include only if this project needs values other than the plugin defaults (fixer_iterations 5, test_attempts 3, build_retries 3, spec_iterations 5, root_cause_iterations 3); omit the section otherwise
    - [ ] `[decomposition]` — when running in spec-first mode, generate with scaffold-optimized defaults: `max_subtasks = 5`, `fail_strategy = "fail-fast"`, `commit_strategy = "individual"`
    - [ ] `[feature_workflow]` — query, on_start_set
-   - [ ] `[module_docs]` — path set to `"docs/"` (always include — Batch 8 generates docs/ARCHITECTURE.md)
+   - [ ] `[module_docs]` (Module Docs) — path set to `"docs/"` (always include — Batch 8 generates docs/ARCHITECTURE.md)
 
-   All config lives in `.agent-flow/config.toml` as TOML `[section]` tables (`key = "value"`); list- and map-valued keys use the delimited-scalar encoding from `core/config-reader.md` (`,` for lists; `;` records + `:` key/value for maps). Do NOT emit a `## Automation Config` `| Key | Value |` block into CLAUDE.md.
+   All config lives in `.agent-flow/config.toml` as TOML `[section]` tables (`key = "value"`); list- and map-valued keys use the delimited-scalar encoding from `../core/config-reader.md` (`,` for lists; `;` records + `:` key/value for maps). Do NOT emit a `## Automation Config` `| Key | Value |` block into CLAUDE.md.
 
    Mark keys requiring manual input with a TOML comment:
    `instance = "" # TODO: Replace with your actual YouTrack/Gitea instance`
 
-   Write the CLAUDE.md pointer as a short `## Automation Config` section whose body only links to `.agent-flow/config.toml` and names `core/config-reader.md` as its reader.
+   Write the CLAUDE.md pointer as a short `## Automation Config` section whose body only links to `.agent-flow/config.toml` and names `../core/config-reader.md` as its reader.
 
 4. Verify the skeleton builds and tests pass:
    - Run build command

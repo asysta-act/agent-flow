@@ -30,7 +30,7 @@ fi
 
 # 4. Init has Step 0 (Parameter Override) before Step 1
 step0_line=$(grep -n "Step 0.*Parameter Override\|Parameter Override" "$INIT_SKILL" | head -1 | cut -d: -f1)
-step1_line=$(grep -n "Step 1.*Read Automation Config\|Read Automation Config" "$INIT_SKILL" | head -1 | cut -d: -f1)
+step1_line=$(grep -n "Step 1.*Read config\|Read config from .agent-flow/config.toml" "$INIT_SKILL" | head -1 | cut -d: -f1)
 if [ -z "$step0_line" ]; then
   fail "init SKILL.md missing Step 0: Parameter Override"
 elif [ -z "$step1_line" ]; then

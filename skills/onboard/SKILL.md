@@ -36,7 +36,7 @@ If not in a git repo → use CWD.
 
 A one-time, local, side-effect-free transform (no network, no tracker calls) that moves a legacy
 inline `## Automation Config` block out of CLAUDE.md and into `.agent-flow/config.toml`. This is the
-ONLY migration path — there is deliberately no `/migrate-config` command.
+ONLY migration path — there is deliberately no separate `migrate-config` command.
 
 Transform steps (per the 23-section migration map in `docs/reference/automation-config.md`):
 

@@ -16,7 +16,7 @@ If $ARGUMENTS contains `--skip-build`, skip running build/test commands.
 ### Block 1: Automation Config — `.agent-flow/config.toml` (structural check)
 
 Automation Config lives in the committed `.agent-flow/config.toml` (resolved by
-`core/config-reader.md`), not inline in CLAUDE.md.
+`../../core/config-reader.md`), not inline in CLAUDE.md.
 
 1. **Exists** — confirm `.agent-flow/config.toml` is present in the project root → [OK], else
    [FAIL] "No `.agent-flow/config.toml` found. Run `/agent-flow:onboard` to create it, or
