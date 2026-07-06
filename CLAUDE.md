@@ -134,7 +134,7 @@ You are a [Role] specializing in [domain].
 
 Projects using this plugin must have a committed `.agent-flow/config.toml` with **18 optional config sections in total** (plus the required sections); CLAUDE.md keeps only a 1-2 line pointer to it. All sections are TOML `[section]` tables (resolved by `core/config-reader.md`); list/map keys use the delimited-scalar encoding. Optional per-developer overrides go in the gitignored `.agent-flow/config.local.toml`.
 
-**Required sections** (must be present in every consumer CLAUDE.md):
+**Required sections** (must be present in every consumer's committed `.agent-flow/config.toml`):
 
 | Section | Keys |
 |---------|------|

@@ -488,7 +488,7 @@ Because there is no single global overlay, repeat the rule in each code-generati
 
 ## Plugin Permission Architecture
 
-agent-flow plugin agents do **NOT** support `hooks:`, `mcpServers:`, or `permissionMode:` keys in YAML frontmatter — the Claude Code platform ignores these fields for security reasons when set at agent level. **Hooks are skill-orchestrated, not agent-frontmatter** (hooks are skill-orchestrated, not agent-frontmatter) — pipeline hooks are configured at **PROJECT level** via the `### Hooks` section in your project's CLAUDE.md, NOT in any agent's YAML frontmatter.
+agent-flow plugin agents do **NOT** support `hooks:`, `mcpServers:`, or `permissionMode:` keys in YAML frontmatter — the Claude Code platform ignores these fields for security reasons when set at agent level. Instead, hooks are skill-orchestrated, not agent-frontmatter: pipeline hooks are configured at **PROJECT level** via the `[hooks]` section in your project's `.agent-flow/config.toml`, NOT in any agent's YAML frontmatter.
 
 <!-- COUNTER-EXAMPLE: Do NOT add these keys to agent frontmatter — they are silently ignored by the platform.
 ---
@@ -510,12 +510,12 @@ END COUNTER-EXAMPLE -->
 
 | Goal | Correct approach |
 |------|-----------------|
-| Run a shell command before/after pipeline stages | `### Hooks` in project CLAUDE.md (`Pre-fix`, `Post-fix`, `Pre-publish`, `Post-publish`) |
+| Run a shell command before/after pipeline stages | `[hooks]` in `.agent-flow/config.toml` (`Pre-fix`, `Post-fix`, `Pre-publish`, `Post-publish`) |
 | Add MCP servers for the project | Project-level `.claude/settings.json` `mcpServers` key |
 | Set permission mode | Project-level `.claude/settings.json` `permissionMode` key |
-| Add agent-specific instructions | `customization/{agent}.toml` via `### Agent Overrides` |
+| Add agent-specific instructions | `customization/{agent}.toml` via `[agent_overrides]` |
 
-Existing project-level `### Hooks` config sections continue to work unchanged — no migration required. See [hooks documentation](hooks.md) for available hook points.
+Configure hook commands under `[hooks]` in `.agent-flow/config.toml`; the pre-migration CLAUDE.md `### Hooks` section is no longer read (the config hard-cut removed the CLAUDE.md parse path). See [hooks documentation](hooks.md) for available hook points.
 
 ## Mode Flags
 
