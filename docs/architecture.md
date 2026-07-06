@@ -1,6 +1,6 @@
 # Architecture
 
-agent-flow is a Claude Code plugin built as a 2-layer system: skills orchestrate WHAT to do, agents specialize in HOW to do it. The plugin is pure markdown with zero runtime dependencies. All project-specific configuration lives outside the plugin in the consuming project's CLAUDE.md.
+agent-flow is a Claude Code plugin built as a 2-layer system: skills orchestrate WHAT to do, agents specialize in HOW to do it. The plugin is pure markdown plus shell + Python hooks, with zero third-party PACKAGE dependencies (requires bash + Python 3, stdlib only). All project-specific configuration lives outside the plugin in a committed `.agent-flow/config.toml` file (resolved by `core/config-reader.md`), with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay.
 
 **Current counts:** 17 agents · 17 skills · 18 optional config sections · 17 core contracts.
 
@@ -50,7 +50,7 @@ graph TD
         HIST[".agent-flow/pipeline-history.md"]
     end
 
-    CONFIG["Automation Config<br/>(project CLAUDE.md)"]
+    CONFIG["Automation Config<br/>(.agent-flow/config.toml)"]
     ISSUE_TRACKER["Issue Tracker<br/>(YouTrack / GitHub / Jira /<br/>Linear / Gitea / Redmine)"]
     SOURCE_CONTROL["Source Control<br/>(Git + PR API)"]
     MCP["MCP Servers"]
@@ -81,7 +81,7 @@ graph TD
 The diagram shows the complete information flow:
 
 - The **user** invokes a skill (e.g., `/agent-flow:fix-bugs PROJ-42`)
-- The **skill** reads Automation Config from the project's CLAUDE.md
+- The **skill** reads Automation Config from `.agent-flow/config.toml` via `core/config-reader.md`
 - The skill dispatches **agents** via Claude Code's Task tool; before each dispatch the skill reads the project's `customization/{agent-name}.toml` overlay (if present) and merges it with the agent's default prompt via 3-tier TOML merge (scalar override, array-of-tables append, table deep merge)
 - **Read-only agents** query external systems (issue tracker, source control) through MCP servers but never modify code; read-only inventory (9 agents): `analyst` (dispatched as `analyst --phase triage` / `analyst --phase impact`), `reviewer`, `spec-analyst`, `architect`, `priority-engine`, `spec-reviewer`, `acceptance-gate`, `backlog-creator`, `sprint-planner`
 - **Execution agents** modify code, create files, and mutate external state through MCP servers; execution inventory: `fixer`, `test-engineer` (supports `--e2e` flag for E2E flows), `publisher`, `scaffolder`, `rollback-agent`, `spec-writer`, `browser-agent` (dispatched as `browser-agent --phase reproduce` or `browser-agent --phase verify`), `deployment-verifier`
@@ -211,7 +211,7 @@ Key characteristics:
 - Mode selection (step 01-mode-select) applies `--yolo` / default / `--step-mode` across the entire scaffold pipeline; scaffold also has its own Interactive / YOLO-with-checkpoint / Full-YOLO progression separate from the mode flags
 - Spec-writer ↔ spec-reviewer loop refines the specification (max 5 iterations)
 - Scaffolder reads tech stack from spec/README.md (spec-first mode) or from skill-supplied stack flags (--no-implement)
-- After git init: auto-fill CLAUDE.md config, push to remote, create tracker issues
+- After git init: auto-fill `.agent-flow/config.toml`, push to remote, create tracker issues
 - Architect decomposes epics into dependency-aware batches
 - Features are implemented per-subtask with fixer/reviewer/test-engineer
 - E2E step uses `browser-agent --phase verify` (named-phase: `browser-agent-verify`) for Playwright-based verification
@@ -219,11 +219,11 @@ Key characteristics:
 
 ## Config Contract Design
 
-The Automation Config contract lives in the project's CLAUDE.md for a specific reason: **the majority of skills explicitly reference it** by reading `## Automation Config` from the current project's CLAUDE.md. Extracting it to a separate file would be a high-risk refactoring that touches the majority of skills.
+The Automation Config contract lives in a committed `.agent-flow/config.toml` file, with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay merged on top. Skills never parse config themselves: **the majority of skills reference config through a single pure-bash reader** (`core/config-reader.md`) rather than reading `## Automation Config` tables from the project's CLAUDE.md. Centralizing resolution in one reader keeps parsing consistent and lets the base file stay committed while per-developer values stay local and gitignored.
 
-### Table Format
+### File Format
 
-All config sections use the `| Key | Value |` table format. This is enforced by `/agent-flow:check-setup` validation. Bullet-point lists are not accepted because they are ambiguous to parse (is a nested bullet a continuation of the previous value or a new key?).
+All config sections use TOML tables in `.agent-flow/config.toml` (e.g. `[issue_tracker]`, `[source_control]`), resolved by `core/config-reader.md`. This is validated by `/agent-flow:check-setup`, which also verifies that `.agent-flow/config.local.toml` is gitignored.
 
 ### Required vs Optional
 
@@ -231,11 +231,11 @@ Required sections (Issue Tracker, Source Control, PR Rules, PR Description Templ
 
 ### Versioning Policy
 
-The config contract is versioned along with the plugin:
+The config contract is versioned along with the plugin. This table summarizes the three MAJOR triggers; see CLAUDE.md's canonical **Versioning Policy** section for the full, authoritative rule set (this table must stay in sync with it):
 
 | Level | Trigger | Impact |
 |-------|---------|--------|
-| MAJOR (X.0.0) | New required key, renamed section | Breaking — consumers must update config |
+| MAJOR (X.0.0) | Breaking change in Automation Config contract (new required key, renamed section) — OR breaking change in agent output format contract (new/modified structured output sections that Agent Overrides or external tooling may parse) — OR introduction of a mandatory new structured contract section in agent definition files that prior-version agents would fail validation against | Breaking — consumers must update config, agent overrides, or custom agent files |
 | MINOR (X.Y.0) | New optional section, new skill/agent | Non-breaking — existing configs work unchanged |
 | PATCH (X.Y.Z) | Behavior fix without contract change | Invisible — no config changes needed |
 
@@ -340,7 +340,7 @@ The file lives under `.agent-flow/` (not `.claude/`), consistent with all other 
 
 ## State Management
 
-The state schema (`state/schema.md`) uses `schema_version: "1.0"`. All additions are **additive** — backward-compatible reads from prior pipelines continue without modification.
+The state schema (`state/schema.md`) defines `schema_version`: `"1.0"` for legacy keyless runs and **`"2.0"`** for keyed runs (PR #15 gate-as-signer dispatch witness — the first **non-additive** change). All earlier additions remain **additive** and backward-compatible; a v1.0 state stays valid and is verified under the legacy sha256 dual-mode (never a false `WITNESS_MISMATCH`).
 
 Additive keys in `state.json`:
 
@@ -349,7 +349,12 @@ Additive keys in `state.json`:
 | `analyst_triage.*` | analyst agent (`--phase triage`) | Triage output — severity, area, complexity, AC count, reproduction steps |
 | `analyst_impact.*` | analyst agent (`--phase impact`) | Impact output — affected files list (max 5), root cause area |
 | `mode_flag` | pipeline skill | Active mode: `yolo`, `default`, or `step-mode` |
-| `overlay_source` | skill (pre-dispatch) | `toml`, `md` (legacy), or `none` — provenance of agent customization |
+| `overlay_source` | skill (pre-dispatch) | `toml`, `none`, or `md_rejected` — provenance of agent customization |
+| `overlay_digest` | skill (pre-dispatch) | v2.0: sha256 of the RAW LF-normalized `.toml` file bytes when `overlay_source=toml` (v1.0 legacy: of the rendered overlay block); the literal `none` or `md_rejected` otherwise |
+| `prompt_head_128` | skill (pre-dispatch) | v1.0 only. On keyed v2.0 runs the gate OBSERVES `head128(tool_input.prompt)` and signs it as ground truth — it is not an orchestrator-committed/compared field |
+| `claim_nonce` / `dispatch_seq` / `override_path` | skill (pre-dispatch, v2.0) | Per-dispatch nonce + monotonic counter + resolved overlay dir, written into the CLAIM and the top-level marker |
+
+**Overlay-bound dispatch witness (v2.0 gate-as-signer).** On keyed runs (`schema_version "2.0"`) the witness is an **HMAC-SHA256 keyed tag** the PreToolUse `Task` gate (`hooks/validate-dispatch-pre.sh`, the sole per-run key holder) computes over a per-field sub-hashed canonical preimage (`subagent_type | model | prompt_head_128 | overlay_source | overlay_digest | stage | run_id | claim_nonce`) and records in the gate-owned ledger `.agent-flow/{RUN-ID}/dispatch-ledger.jsonl` — never in `state.json`. The gate observes-and-signs the dispatched prompt head as ground truth, recomputes `overlay_digest` from the RAW `.toml` bytes, and on a verified match ALLOWs; on a mismatch it emits a deny envelope and `exit 2`, which **blocks the dispatch before the tool runs** (Claude Code ≥ 2.1.90). The PostToolUse audit (`hooks/validate-dispatch.sh` — pure Python; it sources nothing, and the bash `core/lib/stage-invariant.sh` keyed path is demoted to a parity-pinned self-test) re-verifies every ledger tag as a second layer and **cannot block** (it runs after the tool — finding A8). The security authority for "is this run keyed" is the presence of the `0600 dispatch.key`. Legacy v1.0 keyless runs keep the additive `sha256("<subagent_type>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")` 5-tuple receipt with the V1 recompute + V2 overlay-presence dual-mode. Verification is **strict by default**: `AGENT_FLOW_STRICT_DISPATCH` is strict unless explicitly `"0"` (or a `STRICT_DISPATCH_OFF` flag file is present).
 
 The dedup logic in `core/state-manager.md` identifies in-progress pipelines by reading `state.json.status`. The analyst agent writes to `state.analyst_triage` and `state.analyst_impact` sub-objects, providing a natural split of triage+impact data.
 

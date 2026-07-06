@@ -163,7 +163,7 @@ fi
 # Looks for the 3 known dual-pattern lines in real files; skips if files don't
 # have depth-correct refs yet (pre-Phase-7).
 # ---------------------------------------------------------------------------
-REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT="${AGENT_FLOW_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 check_real_line() {
   local label="$1"
@@ -202,8 +202,8 @@ check_real_line() {
 check_real_line "implement-feature/SKILL.md:130" \
   "skills/implement-feature/SKILL.md" 130 "../../" 2
 
-check_real_line "implement-feature/steps/03-decomposition.md:91" \
-  "skills/implement-feature/steps/03-decomposition.md" 91 "../../../" 2
+check_real_line "implement-feature/steps/03-decomposition.md:96" \
+  "skills/implement-feature/steps/03-decomposition.md" 96 "../../../" 2
 
 check_real_line "publish/SKILL.md:176" \
   "skills/publish/SKILL.md" 176 "../../" 2

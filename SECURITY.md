@@ -14,6 +14,30 @@ Include: a description of the vulnerability, steps to reproduce, and potential i
 
 ## Known Limitations
 
+### Advisory-only enforcement — no technical backstop for agent NEVER-constraints
+
+Agent definitions in `agents/*.md` carry hard `NEVER` rules (e.g. publisher's
+"NEVER push to main/development directly — always create a PR", "NEVER force
+push"). These are prompt-level instructions to the agent, not code-enforced
+guarantees. The plugin ships exactly one hook, `hooks/validate-dispatch.sh`
+(PostToolUse), and it is:
+
+- **Opt-in** — not auto-installed; operators must add it to
+  `~/.claude/settings.json` (see `docs/guides/dispatch-enforcement.md`).
+- **Advisory-only even when installed** — PostToolUse fires *after* a tool has
+  already executed, so it cannot block or undo a direct push, a force push, or
+  any other destructive action. It always exits 0.
+
+In short: nothing in the shipped plugin technically prevents a compromised or
+misbehaving agent turn from pushing directly to a protected branch.
+
+**Operator guidance:** treat prompt-level `NEVER` constraints as
+defense-in-depth, not as the primary control. MUST enable server-side branch
+protection (required PR review + required status checks, no direct pushes,
+no force pushes) on `main`/`development` for any repository this plugin is
+pointed at. This is the actual enforcement boundary — the plugin's own
+guardrails are advisory only.
+
 ### Webhook URL — operator trust required
 
 The `Webhook URL` value in `### Notifications` (Automation Config) is dispatched via `curl`
@@ -32,6 +56,7 @@ For the full technical description, see `CLAUDE.md` under "Webhook Payloads".
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x   | ✅ Yes    |
+| Latest published release (see `version` in `.claude-plugin/plugin.json`, currently 1.2.x) | ✅ Yes |
+| All earlier releases | ❌ No |
 
-agent-flow 1.0.0 is the initial supported release. Only the latest release receives security fixes.
+agent-flow follows the Versioning Policy in `CLAUDE.md` (SemVer). Only the latest published release receives security fixes — there is no backport policy for older MAJOR/MINOR lines. Security fixes ship as a PATCH release per that policy.

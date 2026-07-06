@@ -48,11 +48,11 @@ not once per pipeline run.
 
 ### Per-agent overrideable keys — full enumeration
 
-The schema below applies to **any** of the 18 agents. Agent-specific `[limits]` keys are
+The schema below applies to **any** of the 17 agents. Agent-specific `[limits]` keys are
 enumerated in the per-agent reference table further below.
 
 ```toml
-# customization/{agent}.toml — universal schema for all 18 agents
+# customization/{agent}.toml — universal schema for all 17 agents
 
 # --- Tier 1: Scalar overrides ---
 model = "sonnet"    # one of: opus | sonnet | haiku
@@ -65,7 +65,8 @@ style = "rigorous"  # Short descriptor; appended to the agent's system prompt.
 # --- Tier 2: Array of tables (append) ---
 # Plugin-default entries appear BEFORE project additions (order preserved).
 [[process_additions]]
-step = "after_default"    # required; canonical anchor name from toml-overlay-syntax.md
+step = "after_default"    # required; free-form label only — see note below (no effect on
+                           # where the instruction is inserted in the rendered prompt)
 instruction = "Check SQL injection in all DB queries."  # required; free-form string
 
 [[process_additions]]
@@ -86,7 +87,7 @@ max_review_iterations    = 3    # reviewer default: 5
 max_diff_lines           = 80   # fixer default: 100
 max_iterations           = 4    # fixer default: 5
 max_test_attempts        = 5    # test-engineer default: 3
-max_build_retries        = 2    # default: 3
+max_build_retries        = 2    # fixer default: 3
 max_spec_iterations      = 5    # default: 5
 max_root_cause_iterations= 3    # default: 3
 max_files_reported       = 8    # analyst default: 5
@@ -112,7 +113,7 @@ cost_center    = "PROJ-42"
 | Agent | Scalar (Tier 1) | Array (Tier 2) | Table keys in `[limits]` (Tier 3) |
 |-------|-----------------|----------------|-----------------------------------|
 | `analyst` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_files_reported` |
-| `fixer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_diff_lines`, `max_iterations` |
+| `fixer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_diff_lines`, `max_iterations`, `max_build_retries` |
 | `reviewer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_review_iterations` |
 | `test-engineer` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `max_test_attempts`, `test_framework` |
 | `acceptance-gate` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | `ac_threshold`, `complexity_threshold` |
@@ -129,8 +130,12 @@ cost_center    = "PROJ-42"
 | `backlog-creator` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | (none agent-specific) |
 | `sprint-planner` | `model`, `style` | `[[process_additions]]`, `[[constraints]]` | (none agent-specific) |
 
-All agents accept `[meta]` as a free-form table. `max_build_retries` and `max_spec_iterations`
-are global-limit keys available to any agent where they are semantically applicable.
+All agents accept `[meta]` as a free-form table. `max_build_retries` is owned by `fixer` (see
+table above — the fixer↔reviewer build-retry loop it configures is invoked identically by the
+fix-bugs, implement-feature, and scaffold pipelines; see `agents/fixer.md`). `max_spec_iterations`
+is shared by `scaffolder` and `spec-writer` (see table above — both run spec-authoring loops).
+Every `[limits]` key overrideable via TOML MUST appear in at least one row of the reference
+table above; the unknown-key validator rejects any `[limits]` key that is absent from every row.
 
 ---
 
@@ -149,6 +154,10 @@ are global-limit keys available to any agent where they are semantically applica
 - Rule: plugin-default array entries appear **BEFORE** project additions (order preserved).
   TOML overlay entries are **appended after** the defaults, never prepended or interspersed.
 - Each `[[process_additions]]` entry requires keys: `step` (string) and `instruction` (string).
+  `step` is a free-text display label ONLY — it does not control insertion position. All
+  entries render as one flat numbered list, in append order (plugin defaults first, per the
+  rule above): `(step: {step}) {instruction}`. See `core/agent-override-injector.md` Step 3
+  rule 3 for the exact render format.
 - Each `[[constraints]]` entry requires key: `rule` (string).
 - Additional keys inside these entries are subject to unknown-key validation.
 - Example (append ordering):
@@ -268,6 +277,23 @@ not once per pipeline run or per overlay key).
 
 **Log destination**: `.agent-flow/pipeline.log` (append mode; same file as other pipeline log
 entries; see `core/state-manager.md` for log rotation policy).
+
+### Overlay binding into the dispatch witness
+
+The resolved overlay is now bound into the per-stage `dispatch_witness`, which is
+`sha256("<subagent_type>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")`. The
+`overlay_digest` is the sha256 of the rendered overlay Markdown block when `overlay_source=toml`,
+or the literal `none` / `md_rejected` for those branches. Because the overlay provenance and
+digest are witness inputs, dropping a `.toml` overlay flips `overlay_source` `toml→none` and
+`overlay_digest→none`, changing the witness — so the omission is detectable.
+
+The dispatch hook (`hooks/validate-dispatch.sh` via
+`core/lib/stage-invariant.sh::check_dispatch_witness`) verifies in two layers: **V1** recomputes
+the witness from the stored fields and compares it to `dispatch_witness`; **V2** checks overlay
+presence — if `customization/{agent}.toml` exists on disk but the stage recorded
+`overlay_source != toml`, that is a `WITNESS_MISMATCH` (the dropped-overlay case). Verification is
+**strict by default**: `AGENT_FLOW_STRICT_DISPATCH` is strict unless explicitly set to `"0"`, and a
+true mismatch exits the hook with code 2, failing the dispatch.
 
 ### Layer architecture note (Layer 2 vs. Layer 3)
 

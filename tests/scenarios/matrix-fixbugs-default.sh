@@ -48,7 +48,7 @@ else
   fail "acceptance gate step missing AC>=3 condition"
 fi
 
-if grep -qiE 'complexity.*[Mm]|>= M|Medium.*complex' "$ACCEPT_STEP"; then
+if grep -qiE 'bug complexity.{0,3}(≥|>=).{0,3}M' "$ACCEPT_STEP"; then
   echo "OK: acceptance gate step documents complexity>=M condition"
 else
   fail "acceptance gate step missing complexity>=M condition"

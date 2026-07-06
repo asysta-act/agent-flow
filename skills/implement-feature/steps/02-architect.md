@@ -7,17 +7,20 @@ protocol from `../../../core/state-manager.md`.
 
 ### Pre-dispatch witness write
 
-The architect binds to canonical stage `code_analysis` per design.md §4.2 (feature/scaffold mode). Source `core/lib/stage-invariant.sh` and write the witness fields atomically before Task dispatch. Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables.
+The architect binds to canonical stage `code_analysis` per design.md §4.2 (feature/scaffold mode). Source `core/lib/stage-invariant.sh`. Resolve the Agent Override overlay (see the "Agent Override injection" section below) BEFORE computing the witness, then write the witness fields atomically before Task dispatch. Inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 prompt variables.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$ARCHITECT_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness code_analysis agent-flow:architect opus "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness code_analysis agent-flow:architect opus "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:architect"
 EXPECTED_STAGE_NAME="code_analysis"
-# Merge: state.json[stages.code_analysis] = { dispatched_at, dispatch_witness,
-#   agent_name, stage_name, status="in_progress" } atomically.
+# Merge: state.json[stages.code_analysis] = { dispatched_at, agent_name, stage_name,
+#   prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+#   in ONE atomic write. Then append OVERLAY_BLOCK to the prompt.
 ```
 
 ## Agent Override injection

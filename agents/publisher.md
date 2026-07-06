@@ -21,11 +21,11 @@ Follow these steps exactly, in order:
 
 1. **Read Configuration**
 
-   Read project Automation Config from CLAUDE.md. You need these values:
-- **Source Control:** Remote (owner/repo), Base branch, Branch naming pattern
-- **PR Rules:** Labels, Title format
-- **PR Description Template:** the full template text
-- **Issue Tracker:** Type (determines which MCP server to use, default: youtrack), State transitions
+   Read project config from `.agent-flow/config.toml` (resolved by the config reader — see `../core/config-reader.md`). You need these values:
+- **`[source_control]`:** `source_control.remote` (owner/repo), `source_control.base_branch`, `source_control.branch_naming` (branch naming pattern)
+- **`[pr_rules]`:** `pr_rules.labels`, `pr_rules.title_format`
+- **`[pr_description_template]`:** `pr_rules.description_template` (the full template text)
+- **`[issue_tracker]`:** `issue_tracker.type` (determines which MCP server to use, default: youtrack), `issue_tracker.state_transitions`
 
 2. **Pre-Publish Safety Checks**
 
@@ -36,7 +36,7 @@ Follow these steps exactly, in order:
 
 3. **Create or Switch to Feature Branch**
 
-   - Generate branch name using naming pattern from Automation Config (e.g., `fix/{issue-id}-short-description`). Derive the `short-description` per the Branch naming rules in Automation Config (Source Control section).
+   - Generate branch name using the `source_control.branch_naming` pattern from `.agent-flow/config.toml` (e.g., `fix/{issue-id}-short-description`). Derive the `short-description` per the `source_control.branch_naming` rule.
 - If branch already exists (e.g., created by fixer), switch to it: `git checkout {branch}`
 - If branch does not exist, create it: `git checkout -b {branch}`
 
@@ -44,11 +44,11 @@ Follow these steps exactly, in order:
 
    - Stage changed files: `git add {specific files}` — never use `git add .` or `git add -A`
 - Commit with message: concise English summary referencing issue ID
-- Examples by mode:
-  - Bug-fix: `fix(auth): prevent token expiration on refresh [PROJ-123]`
-  - Feature: `feat(auth): add OAuth2 provider support [PROJ-456]`
-  - Scaffold: `scaffold(project): initialize API server with health endpoint [PROJ-789]`
+- Examples by workflow type (per the **Mode hint** input — see Output Contract § Inputs):
+  - Bug-fix (Mode hint absent): `fix(auth): prevent token expiration on refresh [PROJ-123]`
+  - Feature (Mode hint = `Mode: feature`): `feat(auth): add OAuth2 provider support [PROJ-456]`
 - These are git **commit** conventions (Conventional Commits with a trailing `[ISSUE-ID]`) and are independent of the PR **Title format** (Step 6). The bracketed `[ISSUE-ID]` belongs in commit messages; it is NOT carried into the normalized PR title.
+- Scaffold pipeline runs never reach this agent — the scaffolder agent's own push and tracker-issue steps (`skills/scaffold/steps/03-scaffold.md`) own all VCS/PR actions for scaffold, so there is no Scaffold commit-message example here. See Constraints.
 
 5. **Push Branch**
 
@@ -58,15 +58,15 @@ Follow these steps exactly, in order:
 
 6. **Create Pull Request**
 
-   - **Title:** Build the PR title per the **Title format** rule from PR Rules (Automation Config), using the issue ID, mode keyword, and issue summary (from issue tracker) — NOT the branch name. If PR Rules does not define a Title format, fall back to `{issue-id} {Mode}: {summary}` — the issue ID, the mode keyword (`Fix` / `Feat` / `Scaffold`), and the issue summary (so the mode is always present even with no configured format).
-- **Description:** Use PR Description Template from Automation Config (always English). Fill in ALL template sections:
+   - **Title:** Build the PR title per the `pr_rules.title_format` rule from `.agent-flow/config.toml`, using the issue ID, workflow-type keyword, and issue summary (from issue tracker) — NOT the branch name. If `pr_rules.title_format` is not set, fall back to `{issue-id} {Keyword}: {summary}` — the issue ID, the workflow-type keyword (`Fix` for bug-fix, `Feat` for feature — derived from the **Mode hint** input, not from the publish-flow Mode in the Inputs table), and the issue summary (so the keyword is always present even with no configured format).
+- **Description:** Use `pr_rules.description_template` from `.agent-flow/config.toml` (always English). Fill in ALL template sections:
   - Build the PR body as a multi-line string with real line breaks between sections — follow `../core/mcp-body-formatting.md`.
   - Summary, Changes, Testing, Issue link
-  - Bug-fix mode: include **Root Cause** section
-  - Feature/scaffold mode: include **Objective** section (replaces Root Cause)
-- **Labels:** Add labels from PR Rules section only.
-  - **Label ID resolution:** Some MCP servers (e.g., Gitea) require numeric label IDs for PR creation but may not return IDs from the label listing tool. If the MCP label listing tool does not return IDs, retrieve them via a direct API call: `GET /api/v1/repos/{owner}/{repo}/labels` — each label object includes an `id` field. Use the Instance URL from Automation Config as the API base.
-- **Base branch:** From Automation Config (Source Control section)
+  - Bug-fix (Mode hint absent): include **Root Cause** section
+  - Feature (Mode hint = `Mode: feature`): include **Objective** section (replaces Root Cause)
+- **Labels:** Add labels from `pr_rules.labels` only.
+  - **Label ID resolution:** Some MCP servers (e.g., Gitea) require numeric label IDs for PR creation but may not return IDs from the label listing tool. If the MCP label listing tool does not return IDs, retrieve them via a direct API call: `GET /api/v1/repos/{owner}/{repo}/labels` — each label object includes an `id` field. Use `issue_tracker.instance` from `.agent-flow/config.toml` as the API base.
+- **Base branch:** From `source_control.base_branch` in `.agent-flow/config.toml`
 - Use the source control MCP server corresponding to the Remote format (e.g., Gitea API for gitea instances, GitHub API for github.com) for PR creation.
 
    **6a. Capture PR identity from the create response — never guess.**
@@ -90,8 +90,10 @@ Follow these steps exactly, in order:
 
 7. **Update Issue Tracker**
 
+   This step is the **sole tracker-mutation point** for the publish flow. Dispatching skills and commands (including `/agent-flow:publish`) MUST NOT independently set the issue state or post their own PR-link comment after invoking this agent — doing so duplicates this step and produces a double comment on the issue. This agent's Step 7 always owns the mutation; a dispatcher that also performs it has a contract bug in the dispatcher, not here.
+
    - When `mode` field in dispatch context indicates `pr-only-*`, skip tracker state transitions and tracker comments; PR creation proceeds normally.
-- For mode `full-publish`: Set issue state: "For Review" (or equivalent from Automation Config → State transitions); add comment to issue with PR link. After the status-set MCP call, follow `../core/status-verification.md` to verify the transition succeeded.
+- For mode `full-publish`: Set issue state: "For Review" (or equivalent from `issue_tracker.state_transitions` in `.agent-flow/config.toml`); add comment to issue with PR link. After the status-set MCP call, follow `../core/status-verification.md` to verify the transition succeeded.
 
 8. **Output**
 
@@ -116,9 +118,10 @@ Tracker row values by mode:
 | Section | Source | Required |
 |---------|--------|----------|
 | Mode (full-publish / pr-only-404 / pr-only-no-id) | dispatching skill prompt | yes |
-| Source Control config | Automation Config (Remote, Base branch, Branch naming) | yes |
-| PR Rules + PR Description Template | Automation Config | yes |
-| Issue Tracker config (Type, State transitions) | Automation Config | yes (skipped only in pr-only-* modes) |
+| Mode hint | dispatching skill (`Mode: feature` for feature workflows; absent in bug-fix mode) — same convention as `agents/fixer.md`, `agents/reviewer.md`, `agents/test-engineer.md` | no (defaults to bug-fix; scaffold pipeline never dispatches this agent — see Constraints) |
+| Source Control config | `.agent-flow/config.toml` `[source_control]` (remote, base_branch, branch_naming) | yes |
+| PR Rules + PR Description Template | `.agent-flow/config.toml` `[pr_rules]` + `[pr_description_template]` | yes |
+| Issue Tracker config (type, state_transitions) | `.agent-flow/config.toml` `[issue_tracker]` | yes (skipped only in pr-only-* modes) |
 
 ### Outputs
 
@@ -136,13 +139,13 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 1. `dispatched_at` — Field is present and non-empty for stage `publisher`. The orchestrator wrote this pre-dispatch.
 
-2. `dispatch_witness` — Field is present, exactly 64 hex characters, and matches the sha256 of `{subagent_type}|{model}|{prompt_head_128}` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function.
+2. `dispatch_witness` — The signed witness is computed and recorded by the PreToolUse gate (the sole key holder), NOT by the orchestrator and NOT stored in `state.json`. On a keyed run (`schema_version` `"2.0"`) it is the keyed HMAC tag the gate appends to the gate-owned ledger `.agent-flow/{RUN-ID}/dispatch-ledger.jsonl`, keyed by `(run_id, stage, claim_nonce)`, over the per-field sub-hashed canonical preimage `subagent_type|model|prompt_head_128|overlay_source|overlay_digest|stage|run_id|claim_nonce` (the gate observes `prompt_head_128` from the dispatched prompt and signs it as ground truth — it is not a compared claim). Verify by reading the ledger for a `WITNESS_OK` entry for this run's `(run_id, stage)`; on a legacy v1.0 run (no key, no ledger) this is expected and is NOT a failure.
 
 3. `status` — Field equals `"in_progress"` for this stage. The orchestrator wrote this pre-dispatch (status flips to `"completed"` only AFTER you return, so observing `"in_progress"` proves the normal dispatch flow ran).
 
 4. `stage_name` — State.json `stage_name` for this stage equals `publisher` (this value is injected by the orchestrator as a Tier-1 prompt template variable: `EXPECTED_STAGE_NAME=publisher`). If the values mismatch, the orchestrator's dispatch table is inconsistent with the prompt — Block immediately.
 
-5. `agent_name` — State.json `agent_name` for this stage equals `publisher` (injected as `EXPECTED_AGENT_NAME=publisher`). Mismatch → Block.
+5. `agent_name` — State.json `agent_name` for this stage equals the value injected as `EXPECTED_AGENT_NAME` (the namespaced Task subagent_type, e.g. `agent-flow:publisher`). Mismatch → Block.
 
 If ANY invariant fails, output a Block comment using the standard Block Comment Template with `Reason: Step completion invariant violated: {invariant_name}` and exit with BLOCKED status.
 
@@ -155,14 +158,15 @@ This invariant check is the agent-side half of the 3-layer defense; pairs with `
 ## Constraints
 
 - NEVER push to main/development directly — always create a PR
+- NEVER assume you were dispatched for a Scaffold pipeline run — scaffold's VCS/PR actions (push, tracker-issue creation) are owned entirely by the scaffolder agent (`skills/scaffold/steps/03-scaffold.md`); this agent is dispatched only for bug-fix and feature workflows
 - NEVER force push — if push fails due to diverged history, Block
 - NEVER use `git add .` or `git add -A` — stage specific files only (this applies to the publisher's scope; orchestrating commands may use different staging strategies)
 - NEVER include "Generated with Claude Code" footer in PR description — if the tool auto-appends it, that is acceptable, but do NOT add it manually
 - NEVER use `\n` as a line separator in MCP tool parameters -- use actual newlines. See `../core/mcp-body-formatting.md` for the full formatting rule.
-- PR description always in English
+- NEVER write the PR description in a language other than English
 - NEVER guess, compute, or assume a PR number (e.g. "previous + 1", "next id after the last open PR"). The PR `number` MUST come from the create call's own response; if it is unreadable, the create FAILED — Block. See Step 6a.
 - NEVER perform a mutating call (PATCH / DELETE / POST comment) against a PR or issue id without first verifying `head.ref` == current branch AND `base.ref` == configured base (a missing field counts as a mismatch). See Step 6b.
-- On failure: Block using the Block Comment Template:
+- NEVER report a failure without the Block Comment Template — on any failure, Block using this exact format:
   ```
   [agent-flow] 🔴 Pipeline Block
   Agent: publisher

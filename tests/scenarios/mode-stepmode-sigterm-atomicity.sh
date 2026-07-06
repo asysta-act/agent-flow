@@ -2,6 +2,16 @@
 # Verifies: AC-MODE-008aa
 # Description: SIGTERM before last_completed_step write completes → step NOT recorded as done
 #   On resume, interrupted step is re-executed from scratch
+#
+# NOTE on scope: this repo ships no runtime orchestrator binary (it is "a pure
+# plugin of markdown definitions" per CLAUDE.md) — pipeline steps run inside
+# Claude Code agent sessions, not a standalone process this harness can spawn
+# and signal. This scenario is therefore a STATIC check: it (a) greps docs for
+# the documented atomic-write invariant and (b) confirms a state.json fixture
+# is internally consistent with that invariant. It does NOT spawn a process,
+# send a real SIGTERM, or race a write — a green run demonstrates the
+# invariant is documented and the fixture format used to describe it is
+# self-consistent, not that the behavior is actually enforced at runtime.
 set -uo pipefail
 
 # NOTE: REPO_ROOT assumes test file location is tests/scenarios/. Run after Phase 7 has moved files.
@@ -52,12 +62,22 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Assertion 3: Simulate atomic state write pattern
+# Assertion 3: state.json fixture is consistent with the documented atomic-
+# write pattern. This is a STATIC fixture check, NOT a behavioral simulation
+# — no process is spawned and no SIGTERM is sent. It only asserts that a
+# fixture representing "step 03 committed, step 04 in-flight" (the scenario
+# described by Assertions 1/2/4's documentation) parses the way the
+# documented invariant says it should. It cannot, by construction, detect a
+# real mid-write race; that would require a stub orchestrator subprocess this
+# repo does not have (see NOTE at top of file).
 # ---------------------------------------------------------------------------
-echo "--- Assertion 3: simulate atomic state.json write (step success → then write) ---"
+echo "--- Assertion 3: state.json fixture matches documented atomic-write invariant (static check) ---"
 mkdir -p "$TMPDIR_TEST/.agent-flow"
 
-# Step 03 completes successfully (no SIGTERM)
+# Fixture: step 03 completed and was committed to state.json; step 04 is
+# modeled as still in-flight (its completion was never written). This fixture
+# is hand-written to represent the post-SIGTERM state the docs describe —
+# no step 04 write is attempted or interrupted here.
 cat > "$TMPDIR_TEST/.agent-flow/state.json" << 'EOF'
 {
   "schema_version": "1.0",
@@ -66,14 +86,15 @@ cat > "$TMPDIR_TEST/.agent-flow/state.json" << 'EOF'
 }
 EOF
 
-# Now step 04 starts — SIGTERM arrives before write
-# State should STILL show last_completed_step = 03-reproduce (not 04)
+# Confirm the fixture itself is well-formed and matches the documented field
+# name/value — i.e. this is a schema/fixture sanity check, not proof that a
+# real in-flight step 04 would fail to update this file mid-write.
 if command -v jq > /dev/null 2>&1; then
   LAST=$(jq -r '.last_completed_step' "$TMPDIR_TEST/.agent-flow/state.json")
   if [ "$LAST" = "03-reproduce" ]; then
-    echo "OK: state.json last_completed_step = 03-reproduce (not updated mid-step)"
+    echo "OK: fixture state.json last_completed_step = 03-reproduce (matches documented in-flight-step-04 scenario)"
   else
-    fail "state.json shows '$LAST' — should be '03-reproduce' when step 04 is in-flight"
+    fail "fixture state.json shows '$LAST' — should be '03-reproduce' to represent step 04 in-flight"
   fi
 fi
 
@@ -94,6 +115,6 @@ fi
 # Final result
 # ---------------------------------------------------------------------------
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: AC-MODE-008a — SIGTERM atomicity for last_completed_step write documented"
+  echo "PASS: AC-MODE-008a — SIGTERM atomicity for last_completed_step write is documented and fixture-consistent (static check; no process/signal exercised)"
 fi
 exit "$FAIL"

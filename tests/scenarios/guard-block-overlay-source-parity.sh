@@ -22,7 +22,7 @@
 # ===========================================================================
 set -uo pipefail
 
-REPO_ROOT="${CEOS_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+REPO_ROOT="${AGENT_FLOW_REPO_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 
 # SIGPIPE-safe assert helpers: contains / contains_i / matches_re
 . "$REPO_ROOT/tests/lib/assert.sh"

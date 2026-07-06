@@ -1,6 +1,6 @@
 # Testing agent-flow
 
-Test suite for verifying pipeline logic. Contains a mock MCP server, test runner, and 230 automated scenarios.
+Test suite for verifying pipeline logic. Contains a mock MCP server, test runner, and 268 automated scenarios.
 
 ## Structure
 
@@ -10,7 +10,7 @@ tests/
 │   ├── CLAUDE.md          ← Complete Automation Config
 │   ├── app.py             ← Python code with two intentional bugs
 │   └── tests/test_app.py  ← Tests for mock code
-├── scenarios/             ← 230 test scenarios (bash scripts)
+├── scenarios/             ← 268 test scenarios (bash scripts)
 │   ├── happy-path.sh      ← Full pipeline end-to-end
 │   ├── triage-block.sh    ← Triage-analyst detects duplicate → Block
 │   ├── fixer-retry.sh     ← Fixer exhausts retry limit → Block + rollback
@@ -25,7 +25,7 @@ tests/
 │   ├── scaffold-spec-input-conflicts.sh ← Flag validation
 │   └── pipeline-consistency.sh        ← Cross-command consistency checks
 ├── harness/               ← Test infrastructure
-│   ├── fixtures/          ← Mock data (issues.json, automation-config.md)
+│   ├── fixtures/          ← Mock data (issues.json, automation-config.toml)
 │   ├── mock-mcp-server.sh ← Mock MCP server
 │   └── run-tests.sh       ← Test runner
 └── README.md              ← This file
@@ -40,7 +40,7 @@ tests/
 
 ## Test scenarios
 
-The table below shows a representative sample of scenarios — it is **not** an exhaustive list. The full suite contains 230 scenarios in `tests/scenarios/`.
+The table below shows a representative sample of scenarios — it is **not** an exhaustive list. The full suite contains 268 scenarios in `tests/scenarios/`.
 
 | Scenario (examples) | File | Verifies |
 |---------------------|------|----------|

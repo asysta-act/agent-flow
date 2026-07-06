@@ -21,7 +21,7 @@ You are a THIN CONTROLLER. You:
 - Read state from disk (`.agent-flow/{ISSUE-ID}/state.json`)
 - Follow deterministic decision logic (this document + step files)
 - Dispatch fresh subagents via the Task tool (one per step)
-- Write atomic state.json updates (including `dispatched_at` + `dispatch_witness` BEFORE each Task)
+- Resolve the Agent Override overlay, then write atomic state.json updates (including `dispatched_at` + overlay fields + `dispatch_witness` BEFORE each Task)
 
 You do NOT:
 - Reason about the bug domain (subagents do that)
@@ -47,6 +47,9 @@ GOT_BATCH=false; BATCH_N=""; POSITIONAL=""; DRY_RUN=false
 GOT_YOLO=false; GOT_STEP_MODE=false; GOT_DECOMPOSE=false; GOT_NO_DECOMPOSE=false
 PROFILE_NAME=""; CLARIFICATION_TEXT=""
 read -ra ARG_TOKENS <<< "$ARGUMENTS"
+# read -ra splits quoted multi-word values into tokens; reconstruct until next known flag.
+# KNOWN LIMITATION: a value containing a flag-like substring stops reconstruction early.
+KNOWN_FLAG_RE='^(--batch|--dry-run|--yolo|--step-mode|--decompose|--no-decompose|--profile|--clarification)$'
 i=0
 while [ $i -lt ${#ARG_TOKENS[@]} ]; do
   tok="${ARG_TOKENS[$i]}"
@@ -57,8 +60,22 @@ while [ $i -lt ${#ARG_TOKENS[@]} ]; do
     --step-mode)     GOT_STEP_MODE=true ;;
     --decompose)     GOT_DECOMPOSE=true ;;
     --no-decompose)  GOT_NO_DECOMPOSE=true ;;
-    --profile)       i=$((i+1)); PROFILE_NAME="${ARG_TOKENS[$i]}" ;;
-    --clarification) i=$((i+1)); CLARIFICATION_TEXT="${ARG_TOKENS[$i]}" ;;
+    --profile)
+      i=$((i+1)); PROFILE_NAME=""
+      while [ $i -lt ${#ARG_TOKENS[@]} ] && [[ ! "${ARG_TOKENS[$i]}" =~ $KNOWN_FLAG_RE ]]; do
+        PROFILE_NAME="${PROFILE_NAME:+$PROFILE_NAME }${ARG_TOKENS[$i]}"
+        i=$((i+1))
+      done
+      i=$((i-1)) # outer i+=1 advances past last consumed token
+      ;;
+    --clarification)
+      i=$((i+1)); CLARIFICATION_TEXT=""
+      while [ $i -lt ${#ARG_TOKENS[@]} ] && [[ ! "${ARG_TOKENS[$i]}" =~ $KNOWN_FLAG_RE ]]; do
+        CLARIFICATION_TEXT="${CLARIFICATION_TEXT:+$CLARIFICATION_TEXT }${ARG_TOKENS[$i]}"
+        i=$((i+1))
+      done
+      i=$((i-1))
+      ;;
     --*) ;;
     *) [ -z "$POSITIONAL" ] && POSITIONAL="$tok" ;;
   esac
@@ -68,7 +85,7 @@ done
 if $GOT_YOLO && $GOT_STEP_MODE; then echo "[ERROR] --yolo and --step-mode are mutually exclusive" >&2; exit 1; fi
 if $GOT_DECOMPOSE && $GOT_NO_DECOMPOSE; then echo "[ERROR] --decompose and --no-decompose are mutually exclusive" >&2; exit 1; fi
 
-# Tracker-type-aware disambiguation: read Type from CLAUDE.md Issue Tracker section.
+# Tracker-type-aware disambiguation: read issue_tracker.type from .agent-flow/config.toml.
 # String trackers (youtrack|jira|linear): bare integer = batch count. Numeric trackers
 # (github|gitea|redmine): bare integer = single ISSUE_ID.
 if $GOT_BATCH; then
@@ -77,7 +94,8 @@ if $GOT_BATCH; then
 elif [ -z "$POSITIONAL" ]; then
   echo "[ERROR] Usage: /agent-flow:fix-bugs <ISSUE-ID> | --batch <N>" >&2; exit 1
 else
-  TRACKER_TYPE="$(grep -oE '^\| Type \| [A-Za-z][A-Za-z0-9_-]+' CLAUDE.md | head -1 | awk -F'| ' '{print $3}' | tr -d ' ' | tr '[:upper:]' '[:lower:]')"
+  # Extract the `type` scalar from the [issue_tracker] section of .agent-flow/config.toml.
+  TRACKER_TYPE="$(awk '/^\[/{i=($0~/^\[issue_tracker\][[:space:]]*$/)} i&&/^[[:space:]]*type[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/,"");sub(/[[:space:]].*$/,"");gsub(/"/,"");print tolower($0);exit}' .agent-flow/config.toml 2>/dev/null)"
   if [ -z "$TRACKER_TYPE" ]; then
     echo "[WARN] Tracker type not detected; assuming string-tracker semantics (youtrack)" >&2
     TRACKER_TYPE="youtrack"
@@ -105,47 +123,52 @@ Legacy flat `.agent-flow/state.json` → log `[WARN]` and continue with the new 
 
 ## Step 0b — Resume detection
 
-Follow `../../core/resume-detection.md` for resume detection logic. Inputs: `ISSUE_ID` (single) or
-`BATCH_RUN_ID="batch-{timestamp}"` (batch); `MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`,
-`On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
+Follow `../../core/resume-detection.md` for resume detection logic. Inputs: `ISSUE_ID` (single) or `BATCH_RUN_ID="batch-{timestamp}"` (batch);
+`MODE`, `GOT_YOLO`, `GOT_STEP_MODE`, `Webhook_URL`, `On_events`, `CLARIFICATION_TEXT`. Outputs: `RESUME_POINT`, `RESTORED_CONTEXT`, `PIPELINE_TYPE`.
 
-If `RESUME_POINT == "FRESH"`, proceed with Step 1 below. Otherwise skip ahead per the BUG resume
-mapping in `../../core/resume-detection.md`. Batch-mode invokes per-issue resume inside the per-issue
-loop, so the outer batch run does not skip ahead.
+If `RESUME_POINT == "FRESH"`, proceed with Step 1 below. Otherwise skip ahead per the BUG resume mapping in `../../core/resume-detection.md`.
+Batch-mode invokes per-issue resume inside the per-issue loop, so the outer batch run does not skip ahead.
+
+**Webhook events beyond the base 5:** NEEDS_CLARIFICATION fires `pipeline-paused`; `../../core/resume-detection.md` Step 9 fires
+`pipeline-resumed` on resume (both gated on `Webhook_URL` + matching `On events` token).
 
 ## Mode flag semantics
 
-- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps, pauses only on NEEDS_CLARIFICATION.
+- Default (neither `--yolo` nor `--step-mode`): supervised — runs all steps including step 11 (publish) end-to-end unattended; pauses only on NEEDS_CLARIFICATION.
 - `--yolo`: zero gates, autonomous run to PR — auto-approve decomposition, auto-publish.
-- `--step-mode`: pause after each step for human review — mutually exclusive with `--yolo`.
+- `--step-mode`: pause after each step (including before step 11) for human review — mutually exclusive with `--yolo`; use this flag for a human publish-review gate.
 
 ## Configuration
 
-Read from `## Automation Config` in CLAUDE.md per `../../core/config-reader.md`. Required sections:
-Issue Tracker, Source Control, PR Rules, Build & Test, PR Description Template. Optional:
-Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees, Decomposition,
-Error Handling, Agent Overrides, Local Deployment, Browser Verification, Pipeline Profiles,
-Pause Limits, E2E Test. See `docs/reference/automation-config.md` for the full key contract.
+Read config from `.agent-flow/config.toml` per `../../core/config-reader.md`. Required: `[issue_tracker]` (`issue_tracker.type`, `issue_tracker.instance`, `issue_tracker.project`, `issue_tracker.bug_query`, `issue_tracker.state_transitions`, `issue_tracker.on_start_set`), `[source_control]` (`source_control.remote`, `source_control.base_branch`, `source_control.branch_naming`), `[pr_rules]` (`pr_rules.labels`), `[build_and_test]` (`build.build_command`, `build.test_command`), `[pr_description_template]`. Optional: `[retry_limits]`, `[module_docs]`, `[hooks]`, `[custom_agents]`, `[notifications]`, `[worktrees]`, `[decomposition]`, `[error_handling]`, `[agent_overrides]`, `[local_deployment]`, `[browser_verification]`, `[[pipeline_profiles]]`, `[pause_limits]`, `[e2e_test]`. See `docs/reference/automation-config.md` for the full key contract.
 
-Pipeline profile parsing: follow `../../core/profile-parser.md`. Stage names eligible for skip:
-`triage`, `analyst-impact`, `test-engineer`, `test-engineer-e2e`, `browser-agent-reproduce`,
-`browser-agent-verify`. NEVER skip: `fixer`, `reviewer`, `publisher` (these stages CANNOT be skipped).
+Pipeline profile reading: follow `../../core/profile-parser.md`. Stage names eligible for skip: `triage`, `analyst-impact`,
+`test-engineer`, `test-engineer-e2e`, `browser-agent-reproduce`, `browser-agent-verify`. NEVER skip: `fixer`, `reviewer`, `publisher`
+(these stages CANNOT be skipped).
 
-## Architecture freshness (advisory)
+### Config Validity Gate
+
+Follow `skills/implement-feature/SKILL.md` Step 0b: Config Validity Gate identically (unfilled placeholder scan across
+`Issue Tracker`, `Source Control`, `PR Rules`, `Build & Test`, `PR Description Template` → BLOCK) before proceeding to Step 00 — canonical logic lives there.
+
+## Preflight checks (advisory)
 
 <!-- @snippet:architecture-freshness -->
+<!-- @snippet:dispatch-enforcement-preflight -->
 
-Before fixer dispatch, run the canonical architecture freshness check from
-`core/snippets/architecture-freshness.md`. Advisory only, non-blocking.
+Before fixer dispatch, run both canonical advisory (non-blocking) checks: `core/snippets/architecture-freshness.md` (stale architecture docs) and `core/snippets/dispatch-enforcement-preflight.md` (is the blocking PreToolUse `Task` gate wired across the settings tree — user/project/project-local, not just `~/.claude/settings.json`, since hooks combine?).
 
 ## Worktree / batch processing
 
 If `MODE = batch`:
-- If `Worktrees` config exists → parallel (batch_size, base_path, cleanup).
+- If `[worktrees]` config exists → parallel (batch_size, base_path, cleanup).
 - Else → sequential CWD.
-- Outer loop: query the tracker for N bugs via `Bug query` from Automation Config.
+- Outer loop: query the tracker for N bugs via `issue_tracker.bug_query` from `.agent-flow/config.toml`.
 - For each ticket: write per-issue `.agent-flow/{ISSUE-ID}/state.json`, then execute the
   dispatch table below per-issue.
+- "Parallel" means concurrent `Task()` dispatch only — per-issue `state.json` writes stay inside each ticket's own
+  directory (no cross-ticket sharing). The batch-level summary below IS shared, but this orchestrator is its sole
+  writer (sequential fold-in as each `Task()` returns, atomic tmp+rename) — no additional file-level locking needed.
 - Maintain a batch-level summary at `.agent-flow/batch-{timestamp}/state.json` with
   `pipeline_type: "bug_fix_batch"`, `processed[]`, `succeeded[]`, `blocked[]`.
 - On block: increment `block_count`. If `Max blocked per run` reached → skip remaining bugs.
@@ -174,14 +197,24 @@ in `state.json` — never leave a stage at `"pending"` after the step's turn pas
 | 12   | steps/12-result.md                         | terminal report + dispatch-audit surfacing             |
 
 For each step you SHALL invoke the Task tool with the `subagent_type` listed in the corresponding
-step file. Before invoking Task, you SHALL write atomically to `state.json` under
-`stages.<stage>`:
-- `dispatched_at`   = ISO-8601 UTC now
-- `dispatch_witness` = sha256("<subagent_type>|<model>|<prompt_head_128>") via
-  `core/lib/stage-invariant.sh::compute_dispatch_witness`
-- `agent_name`      = `<subagent_type>`
-- `stage_name`      = `<canonical stage name>` (per the step file)
-- `status`          = `"in_progress"`
+step file. Before invoking Task, you SHALL, in this ORDER: (1) run the Agent Override Injector
+(`../../core/agent-override-injector.md`) to resolve `overlay_source` (`toml` | `none` |
+`md_rejected`) and its rendered overlay block; (2) compute `overlay_digest` from that block via
+`core/lib/stage-invariant.sh::compute_overlay_digest`; (3) compute `dispatch_witness` WITH the
+overlay inputs; (4) write atomically (ONE write) to `state.json` under `stages.<stage>`:
+- `dispatched_at`    = ISO-8601 UTC now
+- `agent_name`       = `<subagent_type>`
+- `stage_name`       = `<canonical stage name>` (per the step file)
+- `prompt_head_128`  = first 128 UTF-8-safe bytes of the raw prompt template
+- `overlay_source`   = `<toml | none | md_rejected>`
+- `overlay_digest`   = `<sha256 hex of rendered block | "none" | "md_rejected">`
+- `dispatch_witness` = sha256("<subagent_type>|<model>|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness STAGE SUBAGENT_TYPE MODEL
+  PROMPT_HEAD_128 OVERLAY_SOURCE OVERLAY_DIGEST`
+- `status`           = `"in_progress"`
+
+Then (5) append the rendered overlay block to the prompt and invoke Task. The overlay is resolved
+BEFORE the witness so the receipt binds the overlay actually applied.
 
 You SHALL also inject `EXPECTED_AGENT_NAME` and `EXPECTED_STAGE_NAME` as Tier-1 variables in the
 agent prompt.
@@ -191,60 +224,34 @@ agent prompt.
 Before each Task dispatch, apply Agent Overrides per `../../core/agent-override-injector.md` (.toml
 primary). Applies to both single and batch mode.
 
-**Step file override (planned v1.2):** replacing individual step files via `customization/steps/fix-bugs/{NN}-{name}.md` is not yet implemented. See TOML overlay documentation for current customization options.
+**Step file override (not yet implemented):** replacing individual step files via `customization/steps/fix-bugs/{NN}-{name}.md`
+is not currently supported by any shipped version. See TOML overlay documentation for current customization options.
 
 ## `--step-mode` prompt
 
-After each step completes (before dispatching the next), if `$GOT_STEP_MODE=true`:
-pause and display step result summary, present
-`[step-mode] Step {NN}/12 completed: {step-name}` and prompt
-`Continue / Skip remaining gates / Abort? [c/s/a]:` (re-prompt on empty input).
+After each step completes (before dispatching the next), if `$GOT_STEP_MODE=true`: pause and display step result summary, present `[step-mode] Step {NN}/12 completed: {step-name}` and prompt `Continue / Skip remaining gates / Abort? [c/s/a]:` (re-prompt on empty input).
 
-State machine:
-- `c` / `continue` → proceed to next step.
-- `s` / `skip`     → switch MODE to yolo for remaining steps; log
-  `[INFO] step-mode escape: switched to yolo for remaining steps`.
-- `a` / `abort`    → write `state.json` (`pause_reason=step_mode_abort`,
-  `last_completed_step`, `outcome=paused`, `paused_at=ISO8601`) then exit 0
-  (graceful pause — not an error exit).
+State machine: `c`/`continue` → proceed to next step. `s`/`skip` → switch MODE to yolo for remaining steps; log `[INFO] step-mode escape: switched to yolo for remaining steps`. `a`/`abort` → write `state.json` (`pause_reason=step_mode_abort`, `last_completed_step`, `outcome=paused`, `paused_at=ISO8601`) then exit 0 (graceful pause — not an error exit).
 
 ## Dry-run mode
 
-If `--dry-run` is active: run only Step 00 (without tracker writes), 01 (triage),
-and 02 (impact), then emit a dry-run report (severity, area, risk, affected files,
-complexity, AC count) and exit. No side effects, no PR, no state mutations to the tracker.
+If `--dry-run` is active: run only Step 00 (without tracker writes), 01 (triage), and 02 (impact), then emit a dry-run report (severity, area, risk, affected files, complexity, AC count) and exit. No side effects, no PR, no state mutations to the tracker.
 
 ## Block handler (step X)
 
-When any step blocks the pipeline (see `../../core/mcp-body-formatting.md` for the MCP comment-body formatting contract — applies to every tracker comment this pipeline posts):
-1. Follow `../../core/block-handler.md` for the block protocol (comment template, tracker write).
-2. Step 12's pipeline accumulator runs (`pipeline.total_tokens`, summary table).
-3. Set top-level `status = "blocked"`, write `block` object atomically to state.json.
-4. On block from fixer/reviewer/test-engineer: dispatch the rollback-agent per
-   `../../core/block-handler.md` rollback section (Task tool, haiku model, witness write
-   + EXPECTED_* variables — same dispatch contract as every step file).
-5. Step 12 fires `pipeline-completed` with `"outcome":"blocked"`, `"pr_url":null`.
-6. Batch mode: increment `block_count`; if `Max blocked per run` reached, skip remaining bugs.
+When any step blocks the pipeline (see `../../core/mcp-body-formatting.md` for the MCP comment-body formatting contract — applies to every tracker comment this pipeline posts): 1. Follow `../../core/block-handler.md` for the block protocol (comment template, tracker write). 2. Step 12's pipeline accumulator runs (`pipeline.total_tokens`, summary table). 3. Set top-level `status = "blocked"`, write `block` object atomically to state.json. 4. On block from fixer/reviewer/test-engineer: dispatch the rollback-agent per `../../core/block-handler.md` rollback section (Task tool, haiku model, witness write + EXPECTED_* variables — same dispatch contract as every step file). 5. Step 12 fires `pipeline-completed` with `"outcome":"blocked"`, `"pr_url":null`. 6. Batch mode: increment `block_count`; if `Max blocked per run` reached, skip remaining bugs.
 
 ## Summary (batch mode)
 
-After all bugs processed (batch only): emit a structured table
-(Bug ID / Summary / Status / PR / Block reason) plus
-`{N_fixed} fixed, {N_blocked} blocked, {N_dup} duplicates` and a token-usage estimate.
+After all bugs processed (batch only): emit a structured table (Bug ID / Summary / Status / PR / Block reason) plus `{N_fixed} fixed, {N_blocked} blocked, {N_dup} duplicates` and a token-usage estimate.
 
 ## Rules
 
-- Single mode: work in CWD — no worktrees.
-- Batch mode: worktree behavior follows the Worktrees config (parallel) or sequential CWD.
-- Publisher (step 11) is NOT called automatically in single mode (default) — the user decides;
-  `--yolo` auto-publishes.
-- Block Comment Template is passed to agents as context instructions.
-- Retry limits are passed to agents as context instructions.
-- Hooks fire before/after their respective agent steps, NOT inside the reviewer loop.
-- Custom agents are one-shot gates.
+- Single mode: work in CWD — no worktrees. Batch mode: worktree behavior follows the Worktrees config (parallel) or sequential CWD.
+- Publisher (step 11) runs automatically at the end of every non-paused, non-blocked run — true in default mode as well as `--yolo` (see "## Mode flag semantics"). To gate publish on a human decision, invoke with `--step-mode`.
+- Block Comment Template and Retry limits are passed to agents as context instructions.
+- Hooks fire before/after their respective agent steps, NOT inside the reviewer loop. Custom agents are one-shot gates.
 - Follow `../../core/agent-override-injector.md` for loading project-specific agent customizations.
 - On error → Block handler + inform the user.
 
-For step-level dispatch detail, pre/post-state writes, hook invocations, NEEDS_CLARIFICATION
-handling, decomposition orchestration, and webhook payloads, refer to the individual files
-listed in the Step Dispatch table above.
+For step-level dispatch detail, pre/post-state writes, hook invocations, NEEDS_CLARIFICATION handling, decomposition orchestration, and webhook payloads, refer to the individual files listed in the Step Dispatch table above.

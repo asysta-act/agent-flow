@@ -24,7 +24,7 @@ Child skills own all pipeline state: `state.json`, PRs, test runs, and webhook e
 
 ## Configuration
 
-Add a `### Autopilot` subsection inside `## Automation Config` in your project's `CLAUDE.md`. All 7 keys are optional — the defaults are safe for first use.
+Add an `[autopilot]` section to your project's `.agent-flow/config.toml`. All 7 keys are optional — the defaults are safe for first use.
 
 **Important:** `Bug query` and `Feature query` are NOT keys in `### Autopilot`. They live in their respective existing sections:
 - `Bug query` → under `### Issue Tracker` (required existing key)

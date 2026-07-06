@@ -55,14 +55,20 @@ if [ -f "$ONBOARD_SKILL" ]; then
   fi
 fi
 
-# Assertion 4: mock-project CLAUDE.md uses <your-gitea-host>/test/mock-project
-echo "--- Assertion 4: tests/mock-project/CLAUDE.md placeholder neutralized ---"
-if [ -f "$MOCK_CLAUDE" ]; then
-  if grep -qF '<your-gitea-host>/test/mock-project' "$MOCK_CLAUDE"; then
-    echo "OK: tests/mock-project/CLAUDE.md uses '<your-gitea-host>/test/mock-project' placeholder"
+# Assertion 4: mock-project config uses <your-gitea-host>/test/mock-project.
+# Post-migration the Source Control value moved from the inline CLAUDE.md table to the
+# committed .agent-flow/config.toml (CLAUDE.md is now a pointer), so the placeholder is
+# asserted there.
+echo "--- Assertion 4: tests/mock-project/.agent-flow/config.toml placeholder neutralized ---"
+MOCK_CONFIG="$REPO_ROOT/tests/mock-project/.agent-flow/config.toml"
+if [ -f "$MOCK_CONFIG" ]; then
+  if grep -qF '<your-gitea-host>/test/mock-project' "$MOCK_CONFIG"; then
+    echo "OK: tests/mock-project/.agent-flow/config.toml uses '<your-gitea-host>/test/mock-project' placeholder"
   else
-    fail "tests/mock-project/CLAUDE.md missing '<your-gitea-host>/test/mock-project' placeholder"
+    fail "tests/mock-project/.agent-flow/config.toml missing '<your-gitea-host>/test/mock-project' placeholder"
   fi
+else
+  fail "tests/mock-project/.agent-flow/config.toml does not exist"
 fi
 
 # Assertion 5: plugin.json does not contain example.invalid URL (was a placeholder, now resolved)

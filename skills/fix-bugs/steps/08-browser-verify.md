@@ -6,8 +6,8 @@ code and confirm the bug is resolved at the UI level. This step is CONDITIONAL.
 ## Skip conditions
 
 Skip this entire step if ANY of the following is true:
-- `browser_verification_enabled = false` (Browser Verification section absent from Automation Config)
-- `browser_verify = false` (`On events` in Browser Verification config does NOT contain `verify`)
+- `browser_verification_enabled = false` (`[browser_verification]` section absent from `.agent-flow/config.toml`)
+- `browser_verify = false` (`browser.on_events` in `[browser_verification]` config does NOT contain `verify`)
 - Stage `browser-agent-verify` is in the profile's Skip stages
 
 When skipping: log `[SKIP] browser verification ({reason})`, set
@@ -24,10 +24,14 @@ Before dispatching, atomically write per-stage pre-dispatch fields to
 - `browser_verification.agent_name`      = `"agent-flow:browser-agent"`
 - `browser_verification.stage_name`      = `"browser_verification"`
 - `browser_verification.dispatched_at`   = current ISO-8601 UTC timestamp
-- `browser_verification.dispatch_witness` = sha256("agent-flow:browser-agent|sonnet|<prompt_head_128>")
+- `browser_verification.prompt_head_128` = first 128 UTF-8-safe bytes of the un-expanded prompt template
+- `browser_verification.overlay_source`  = `toml` | `none` | `md_rejected` (from the Agent Override Injector — resolve it FIRST, see "Agent Override injection" below)
+- `browser_verification.overlay_digest`  = sha256 hex of the rendered overlay block (`toml`), else literal `none` / `md_rejected` (via `compute_overlay_digest`)
+- `browser_verification.dispatch_witness` = sha256("agent-flow:browser-agent|sonnet|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  (compute via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness browser_verification agent-flow:browser-agent sonnet <prompt_head_128> <overlay_source> <overlay_digest>`; the overlay is resolved BEFORE the witness)
 - `browser_verification.tokens_used` = 0, `browser_verification.duration_ms` = 0, `browser_verification.tool_uses` = 0
 
-Follow atomic write protocol from `../../../core/state-manager.md`.
+Follow atomic write protocol from `../../../core/state-manager.md`. Then append the rendered overlay block to the prompt and dispatch.
 
 ## Agent Override injection
 

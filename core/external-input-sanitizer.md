@@ -24,7 +24,7 @@ is passed to any agent:
 1b. Before wrapping, scan the raw content for literal occurrences of the boundary marker strings `--- EXTERNAL INPUT START ---` and `--- EXTERNAL INPUT END ---`. Replace each occurrence:
    - `--- EXTERNAL INPUT START ---` → `[ESCAPED: EXTERNAL INPUT START]`
    - `--- EXTERNAL INPUT END ---` → `[ESCAPED: EXTERNAL INPUT END]`
-   This neutralizes marker injection attempts in attacker-controlled content. The transform is idempotent — applying it to already-escaped content produces no additional changes (the literal marker strings no longer appear after the first pass).
+   This neutralizes marker injection attempts in attacker-controlled content. The transform is idempotent — applying it to already-escaped content produces no additional changes (the literal marker strings no longer appear after the first pass). This closes the "Nested EXTERNAL INPUT marker forgery" and "Producer-side marker stripping" risks tracked in `core/agent-states.md` for the literal-exact-match case; it is a plain string scan and does NOT catch homoglyph or zero-width Unicode substitutions of the marker text — that residual bypass remains open and tracked in `core/agent-states.md` under "Homoglyph / zero-width character bypass".
 2. Wrap each piece in boundary markers with a single blank line separating the marker from the content:
 
    ```

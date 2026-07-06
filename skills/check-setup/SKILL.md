@@ -13,19 +13,47 @@ If $ARGUMENTS contains `--skip-build`, skip running build/test commands.
 
 ## Steps
 
-### Block 1: Automation Config (structural check)
+### Block 1: Automation Config — `.agent-flow/config.toml` (structural check)
 
-1. Read the current project's CLAUDE.md
-2. Verify the existence of the `## Automation Config` section → [OK] or [FAIL]
-3. Verify required sections and keys:
+Automation Config lives in the committed `.agent-flow/config.toml` (resolved by
+`../../core/config-reader.md`), not inline in CLAUDE.md.
 
-| Section | Required keys |
+1. **Exists** — confirm `.agent-flow/config.toml` is present in the project root → [OK], else
+   [FAIL] "No `.agent-flow/config.toml` found. Run `/agent-flow:onboard` to create it, or
+   `/onboard --migrate` if you still have a legacy inline config in CLAUDE.md."
+2. **Tracked, not gitignored** — run `git check-ignore .agent-flow/config.toml`:
+   - exits 0 (the file IS gitignored) → [FAIL] "`.agent-flow/config.toml` is gitignored — it MUST
+     be committed/tracked so the whole team shares one config. Remove the ignore rule."
+   - exits 1 (not ignored / tracked) → [OK] "`.agent-flow/config.toml` is tracked"
+3. Verify the required `[section]`s are present in `.agent-flow/config.toml` and their required keys
+   are filled — a missing required section or key is fatal:
+
+| `[section]` | Required keys |
 |---------|--------------|
-| Issue Tracker | Type (or default youtrack), Instance, Project, Bug query, State transitions, On start set |
-| Source Control | Remote, Base branch, Branch naming |
-| PR Rules | Labels (Title format optional) |
-| PR Description Template | (subsection present) |
-| Build & Test | Build command, Test command |
+| `[issue_tracker]` | type (or default youtrack), instance, project, bug_query, state_transitions, on_start_set |
+| `[source_control]` | remote, base_branch, branch_naming |
+| `[pr_rules]` | labels (title_format optional) |
+| `[pr_description_template]` | template (multi-line `"""` present) |
+| `[build_and_test]` | build_command, test_command |
+
+**Key-list validation** — compare every key in `.agent-flow/config.toml` against the documented key
+list for its `[section]` (see `docs/reference/automation-config.md`):
+   - a **missing required** section/key → [FAIL] naming the missing required section
+   - an **unknown key** (not in the documented list) → [WARN] "unknown key '{key}' in [{section}] — ignored"
+   (Rule: unknown key ⇒ [WARN]; missing required ⇒ [FAIL].)
+
+**`config.local.toml` accidental-commit guard** — if `.agent-flow/config.local.toml` exists, run
+`git check-ignore .agent-flow/config.local.toml`:
+   - exits 1 (NOT gitignored / tracked) → [WARN] "`.agent-flow/config.local.toml` is present but NOT
+     gitignored — the per-developer overlay should be gitignored so local overrides are never committed."
+   - exits 0 (gitignored) → [OK] (no warning)
+
+**Legacy inline config detection (DETECT-ONLY hint)** — read the project's CLAUDE.md and check
+*only for the presence* of a legacy inline `## Automation Config` heading. This is a bare
+presence/absence detection — it MUST NOT read the section's `### {Section}` rows into any config
+object (the resolved config comes solely from `.agent-flow/config.toml`). If the legacy heading is
+present → [WARN] "Legacy inline `## Automation Config` block detected in CLAUDE.md. Config now lives
+in `.agent-flow/config.toml` — run `/onboard --migrate` to convert it, then delete the inline block."
 
 ### 3a. Per-tracker validation
 
@@ -43,17 +71,32 @@ Find the row matching the configured Type in the Validation Rules table.
 - Apply the instance validation rule (if any) to the Instance value
 - For unknown Type → [WARN] "Unknown tracker type '{Type}'. Validation skipped."
 
+### 3b. Build & Test — Verify command (optional key)
+
+`Verify command` is an optional key inside the required `Build & Test` section (per CLAUDE.md: it
+runs after PR merge, and the issue is re-opened if it fails). It is not required for pipeline
+readiness, so check it separately from the required-key table in Step 3:
+
+- Key absent → [SKIP] "Build & Test — Verify command not configured (optional; runs after PR merge, re-opens the issue on failure)"
+- Key present, non-empty, not a placeholder → [OK] "Build & Test — Verify command configured"
+- Key present but empty or a placeholder (`<...>`) → [WARN] "Build & Test — Verify command is present but empty/placeholder; post-merge verification will not run"
+
 4. For each key: verify that the value exists and is NOT a placeholder (`<...>`)
    - Present and filled → [OK]
    - Empty or placeholder → [FAIL]
 
-5. Verify optional sections (if they exist, check the format):
-   - Retry Limits, Hooks, Custom Agents, Notifications, Worktrees, E2E Test, Browser Verification, Error Handling, Decomposition, Pipeline Profiles, Metrics, Feature Workflow, Local Deployment, Agent Overrides
+5. Verify optional sections (if they exist, check the format). This is the full 18-section
+   canonical list of `[section]`s from the `.agent-flow/config.toml` reference in
+   docs/reference/automation-config.md — keep this list in sync with it:
+   - Retry Limits, Module Docs, Hooks, Custom Agents, Notifications, Worktrees, E2E Test, Browser Verification, Error Handling, Feature Workflow, Decomposition, Pipeline Profiles, Metrics, Agent Overrides, Local Deployment, Sprint Planning, Autopilot, Pause Limits
    - Exists and correct format → [OK]
    - Does not exist → [SKIP] (optional)
    - Exists but incorrect format → [WARN]
    - Local Deployment (if present): Type must be `docker` or `native` → [WARN] if neither; Start command and Stop command must be non-empty → [WARN] if missing
    - Browser Verification (if present): On events must be `reproduce`, `verify`, or `reproduce, verify` → [WARN] if other; Stop command (optional) must be non-empty if present → [WARN] if empty
+   - Sprint Planning (if present): Mode must be `suggest` or `apply` → [WARN] if neither; Max issues (if present) must be an integer 1–50 → [WARN] if out of range
+   - Autopilot (if present): must have exactly 7 keys — Max issues per run, Lock timeout, Log file, Bug limit, Feature limit, On error, Dry run → [WARN] "Autopilot — expected exactly 7 keys, found {N}" if the count differs. Note: `Bug query` lives in Issue Tracker and `Feature query` lives in Feature Workflow — neither belongs in Autopilot, and their presence there does not count toward the 7. On error (if present) must be `skip` or `stop` → [WARN] if neither
+   - Pause Limits (if present): Pause timeout must parse as `<N> hours` or `<N> days` within range 1 hour–365 days (3600s–31536000s, matching `parse_pause_timeout()` in `skills/autopilot/SKILL.md`) → [WARN] "Pause Limits — Pause timeout '{value}' is out of range or unparseable; autopilot falls back to the default (30 days)" if invalid. This is advisory only — autopilot does not abort on an invalid value, so this never escalates past [WARN]
 
 ### Block 2: MCP servers (presence and connectivity)
 
@@ -63,7 +106,7 @@ Find the row matching the configured Type in the Validation Rules table.
      - Found at {path} → [WARN] ".mcp.json found at {path}, but Claude Code loads from CWD ({cwd}). Copy or symlink it here."
      - Not found anywhere → [FAIL] "No .mcp.json found. Run /agent-flow:setup-mcp to create one."
 
-7. Compare MCP servers with Automation Config:
+7. Compare MCP servers with `.agent-flow/config.toml`:
    - Issue tracker MCP: reuse the trackers.md path resolved in Step 3a (do not Glob again).
      Read the MCP Server Detection table. Find the row matching Type.
      Search .mcp.json server names/URLs for the listed keywords.
@@ -76,10 +119,21 @@ Find the row matching the configured Type in the Validation Rules table.
 
 8. Verify that tokens in `.mcp.json` are not empty or placeholders → [OK] or [FAIL]
    - If tracker Type is `gitea` AND `.mcp.json` contains a `command` field referencing `forgejo-mcp`: emit `[WARN] forgejo-mcp detected in .mcp.json for Type: gitea — re-run /agent-flow:setup-mcp to install gitea-mcp.`
+     Rationale: `forgejo-mcp` is a third-party MCP server that also targets Gitea-compatible
+     instances (Forgejo is a Gitea fork), so it's an easy substitution mistake for a `Type: gitea`
+     project. `/agent-flow:setup-mcp` always installs the dedicated `gitea-mcp` binary for this
+     tracker type (see `docs/reference/trackers.md`'s MCP Server Detection table) — a `forgejo-mcp`
+     command here is a non-standard substitute, not the expected binary, even though it may work.
 
 ### Block 3: Connectivity
 
-9. Run the Bug query from Automation Config via MCP (limit 1 result):
+> **Pattern source:** `../../core/mcp-detection.md`'s Classification Reference table is the canonical
+> single source for the TLS/auth/not-found/timeout trigger-pattern lists used across the plugin.
+> The TLS and auth pattern lists in Steps 9 and 10 below mirror that table's `"tls"` and `"auth"`
+> rows (adapted here to also gate the curl confirmation probe). If a pattern is added or changed,
+> update `../../core/mcp-detection.md` first and mirror the change into both copies below.
+
+9. Run the bug query (`issue_tracker.bug_query`) from `.agent-flow/config.toml` via MCP (limit 1 result):
    - Success → [OK] with the number of bugs found
    - On failure, classify the error in this order:
      1. **TLS error** (error contains any of: UNABLE_TO_VERIFY_LEAF_SIGNATURE, CERT_UNTRUSTED,
@@ -88,7 +142,7 @@ Find the row matching the configured Type in the Validation Rules table.
         Run a curl probe to confirm network reachability:
         - Check `which curl` — if curl is not available, skip probe and emit:
           [FAIL] "Issue tracker — TLS error detected. Add NODE_OPTIONS: --use-system-ca to .mcp.json env block. (curl not available for confirmation probe)"
-        - Run: `curl -s -o /dev/null -w "%{http_code}" --max-time 5 {Instance}`
+        - Run: `curl -s -o /dev/null -w "%{http_code}" --proto "=http,https" --max-time 5 "{Instance}"`
         - curl exit 0 and HTTP code != 000 →
           [FAIL] "Issue tracker — server reachable but MCP connection failed (likely TLS) — add NODE_OPTIONS: --use-system-ca to the env block in .mcp.json"
         - curl exit non-zero or HTTP code 000 →
@@ -98,7 +152,7 @@ Find the row matching the configured Type in the Validation Rules table.
      3. **Any other error** →
         [FAIL] "Issue tracker — server not reachable — verify the server is running and URL is correct. If using a private CA (self-signed or corporate PKI), also try NODE_OPTIONS: --use-system-ca."
 10. Verify source control connectivity: fetch metadata for the configured Remote (owner/repo) via MCP
-    - Use MCP to fetch repository metadata for the Remote value from Automation Config
+    - Use MCP to fetch repository metadata for the `source_control.remote` value from `.agent-flow/config.toml`
     - Success → [OK] "Source control — {owner/repo} reachable"
     - On failure, classify the error in this order:
       1. **TLS error** (error contains any of: UNABLE_TO_VERIFY_LEAF_SIGNATURE, CERT_UNTRUSTED,
@@ -111,7 +165,7 @@ Find the row matching the configured Type in the Validation Rules table.
          If {sc_base_url} was derived, run a curl probe:
          - Check `which curl` — if curl is not available, skip probe and emit:
            [FAIL] "Source control — TLS error detected. Add NODE_OPTIONS: --use-system-ca to .mcp.json env block. (curl not available for confirmation probe)"
-         - Run: `curl -s -o /dev/null -w "%{http_code}" --max-time 5 {sc_base_url}`
+         - Run: `curl -s -o /dev/null -w "%{http_code}" --proto "=http,https" --max-time 5 "{sc_base_url}"`
          - curl exit 0 and HTTP code != 000 →
            [FAIL] "Source control — server reachable but MCP connection failed (likely TLS) — add NODE_OPTIONS: --use-system-ca to the env block in .mcp.json"
          - curl exit non-zero or HTTP code 000 →
@@ -121,7 +175,7 @@ Find the row matching the configured Type in the Validation Rules table.
       2. **Auth error** (401/403) →
          [FAIL] "Source control — authentication failed. Token needs repository:read scope (Gitea), repo scope (GitHub), or read_repository scope (GitLab)."
       3. **Not found** (404) →
-         [FAIL] "Source control — repository {owner/repo} not found. Verify Remote in Automation Config."
+         [FAIL] "Source control — repository {owner/repo} not found. Verify source_control.remote in .agent-flow/config.toml."
       4. **Tool not found** (MCP server lacks repository metadata method) →
          [WARN] "Source control MCP: repository existence check not supported — skipping."
       5. **Any other error** →
@@ -158,7 +212,7 @@ else
 fi
 ```
 
-Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUMENTS` (same flag used by Block 4). The 4-branch decision tree:
+Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUMENTS` (same flag used by Block 4). The 5-branch decision tree:
 - `--skip-build` flag → `[SKIP] Docker - skipped (--skip-build flag)`
 - No Dockerfile present → `[SKIP] Docker - no Dockerfile`
 - `docker` binary not on PATH → `[SKIP] Docker - docker binary not found` (handles CI environments without Docker)
@@ -167,11 +221,16 @@ Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUM
 
 ## Output format
 
-```
-## Setup report — {Remote from Automation Config}
+> The template below is populated from all Blocks in this file, including Blocks 5–7 (Plugin
+> Composability, Dispatch Enforcement Hook, Agent Overrides) and the Deprecated config detection
+> pass, which are defined further below. `[ADVISORY]` lines (Block 6 only) and `[SKIP]` lines never
+> count toward the `{N} FAIL, {M} WARN` totals in the Result line.
 
-### Automation Config
-[OK]   ## Automation Config found in CLAUDE.md
+```
+## Setup report — {source_control.remote from .agent-flow/config.toml}
+
+### Config (.agent-flow/config.toml)
+[OK]   .agent-flow/config.toml found and tracked (not gitignored)
 [OK]   Issue Tracker — all keys filled (Type: {type})
 [OK]   Source Control — all keys filled
 [FAIL] PR Description Template — section missing
@@ -193,8 +252,19 @@ Where `$skip_build` is set to `"true"` when `--skip-build` is present in `$ARGUM
 ### Docker
 [SKIP] Docker - no Dockerfile
 
+### Plugin Composability
+[OK]   No plugin conflicts detected
+
+### Dispatch Enforcement Hook
+[ADVISORY] PostToolUse hook not configured — dispatch enforcement is opt-in. See docs/guides/dispatch-enforcement.md to install.
+[ADVISORY] Agent NEVER-constraints (e.g. publisher's 'NEVER push to main') are prompt-level only and are NOT technically enforced by this plugin even when the hook is installed. Enable server-side branch protection as the actual enforcement boundary. See SECURITY.md — Known Limitations.
+
 ### Agent Overrides
 [FAIL] Agent overrides - .toml overlays present (customization/browser-agent.toml customization/fixer.toml) but neither tomllib (Python 3.11+) nor the tomli backport is importable by python3. The injector will SILENTLY DROP these overlays. Fix: install Python 3.11+, or run 'python3 -m pip install tomli'.
+
+### Deprecated config
+[WARN] Deprecated config section detected: ### Extra labels
+       Move any labels into ### PR Rules → Labels (which fully supports the use case). See CHANGELOG.md.
 
 ---
 Result: {N} FAIL, {M} WARN — {verdict}
@@ -206,25 +276,90 @@ Verdict:
 
 ### Block 5: Plugin Composability
 
-13. Check installed plugins:
+14. Check installed plugins:
     - Look for plugin registry: `.claude/plugins.json`, `.claude-plugins`, or another file with plugin metadata (exact location depends on the Claude Code version — if none of these files exist → [SKIP] "Plugin registry not found — conflict detection skipped")
     - If found: read the list of installed plugins
     - For each plugin: check if it registers commands with the same base name as agent-flow commands (without namespace prefix)
     - If conflict → [WARN] "Plugin '{name}' registers command '{cmd}' which may conflict with agent-flow:{cmd}"
     - If no conflicts → [OK] "No plugin conflicts detected"
 
-### Block 6: Dispatch Enforcement Hook (advisory)
+### Block 6: Dispatch Enforcement Hooks (advisory)
 
-14. Check whether the dispatch enforcement hook is installed:
-    a. Verify that `hooks/validate-dispatch.sh` exists in the plugin installation directory.
-       - Glob with `.claude/plugins/**/hooks/validate-dispatch.sh`; if not found, try `hooks/validate-dispatch.sh` relative to CWD.
-       - Found → [OK] "hooks/validate-dispatch.sh present at {path}"
-       - Not found → [ADVISORY] "hooks/validate-dispatch.sh not found — dispatch audit not available"
-    b. Check whether `~/.claude/settings.json` contains a PostToolUse hook entry referencing `validate-dispatch`.
-       - Read `~/.claude/settings.json` (if accessible).
-       - Found entry referencing `validate-dispatch` → [OK] "PostToolUse hook wired in ~/.claude/settings.json"
-       - Not found or file unreadable → [ADVISORY] "PostToolUse hook not configured — dispatch enforcement is opt-in. See docs/guides/dispatch-enforcement.md to install."
-    c. All results in this block are advisory — they NEVER contribute to the FAIL count or change the final verdict.
+Dispatch enforcement is **two** hooks (see `docs/guides/dispatch-enforcement.md`):
+the **PreToolUse `Task` gate** `hooks/validate-dispatch-pre.sh` (the only component
+that can BLOCK a dispatch) and the **PostToolUse audit** `hooks/validate-dispatch.sh`
+(advisory second layer). Both can be wired at any scope of the Claude Code settings
+tree — `~/.claude/settings.json` (user), `.claude/settings.json` (project), or
+`.claude/settings.local.json` (project-local) — and **hooks COMBINE across scopes**
+(none overrides another; only `"disableAllHooks": true` disables them). Detecting the
+wiring from `~/.claude/settings.json` ALONE is a false negative when an operator wired
+it at the project or project-local scope, so this block scans the whole tree.
+
+15. Check whether the dispatch enforcement hooks are installed:
+
+    a. Verify the hook scripts exist in the plugin installation directory. For each of
+       `hooks/validate-dispatch-pre.sh` (gate) and `hooks/validate-dispatch.sh` (audit):
+       Glob with `.claude/plugins/**/hooks/{name}`; if not found, try `hooks/{name}`
+       relative to CWD.
+       - Found → [OK] "hooks/{name} present at {path}"
+       - Not found → [ADVISORY] "hooks/{name} not found — that layer is not available"
+
+    b. Detect whether the hooks are wired anywhere in the settings tree, using the
+       shared helper `core/lib/detect-dispatch-hooks.sh`. Locate it with Glob: pattern
+       `.claude/plugins/**/core/lib/detect-dispatch-hooks.sh` first, then
+       `**/core/lib/detect-dispatch-hooks.sh`, then `core/lib/detect-dispatch-hooks.sh`
+       relative to CWD. If located, set `$DDH_LIB` to the resolved path and run:
+
+       ```bash
+       # Block 6b: tree-aware dispatch-hook detection (advisory)
+       if [ -z "${DDH_LIB:-}" ] || [ ! -f "${DDH_LIB:-}" ]; then
+         echo "[ADVISORY] Dispatch hooks - detect-dispatch-hooks.sh not found; settings-tree wiring detection skipped (verify plugin installation)."
+       else
+         # shellcheck disable=SC1090
+         . "$DDH_LIB"
+         ddh_out="$(detect_dispatch_hooks "$PWD" "${HOME:-}")"
+         # Pipe-free, CR-safe KEY=VALUE extractor (no `| head` -> no pipefail/SIGPIPE race).
+         val() {
+           local line
+           while IFS= read -r line; do
+             line="${line%$'\r'}"
+             case "$line" in "$1="*) printf '%s' "${line#*=}"; return 0 ;; esac
+           done <<EOF
+$ddh_out
+EOF
+         }
+         gate_wired=$(val GATE_WIRED);  gate_task=$(val GATE_MATCHER_TASK); gate_scopes=$(val GATE_SCOPES)
+         audit_wired=$(val AUDIT_WIRED); audit_scopes=$(val AUDIT_SCOPES)
+         disabled=$(val DISABLE_ALL_HOOKS); disabled_scopes=$(val DISABLE_ALL_HOOKS_SCOPES)
+
+         # PreToolUse Task gate — the blocking component.
+         if [ "$gate_wired" = "1" ] && [ "$gate_task" = "1" ]; then
+           echo "[OK] Dispatch hooks - PreToolUse Task gate wired (${gate_scopes})"
+         elif [ "$gate_wired" = "1" ]; then
+           echo "[ADVISORY] Dispatch hooks - gate command present (${gate_scopes}) but matcher is not \"Task\" — it will NOT gate dispatches. Register it under PreToolUse with matcher \"Task\" (see docs/reference/hooks.md)."
+         else
+           echo "[ADVISORY] Dispatch hooks - PreToolUse Task gate not wired in any settings file (user/project/local) — dispatch enforcement is advisory only. See docs/guides/dispatch-enforcement.md to install."
+         fi
+
+         # PostToolUse audit — the advisory second layer.
+         if [ "$audit_wired" = "1" ]; then
+           echo "[OK] Dispatch hooks - PostToolUse audit wired (${audit_scopes})"
+         else
+           echo "[ADVISORY] Dispatch hooks - PostToolUse audit not wired in any settings file — see docs/guides/dispatch-enforcement.md."
+         fi
+
+         # disableAllHooks short-circuits everything above.
+         if [ "$disabled" = "1" ]; then
+           echo "[WARN] Dispatch hooks - \"disableAllHooks\": true set in ${disabled_scopes} — wired hooks will NOT fire until that is removed."
+         fi
+       fi
+       # Managed/OS-level settings are not inspected by this check.
+       echo "[ADVISORY] Dispatch hooks - managed/OS-level settings (Windows registry policy, macOS plist, Linux managed JSON) are not inspected; a hook wired ONLY there cannot be confirmed here."
+       ```
+
+    c. All results in this block are advisory — they NEVER contribute to the FAIL count
+       or change the final verdict. (The keyed runtime preconditions that CAN fail live
+       in Block 8.)
 
 ### Block 7: Agent Overrides (TOML overlay parsing)
 
@@ -238,7 +373,7 @@ apply, and nothing surfaces it. This block catches that exact condition. The sam
 happens on TOML syntax errors and unknown-key validation failures, so present-but-unparseable
 overlays are validated end-to-end too.
 
-15. Resolve the override directory from `### Agent Overrides → Path` in Automation Config
+16. Resolve the override directory from the `[agent_overrides]` `path` key in `.agent-flow/config.toml`
     (default `customization/`). Set `$override_path` to the resolved value and run the probe:
 
 ```bash
@@ -264,7 +399,7 @@ else
 fi
 ```
 
-16. If the probe reported `[OK]` (parser available) AND at least one overlay exists, validate each
+17. If the probe reported `[OK]` (parser available) AND at least one overlay exists, validate each
     overlay end-to-end so syntax errors and unknown-key violations — which also drop the overlay
     silently — are caught. Locate the parser library with Glob: pattern
     `.claude/plugins/**/skills/setup-agents/lib/toml-merge.sh` first, then
@@ -285,6 +420,96 @@ fi
 All `[FAIL]` results in this block **count toward the final FAIL verdict** — a present-but-unparseable
 overlay means a configured customization is silently not being applied, which is a setup defect. A
 clean project with no overlays yields `[SKIP]` and never affects the verdict.
+
+### Block 8: Keyed Dispatch Witness Prerequisites (PR #15)
+
+The gate-as-signer dispatch witness (`hooks/validate-dispatch-pre.sh` PreToolUse gate +
+`hooks/validate-dispatch.sh` PostToolUse audit) is **pure Python stdlib** (`hmac`, `hashlib`,
+`secrets`) — there is **no bash HMAC fallback**. The PreToolUse gate can only **BLOCK** a bad
+dispatch (deny + `exit 2`) on **Claude Code >= 2.1.90** (issue #26923: `Task` exit-2 was a no-op
+before that). This block asserts those preconditions so the marquee guarantee is not mere
+documentation.
+
+17. Run the prerequisite probes:
+
+```bash
+# Block 8: keyed dispatch witness prerequisites
+
+# (1) Python 3 stdlib — the keyed HMAC gate + audit are pure Python (stdlib only; NO bash fallback).
+if command -v python3 >/dev/null 2>&1 && python3 -c 'import sys,hmac,hashlib,secrets' >/dev/null 2>&1; then
+  echo "[OK] Dispatch witness - Python 3 stdlib (hmac, hashlib, secrets) importable"
+elif command -v python >/dev/null 2>&1 && python -c 'import sys,hmac,hashlib,secrets' >/dev/null 2>&1; then
+  echo "[OK] Dispatch witness - Python 3 stdlib (hmac, hashlib, secrets) importable (python)"
+else
+  echo "[FAIL] Dispatch witness - no runnable Python 3 with stdlib hmac/hashlib/secrets on PATH. The PreToolUse gate and PostToolUse audit are pure Python (stdlib only); there is NO bash HMAC fallback. Fix: install Python 3 on PATH."
+fi
+
+# (2) TOML parser for agent-overlay model resolution (tomllib >= 3.11, OR the tomli backport on 3.10.x).
+if python3 -c 'import tomllib' >/dev/null 2>&1 || python3 -c 'import tomli' >/dev/null 2>&1; then
+  echo "[OK] Dispatch witness - TOML overlay parser available (tomllib or tomli) for shared model resolution"
+else
+  echo "[WARN] Dispatch witness - no TOML parser (tomllib on Python 3.11+, or the tomli backport on 3.10.x). Overlay model resolution is then SKIPPED identically on both gate and orchestrator (frontmatter/claim model is bound). Install Python 3.11+ or run 'python3 -m pip install tomli' to bind overlay model overrides."
+fi
+
+# (3) Claude Code >= 2.1.90 — the LOAD-BEARING precondition for the PreToolUse 'true block'.
+cc_ver=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+if [ -z "$cc_ver" ]; then
+  echo "[WARN] Dispatch witness - could not parse 'claude --version'. The PreToolUse gate needs Claude Code >= 2.1.90 to BLOCK a failing dispatch (older clients silently degrade to PostToolUse-advisory). Verify your version manually."
+else
+  cc_major=${cc_ver%%.*}; cc_rest=${cc_ver#*.}; cc_minor=${cc_rest%%.*}; cc_patch=${cc_rest##*.}
+  if [ "$cc_major" -gt 2 ] \
+     || { [ "$cc_major" -eq 2 ] && [ "$cc_minor" -gt 1 ]; } \
+     || { [ "$cc_major" -eq 2 ] && [ "$cc_minor" -eq 1 ] && [ "$cc_patch" -ge 90 ]; }; then
+    echo "[OK] Dispatch witness - Claude Code ${cc_ver} (>= 2.1.90; PreToolUse gate can block)"
+  else
+    echo "[FAIL] Dispatch witness - Claude Code ${cc_ver} < 2.1.90. The PreToolUse Task gate CANNOT block (deny + exit 2 is a no-op before 2.1.90, issue #26923); dispatch enforcement silently degrades to PostToolUse-advisory. Fix: upgrade Claude Code to >= 2.1.90."
+  fi
+fi
+```
+
+The `claude --version` parse is the **load-bearing primary**: a parseable version `< 2.1.90` is a
+hard `[FAIL]`; an unparseable version is a `[WARN]` (cannot prove the precondition either way). No
+bash HMAC fallback is ever added — Python stdlib is a hard requirement.
+
+18. **First-keyed-run deny-canary handshake (once per machine).** This converts the version
+    precondition from documentation into a checked assertion: the gate recognizes the reserved
+    sentinel `subagent_type` `agent-flow:__deny_canary__` and **unconditionally DENIES** it, so a
+    real block proves the running client honors PreToolUse `deny` + `exit 2`.
+
+    - If `.agent-flow/.version-confirmed` already exists → `[SKIP] Dispatch witness - deny-canary
+      handshake already confirmed on this machine`.
+    - Otherwise dispatch ONE inert canary:
+      `Task(subagent_type="agent-flow:__deny_canary__", description="agent-flow version handshake (inert)", prompt="inert — version handshake, do no work")`.
+      The payload is deliberately inert, so even if it launches on a `< 2.1.90` client (where the
+      gate's deny is a no-op) it does no work.
+      - The dispatch was **BLOCKED** (the gate denied it) → `[OK] Dispatch witness - deny-canary
+        blocked; Claude Code honors the PreToolUse true block` and record the once-per-machine
+        marker (the ONLY file this skill writes — a runtime handshake marker, not config):
+
+        ```bash
+        mkdir -p .agent-flow 2>/dev/null
+        date -u '+%Y-%m-%dT%H:%M:%SZ' > .agent-flow/.version-confirmed 2>/dev/null \
+          && echo "[OK] Dispatch witness - recorded .agent-flow/.version-confirmed"
+        ```
+
+      - The canary **LAUNCHED** (was not blocked) → `[FAIL] Dispatch witness - deny-canary was NOT
+        blocked: this Claude Code client is < 2.1.90 (the PreToolUse gate's deny is a no-op).
+        Dispatch enforcement is advisory only until you upgrade to >= 2.1.90.` Do NOT record the
+        marker.
+
+All `[FAIL]` results in Block 8 **count toward the final FAIL verdict** — a missing Python stdlib
+or a `< 2.1.90` client means the keyed gate cannot enforce. `[WARN]` results are advisory.
+
+19. **Key-loss recovery (advisory note).** If a keyed run reports `WITNESS_UNVERIFIABLE` because
+    its per-run `.agent-flow/{RUN-ID}/dispatch.key` was lost on a progressed run (≥1 completed
+    stage or a non-empty ledger), this is **fail-closed by design** — the gate NEVER
+    auto-regenerates the key on a progressed run (that would re-open the `f-c570b4` forge).
+    Recovery is an **explicit operator choice**, not automatic: either archive/remove the affected
+    run directory `.agent-flow/{RUN-ID}/` to rebaseline with a fresh keyed run (the bootstrap
+    mints a new key only on a genuinely fresh run — zero completed stages + empty ledger), OR set
+    `AGENT_FLOW_STRICT_DISPATCH=0` to continue advisory-only meanwhile. Full procedure: the
+    **Key-loss recovery (operator runbook)** in `state/schema.md`. Emit `[ADVISORY]` and print the
+    one-line summary; this note **never** contributes to the FAIL count.
 
 ## Deprecated config detection
 

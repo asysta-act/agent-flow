@@ -40,6 +40,22 @@ SQL DDL, database schema design, migration strategies (expand-contract), zero-do
    {PASS | WARN — {reason} | BLOCK — {reason}}
    ```
 
+## Output Contract
+
+### Inputs
+
+| Section | Source | Required |
+|---------|--------|----------|
+| Changed files + diff | upstream fixer | yes |
+| Migration files (SQL files, ORM migration files) | project repository | yes |
+
+### Outputs
+
+| Section produced | When | Required fields |
+|------------------|------|-----------------|
+| `## Migration Review Report` | always | Migrations table (File, Operations, Risk, Reversible, Notes); Issues (severity-tagged descriptions); Verdict: PASS / WARN / BLOCK |
+| `[agent-flow] 🔴 Pipeline Block` | on BLOCK verdict (destructive operation without backup/rollback migration) | Agent: migration-reviewer; Step: the configured integration point (post-fix or pre-publish); Reason; Detail; Recommendation |
+
 ## Step Completion Invariants
 
 Invariant fields checked: `dispatched_at`, `dispatch_witness`, `status`, `stage_name`, `agent_name`. Tokens: `EXPECTED_AGENT_NAME`, `EXPECTED_STAGE_NAME`.
@@ -48,7 +64,7 @@ MANDATORY for all custom agents. Before returning to the orchestrator, you SHALL
 
 1. **`dispatched_at`** — Field is present and non-empty for stage `{your_stage_name}`. Orchestrator wrote this pre-dispatch.
 
-2. **dispatch_witness** — Field is present, exactly 64 hex characters, matching `sha256({subagent_type}|{model}|{prompt_head_128})` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh check_dispatch_witness`.
+2. `dispatch_witness` — The signed witness is computed and recorded by the PreToolUse gate (the sole key holder), NOT by the orchestrator and NOT stored in `state.json`. On a keyed run (`schema_version` `"2.0"`) it is the keyed HMAC tag the gate appends to the gate-owned ledger `.agent-flow/{RUN-ID}/dispatch-ledger.jsonl`, keyed by `(run_id, stage, claim_nonce)`, over the per-field sub-hashed canonical preimage `subagent_type|model|prompt_head_128|overlay_source|overlay_digest|stage|run_id|claim_nonce` (the gate observes `prompt_head_128` from the dispatched prompt and signs it as ground truth — it is not a compared claim). Verify by reading the ledger for a `WITNESS_OK` entry for this run's `(run_id, stage)`; on a legacy v1.0 run (no key, no ledger) this is expected and is NOT a failure.
 
 3. **status** — Equals `"in_progress"` for this stage when you read it. Status flips to `"completed"` only AFTER you return.
 

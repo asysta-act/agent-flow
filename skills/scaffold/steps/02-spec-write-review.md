@@ -20,11 +20,11 @@ Check Agent Overrides: if `{Agent Overrides path}/spec-writer.toml` exists, appe
 You MUST invoke Task(subagent_type='agent-flow:spec-writer', model='opus'). DO NOT inline-execute.
 Context: input source + MODE + tech stack flags (--lang, --framework, --db, --ci)
 
-**Post-dispatch (COST-R2, COST-R3):** Defensive-read `result.usage`. Write `spec_writer.completed_at`, `spec_writer.tokens_used`, `spec_writer.duration_ms`, `spec_writer.tool_uses` (fallback `0`). Set `spec_writer.status = "completed"`.
+**Post-dispatch (COST-R2, COST-R3):** Defensive-read `result.usage`. Write `spec_writer.completed_at`, `spec_writer.tokens_used`, `spec_writer.duration_ms`, `spec_writer.tool_uses` (default `0`). Set `spec_writer.status = "completed"`.
 
 ## Spec-Writer ↔ Spec-Reviewer Loop
 
-Read `Spec iterations` from Automation Config → Retry Limits (default 5; on fresh scaffold CLAUDE.md absent → use 5).
+Read `retry.spec_iterations` from `.agent-flow/config.toml` `[retry_limits]` (default 5; on a fresh scaffold `.agent-flow/config.toml` is absent → use 5).
 
 For each iteration:
 1. **Pre-dispatch spec_reviewer (COST-R4):** Write `spec_reviewer.started_at`, `spec_reviewer.model = "opus"`, status `"in_progress"`, counters `0`.

@@ -3,6 +3,20 @@
 Run the fixer ↔ reviewer iteration loop. Follow `../../../core/fixer-reviewer-loop.md` for the iteration
 protocol.
 
+## Centralized claim-write ritual (v2.0 gate-as-signer)
+
+Immediately before **every** `Task()` dispatch in this loop (each fixer and each
+reviewer iteration), perform the centralized claim-write ritual defined once in
+`../../claim-ritual.md`. The ritual mints a fresh `claim_nonce`
+(`secrets.token_hex(16)`) + a monotonic `dispatch_seq`, atomically writes the
+**claim-only** stage record into `state.json`, and atomically writes the
+top-level per-dispatch marker `.agent-flow/pending-dispatch.json` (temp +
+`os.replace`). This is the single source of truth and **supersedes** the legacy
+per-iteration `dispatch_witness` / 6-arg `compute_dispatch_witness` fields below
+on keyed (`schema_version "2.0"`) runs: the orchestrator writes no key and no
+signed tag, and the prompt head is gate-observed ground truth, not an
+orchestrator-written field.
+
 ## Pre-loop state initialization
 
 Before the first fixer dispatch, atomically write per-stage pre-dispatch fields to
@@ -15,19 +29,23 @@ Before the first fixer dispatch, atomically write per-stage pre-dispatch fields 
 - `fixer_reviewer.stage_name`      = `"fixer_reviewer"`
 - `fixer_reviewer.dispatched_at`   = current ISO-8601 UTC timestamp (updated per iteration —
                                        represents most-recent Task() dispatch within the loop)
-- `fixer_reviewer.dispatch_witness` = sha256("agent-flow:fixer|opus|<prompt_head_128>")
-  (compute via `core/lib/stage-invariant.sh::compute_dispatch_witness`; updated per iteration to
+- `fixer_reviewer.prompt_head_128` = first 128 UTF-8-safe bytes of the un-expanded prompt template (per iteration)
+- `fixer_reviewer.overlay_source`  = `toml` | `none` | `md_rejected` (from the Agent Override Injector — resolve it FIRST per iteration, see "Agent Override injection" below)
+- `fixer_reviewer.overlay_digest`  = sha256 hex of the rendered overlay block (`toml`), else literal `none` / `md_rejected` (via `compute_overlay_digest`)
+- `fixer_reviewer.dispatch_witness` = sha256("agent-flow:fixer|opus|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  (compute via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness fixer_reviewer agent-flow:fixer opus <prompt_head_128> <overlay_source> <overlay_digest>`; updated per iteration to
    match the most-recent Task() dispatch — reviewer iterations recompute with reviewer's prompt
-   head)
+   head and that iteration's overlay resolution)
 - `fixer_reviewer.tokens_used` = 0, `fixer_reviewer.duration_ms` = 0, `fixer_reviewer.tool_uses` = 0
   (cumulative counters, initialized at loop start — accumulated across all iterations)
 
-Follow atomic write protocol from `../../../core/state-manager.md`. All fields written in a single atomic replace.
+Follow atomic write protocol from `../../../core/state-manager.md`. All fields written in a single atomic replace. Then append the rendered overlay block to the prompt and dispatch.
 
-**Per-iteration witness update:** before each Task() call inside the loop, re-write `dispatched_at`
-and `dispatch_witness` to reflect that iteration's actual dispatch tuple. `agent_name` flips between
-`"agent-flow:fixer"` and `"agent-flow:reviewer"` accordingly. The cumulative counters (tokens,
-duration_ms, tool_uses) keep accumulating — do NOT reset.
+**Per-iteration witness update:** before each Task() call inside the loop, resolve the Agent
+Override overlay FIRST, then re-write `dispatched_at`, `prompt_head_128`, `overlay_source`,
+`overlay_digest`, and `dispatch_witness` to reflect that iteration's actual dispatch tuple.
+`agent_name` flips between `"agent-flow:fixer"` and `"agent-flow:reviewer"` accordingly. The
+cumulative counters (tokens, duration_ms, tool_uses) keep accumulating — do NOT reset.
 
 ## Agent Override injection
 
@@ -61,7 +79,7 @@ If fixer output contains `## NEEDS_DECOMPOSITION`:
 2. If `decompose_mode = DISABLED` → Block handler (step X)
 3. If this bug has already been decomposed once → Block handler (step X)
 4. Run architect for decomposition, continue with subtask execution
-5. After subtask execution: skip to step 07-publish
+5. After subtask execution: skip to step 11 (publish)
 
 ## NEEDS_CLARIFICATION detection (fixer)
 
@@ -121,12 +139,12 @@ continue
 
 ## Build (post-fixer)
 
-Run the Build command from Automation Config. Retry limit = Build retries from config.
+Run the `build.build_command` from `.agent-flow/config.toml`. Retry limit = `retry.build_retries` from config.
 Failure after exhausting retries → proceed to Block handler (step X).
 
 ## Post-fix hooks
 
-If Hooks → Post-fix exists:
+If `hooks.post_fix` exists:
 - Run the command via Bash. Failure → Block handler (step X).
 
 If Custom Agents → Post-fix agent exists:
@@ -140,8 +158,11 @@ If `{Agent Overrides path}/reviewer.toml` exists, append its rendered Markdown c
 
 ## Reviewer dispatch
 
-Before invoking reviewer: re-write `fixer_reviewer.dispatched_at`, `fixer_reviewer.dispatch_witness`
-(sha256 with reviewer prompt head), and `fixer_reviewer.agent_name = "agent-flow:reviewer"`.
+Before invoking reviewer: resolve the reviewer's Agent Override overlay FIRST, then re-write
+`fixer_reviewer.dispatched_at`, `fixer_reviewer.prompt_head_128`, `fixer_reviewer.overlay_source`,
+`fixer_reviewer.overlay_digest`, `fixer_reviewer.dispatch_witness`
+(sha256("agent-flow:reviewer|opus|<prompt_head_128>|<overlay_source>|<overlay_digest>") with the
+reviewer prompt head and reviewer overlay), and `fixer_reviewer.agent_name = "agent-flow:reviewer"`.
 Follow atomic write protocol.
 
 You MUST invoke `Task(subagent_type='agent-flow:reviewer', model='opus')`.
@@ -164,7 +185,7 @@ REQUEST_CHANGES → back to fixer. Iterations exhausted → Block handler (step 
 
 ## Smoke check (post-review)
 
-Run Build command and Test command from Automation Config after the loop completes:
+Run `build.build_command` and `build.test_command` from `.agent-flow/config.toml` after the loop completes:
 1. Run Build command. Failure → Block handler (step X).
 2. Run Test command (existing tests only). Failure → Block handler (step X).
 

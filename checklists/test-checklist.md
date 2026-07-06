@@ -19,6 +19,7 @@
 - [ ] Tests use project conventions (framework, naming, location)
 - [ ] Test code uses the project's code language (localized text only in user-facing-string assertions)
 - [ ] No flaky tests (no timing dependencies, no external service calls)
+- [ ] `--e2e` mode only: E2E test invoked via the configured Automation Config → E2E Test → Command (not the unit Build & Test command); new e2e test files follow the configured Framework's file/naming convention
 
 ## Completeness
 - [ ] All changed functions have test coverage (or a documented untestable-seam gap)

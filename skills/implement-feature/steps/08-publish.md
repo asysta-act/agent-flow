@@ -27,13 +27,16 @@ publisher binds to canonical stage `publisher` per design.md §4.2.
 
 ```bash
 . core/lib/stage-invariant.sh
+# (1) Resolve overlay first: OVERLAY_SOURCE in {toml,none,md_rejected}, OVERLAY_BLOCK = rendered block.
+OVERLAY_DIGEST="$(compute_overlay_digest "$OVERLAY_SOURCE" "$OVERLAY_BLOCK")"
 PROMPT_HEAD_128="$(printf '%s' "$PUBLISHER_PROMPT_TEMPLATE" | head -c 128)"
-DISPATCH_WITNESS="$(compute_dispatch_witness publisher agent-flow:publisher haiku "$PROMPT_HEAD_128")"
+DISPATCH_WITNESS="$(compute_dispatch_witness publisher agent-flow:publisher haiku "$PROMPT_HEAD_128" "$OVERLAY_SOURCE" "$OVERLAY_DIGEST")"
 DISPATCHED_AT="$(date -u +%FT%TZ)"
 EXPECTED_AGENT_NAME="agent-flow:publisher"
 EXPECTED_STAGE_NAME="publisher"
-# Merge: state.json[stages.publisher] = { dispatched_at, dispatch_witness, agent_name,
-#   stage_name, status="in_progress" } atomically.
+# Merge: state.json[stages.publisher] = { dispatched_at, agent_name, stage_name,
+#   prompt_head_128, overlay_source, overlay_digest, dispatch_witness, status="in_progress" }
+#   in ONE atomic write. Then append OVERLAY_BLOCK to the prompt.
 ```
 
 ## Agent Override injection
@@ -64,6 +67,11 @@ Read `.agent-flow/dispatch-audit.log` (or absent → silent). Parse each line an
 - **OK** — `WITNESS_OK` audit line present.
 - **SUPPRESSED** — stage is NOT in REQUIRED or OPTIONAL list (do not surface; this is a stage from
   another skill's pipeline).
+
+> **Overlay binding note:** the dispatch witness now binds the resolved overlay (`overlay_source` +
+> `overlay_digest`), so a dropped overlay (a `.toml` present on disk but `overlay_source != toml`)
+> is enforced by the hook's V2 overlay-presence check and surfaces here as a `WITNESS_MISMATCH`
+> audit line. Continue to surface such entries as anomalies via the terminal block below.
 
 ```bash
 SKILL_DIR="${CLAUDE_SKILL_DIR:-skills/implement-feature}"
@@ -107,7 +115,7 @@ catch it). The `stages.<stage>.overlay_source` field is the only signal that the
 This sub-step surfaces the mismatch where a `customization/<agent>.toml` exists for a stage's
 agent but the recorded `overlay_source` shows the overlay was NOT applied.
 
-Resolve the override directory from `### Agent Overrides → Path` in Automation Config (default
+Resolve the override directory from `agent_overrides.path` in `.agent-flow/config.toml` (default
 `customization/`). For each stage block in `state.json` `stages.<stage>`:
 
 1. Read `stages.<stage>.overlay_source`. If absent (legacy run) or equal to `toml`, skip (no anomaly).
@@ -162,10 +170,10 @@ Follow `../../../core/post-publish-hook.md` for hook execution and webhook firin
 
 ## Feature Verification (optional)
 
-Follow `../../../core/fix-verification.md`. If Build & Test → Verify exists in Automation Config:
+Follow `../../../core/fix-verification.md`. If `build.verify_command` exists in `.agent-flow/config.toml`:
 1. Wait for PR merge (query via MCP server, max 5 attempts with 30s interval).
    If PR not merged after 5 attempts → display warning and exit.
 2. Checkout base branch and pull: `git checkout {base_branch} && git pull`
-3. Run the Verify command from Automation Config.
+3. Run the `build.verify_command` from `.agent-flow/config.toml`.
 4. If OK → add a success comment to the issue.
-5. If FAIL → add a failure comment, re-open issue if State transitions supports it, display to user.
+5. If FAIL → add a failure comment, re-open issue if `issue_tracker.state_transitions` supports it, display to user.

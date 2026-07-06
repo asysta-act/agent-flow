@@ -90,7 +90,7 @@ check_polymorphic "analyst" \
 # test-engineer: default (no flag) + --e2e
 check_polymorphic "test-engineer" \
   "### Output Contract — Default (no flag)" \
-  "### Output Contract — Phase: --e2e" || te_skip=77
+  "### Output Contract — --e2e Flag" || te_skip=77
 
 # browser-agent: reproduce + verify
 check_polymorphic "browser-agent" \

@@ -4,6 +4,15 @@ set -euo pipefail
 # AC-11: Webhook failure is advisory (WARN + continue, pipeline not blocked)
 # Traces: WEBHOOK-R5
 # Description: Verifies core/post-publish-hook.md documents advisory failure semantics
+#
+# NOTE: This is the canonical scenario for the AC-11 advisory-failure mechanics
+# ('[WARN] Webhook delivery failed' message, advisory/non-blocking semantics, and
+# the curl max-time timeout pattern) against core/post-publish-hook.md. The
+# separate CLAUDE.md forward-compatibility paragraph for webhook payloads is
+# covered by ac-webhook-advisory-failure.sh, which does NOT re-assert the checks
+# below. Per CONTRIBUTING.md rule 9 ("no duplicate coverage for an existing AC
+# id"), do not reintroduce the CLAUDE.md check here — extend this file instead
+# of adding a near-duplicate.
 
 # Depends on Phase 7 implementation
 

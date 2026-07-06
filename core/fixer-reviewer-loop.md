@@ -23,7 +23,7 @@ Iterative fixer↔reviewer loop with configurable limits and acceptance criteria
 5. Check if `{agent_override_path}/reviewer.md` exists. If yes, append its content to reviewer context.
 6. You MUST invoke Task(subagent_type='agent-flow:reviewer', model='opus'). DO NOT inline-execute. Inline execution is a CONTRACT VIOLATION detected by the PostToolUse validator. Pass fixer's changes + AC list.
 7. If reviewer outputs `APPROVE` (with AC Fulfillment section) → update state.json, return `APPROVED` with AC fulfillment report.
-8. If iteration count >= max_iterations → update state.json, return `BLOCKED` with last reviewer critique as detail.
+8. If `iteration count + 1 >= max_iterations` → update state.json, return `BLOCKED` with last reviewer critique as detail. (The `+1` accounts for the round just completed — `iteration count` is not incremented until step 9, so checking the raw counter here would let one extra round run past the configured limit.)
 9. Pass reviewer critique back to fixer as additional context, increment iteration counter, go to step 1.
 10. After each iteration, update state.json atomically (see `core/state-manager.md` atomic write protocol): increment `fixer_reviewer.iterations`, set `fixer_reviewer.last_verdict`, update `fixer_reviewer.ac_fulfillment` from reviewer AC Fulfillment section, set `fixer_reviewer.status` to `"in_progress"`, and accumulate usage fields: `fixer_reviewer.tokens_used += iteration_tokens_used`, `fixer_reviewer.duration_ms += iteration_duration_ms`, `fixer_reviewer.tool_uses += iteration_tool_uses`. These cumulative writes ensure that if the pipeline crashes mid-loop, the state.json reflects the token cost of all completed iterations and can be used for cost reporting on resume.
 

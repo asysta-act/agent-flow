@@ -9,7 +9,7 @@
 #       test, e2e_test, browser_verification, acceptance_gate, publisher
 #   C) NEW v10 stages present (sanity sub-asserts):
 #       reproduce_browser, smoke_check, e2e_test, browser_verification, acceptance_gate
-#   D) Hook sources core/lib/stage-invariant.sh
+# Note: the hook is a Python process; STAGES is a Python list, not a bash array.
 # Expected RED phase: FAIL — current STAGES has 5 entries
 # Expected GREEN phase (post-impl): PASS
 # ===========================================================================
@@ -28,15 +28,15 @@ if [ ! -f "$HOOK" ]; then
   exit 1
 fi
 
-# A. Extract the STAGES= line.
-STAGES_LINE=$(grep -E '^STAGES=\(' "$HOOK" | head -n 1)
-if [ -z "$STAGES_LINE" ]; then
-  fail "FC-4.A: $HOOK missing 'STAGES=( ... )' declaration"
+# A. Extract the STAGES Python list (multi-line: STAGES = [ "a", "b", ... ]).
+STAGES_BLOCK=$(awk '/^STAGES = \[/{f=1} f{print} /\]/{if(f)exit}' "$HOOK")
+if [ -z "$STAGES_BLOCK" ]; then
+  fail "FC-4.A: $HOOK missing 'STAGES = [ ... ]' declaration"
   exit 1
 fi
 
-# Extract names inside the parens.
-NAMES=$(printf '%s' "$STAGES_LINE" | sed -E 's/^STAGES=\(([^)]*)\).*/\1/')
+# Extract the quoted stage names from the block.
+NAMES=$(printf '%s' "$STAGES_BLOCK" | grep -oE '"[a-z][a-z0-9_]+"' | tr -d '"')
 
 # Build sorted-unique sets.
 SORTED_ACTUAL=$(printf '%s\n' $NAMES | sort -u)
@@ -66,13 +66,8 @@ for new_stage in reproduce_browser smoke_check e2e_test browser_verification acc
   fi
 done
 
-# E. Hook should source core/lib/stage-invariant.sh
-if ! grep -qE 'source[[:space:]]+.*core/lib/stage-invariant\.sh|\.[[:space:]]+.*core/lib/stage-invariant\.sh' "$HOOK"; then
-  fail "FC-4.E: $HOOK does not source 'core/lib/stage-invariant.sh'"
-fi
-
 if [ "$FAIL" -eq 0 ]; then
-  echo "PASS: v10-hooks-stages-extended — STAGES has 10 stages; sources stage-invariant.sh"
+  echo "PASS: v10-hooks-stages-extended — STAGES has 10 stages"
   exit 0
 fi
 exit 1

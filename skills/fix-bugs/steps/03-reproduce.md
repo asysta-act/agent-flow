@@ -5,8 +5,8 @@ Dispatch `browser-agent --phase reproduce`. This step is CONDITIONAL — evaluat
 ## Skip conditions
 
 Skip this entire step if ANY of the following is true:
-- `browser_verification_enabled = false` (Browser Verification section absent from Automation Config)
-- `browser_reproduce = false` (`On events` in Browser Verification config does NOT contain `reproduce`)
+- `browser_verification_enabled = false` (`[browser_verification]` section absent from `.agent-flow/config.toml`)
+- `browser_reproduce = false` (`browser.on_events` in `[browser_verification]` config does NOT contain `reproduce`)
 - Stage `browser-agent-reproduce` is in the profile's Skip stages
 
 When skipping: log `[SKIP] browser reproduction ({reason})`, update state, continue to step 04.
@@ -18,7 +18,7 @@ own reproduction context internally).
 
 Before dispatching browser-agent: run Pre-fix hook if configured.
 
-If Hooks → Pre-fix exists in Automation Config:
+If `hooks.pre_fix` exists in `.agent-flow/config.toml`:
 - Run the command via Bash in the context of the given bug.
 - Failure → Block (issue comment per Block Comment Template, continue with next bug).
 
@@ -32,11 +32,14 @@ Before dispatching, atomically write per-stage pre-dispatch fields to
 - `reproduction.agent_name`      = `"agent-flow:browser-agent"`
 - `reproduction.stage_name`      = `"reproduce_browser"`
 - `reproduction.dispatched_at`   = current ISO-8601 UTC timestamp
-- `reproduction.dispatch_witness` = sha256("agent-flow:browser-agent|sonnet|<prompt_head_128>")
-  (compute via `core/lib/stage-invariant.sh::compute_dispatch_witness`)
+- `reproduction.prompt_head_128` = first 128 UTF-8-safe bytes of the un-expanded prompt template
+- `reproduction.overlay_source`  = `toml` | `none` | `md_rejected` (from the Agent Override Injector — resolve it FIRST, see "Agent Override injection" below)
+- `reproduction.overlay_digest`  = sha256 hex of the rendered overlay block (`toml`), else literal `none` / `md_rejected` (via `compute_overlay_digest`)
+- `reproduction.dispatch_witness` = sha256("agent-flow:browser-agent|sonnet|<prompt_head_128>|<overlay_source>|<overlay_digest>")
+  (compute via the 6-arg `core/lib/stage-invariant.sh::compute_dispatch_witness reproduce_browser agent-flow:browser-agent sonnet <prompt_head_128> <overlay_source> <overlay_digest>`; the overlay is resolved BEFORE the witness)
 - `reproduction.tokens_used` = 0, `reproduction.duration_ms` = 0, `reproduction.tool_uses` = 0
 
-Follow atomic write protocol from `../../../core/state-manager.md`. All fields written in a single atomic replace.
+Follow atomic write protocol from `../../../core/state-manager.md`. All fields written in a single atomic replace. Then append the rendered overlay block to the prompt and dispatch.
 
 ## Agent Override injection
 

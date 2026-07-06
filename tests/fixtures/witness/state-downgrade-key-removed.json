@@ -1,0 +1,33 @@
+{
+  "_comment": "FIXTURE (downgrade i, REQ-025/REQ-047): progressed keyed v2.0 run with a POPULATED dispatch-ledger.jsonl but the sibling dispatch.key REMOVED. >=1 completed stage means the forge-resistant bootstrap predicate fails; with the key gone the ledger tags cannot be verified, so the verdict is WITNESS_UNVERIFIABLE (exit 2 under strict). The key is NOT regenerated.",
+  "schema_version": "2.0",
+  "fixture_kind": "downgrade_key_removed_unverifiable",
+  "stages": {
+    "triage": {
+      "dispatched_at": "2026-04-19T00:00:00Z",
+      "subagent_type": "agent-flow:analyst",
+      "agent_name": "agent-flow:analyst",
+      "model": "sonnet",
+      "stage_name": "triage",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "aaaa1111aaaa1111aaaa1111aaaa1111",
+      "dispatch_seq": 1,
+      "status": "completed"
+    },
+    "fixer_reviewer": {
+      "dispatched_at": "2026-04-19T00:05:00Z",
+      "subagent_type": "agent-flow:fixer",
+      "agent_name": "agent-flow:fixer",
+      "model": "opus",
+      "stage_name": "fixer_reviewer",
+      "overlay_source": "none",
+      "overlay_digest": "none",
+      "override_path": "customization/",
+      "claim_nonce": "bbbb2222bbbb2222bbbb2222bbbb2222",
+      "dispatch_seq": 2,
+      "status": "in_progress"
+    }
+  }
+}

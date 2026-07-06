@@ -1,0 +1,49 @@
+[issue_tracker]
+type = "github"
+instance = "github.com"
+project = "test-org/test-repo"
+bug_query = "is:issue is:open label:bug"
+state_transitions = "In Progress: add label:in-progress; Blocked: add label:blocked; For Review: add label:for-review"
+on_start_set = "add label:in-progress"
+
+[source_control]
+remote = "github.com/test-org/test-repo"
+base_branch = "main"
+branch_naming = "fix/{issue}-{short-description}"
+
+[pr_rules]
+labels = "ForReview"
+
+[pr_description_template]
+template = """
+## Summary
+{summary}
+
+## Changes
+{changes}
+
+## Testing
+{testing}
+
+Fixes #{issue_number}
+"""
+
+[build_and_test]
+build_command = "echo \"build ok\""
+test_command = "echo \"test ok\""
+verify_command = "echo \"verify ok\""
+
+[[pipeline_profiles]]
+name = "fast"
+skip_stages = "triage, analyst-impact, test-engineer"
+extra_stages = ""
+
+[[pipeline_profiles]]
+name = "strict"
+skip_stages = ""
+extra_stages = "test-engineer-e2e"
+
+[[pipeline_profiles]]
+name = "minimal"
+skip_stages = "triage, analyst-impact, test-engineer, test-engineer-e2e"
+extra_stages = ""

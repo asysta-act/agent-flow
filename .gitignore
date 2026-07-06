@@ -5,7 +5,18 @@ nul
 .forge/
 .forge.bak-*/
 .forge.v*/
-.agent-flow/
+# agent-flow runtime state — never ignore the whole dir (config.toml must stay tracked)
+.agent-flow/state.json
+.agent-flow/pipeline.log
+.agent-flow/autopilot.log
+.agent-flow/dispatch-audit.log
+.agent-flow/pending-dispatch.json
+.agent-flow/STRICT_DISPATCH_OFF
+.agent-flow/.version-confirmed
+.agent-flow/*.tmp
+.agent-flow/browser/
+.agent-flow/*/
+config.local.toml
 *.stackdump
 REVIEW-REPORT-*.md
 docs/plans/

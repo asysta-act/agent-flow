@@ -8,8 +8,8 @@ connectivity, and conditionally runs the brainstorm phase for vague project desc
 Before anything else, check the target directory:
 
 1. **Empty directory** (or does not exist) → full scaffold
-2. **Existing project without CLAUDE.md** → offer: "Project exists but has no CLAUDE.md. Do you want `/scaffold add claude-md`?"
-3. **Existing project with CLAUDE.md** → offer: "Project already has Automation Config. Do you want `/implement-feature`?"
+2. **Existing project without `.agent-flow/config.toml`** → offer: "Project exists but has no agent-flow config. Do you want `/scaffold add claude-md`?"
+3. **Existing project with `.agent-flow/config.toml`** → offer: "Project already has agent-flow config. Do you want `/implement-feature`?"
 4. **Existing git repo with uncommitted changes** → warn: "Uncommitted changes. Commit or stash them."
 
 If state is not 1 and user does not confirm → STOP.
@@ -19,7 +19,7 @@ If state is not 1 and user does not confirm → STOP.
 Collect infrastructure intent. Always runs regardless of MODE (including --yolo).
 
 **--infra flag preset:** If `infra_preset` is set:
-- Parse named pairs (`tracker:{ready|later},sc:{ready|later}`; shorthand already expanded at validation)
+- Read named pairs (`tracker:{ready|later},sc:{ready|later}`; shorthand already expanded at validation)
 - Set `tracker_effective_status` and `sc_effective_status`
 - Display: `Infrastructure preset from --infra flag: tracker={tracker}, SC={sc}`
 - If tracker preset is `"ready"`: still ask for tracker type, instance URL, project key
@@ -38,7 +38,7 @@ Collect details for services declared "ready":
 - Tracker: type (`youtrack/github/jira/linear/gitea/redmine`), instance URL, project key
 - SC: remote (owner/repo), base branch (default: main)
 
-Resolve `{trackers_md_path}` once (Glob `.claude/plugins/**/docs/reference/trackers.md` → fallback → bare `docs/reference/trackers.md`). Show format examples from that file.
+Resolve `{trackers_md_path}` once (Glob `.claude/plugins/**/docs/reference/trackers.md` → otherwise → bare `docs/reference/trackers.md`). Show format examples from that file.
 
 **Store in-memory variables:**
 

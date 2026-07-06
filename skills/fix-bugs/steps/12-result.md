@@ -72,8 +72,11 @@ For each WITNESS_MISSING entry in `.agent-flow/dispatch-audit.log` for this run:
 | In `optional` list AND stage's config-gating evaluated to "on" | **ANOMALY** | Render as anomaly block. |
 | NOT in allow-list (hook STAGES superset entries — e.g., implement-feature-only stages bleeding in) | SUPPRESSED | Do NOT render. Not part of this pipeline's expected dispatch set. |
 
-For WITNESS_MISMATCH entries: always render as ANOMALY (witness present but malformed → likely
-state.json corruption or orchestrator bug).
+For WITNESS_MISMATCH entries: always render as ANOMALY. The witness now binds the resolved overlay
+(`overlay_source` + `overlay_digest`), so a mismatch means either witness-field tampering/corruption
+(hook V1 recompute failed) OR a dropped overlay — a `.toml` overlay present on disk but
+`overlay_source != toml` (hook V2 overlay-presence check). Both are now enforced by the PostToolUse
+hook; continue to surface them here in the terminal report.
 
 For WITNESS_OK entries: never render (no action needed).
 
@@ -108,7 +111,7 @@ catch it). The `stages.<stage>.overlay_source` field is the only signal that the
 This sub-step surfaces the mismatch where a `customization/<agent>.toml` exists for a stage's
 agent but the recorded `overlay_source` shows the overlay was NOT applied.
 
-Resolve the override directory from `### Agent Overrides → Path` in Automation Config (default
+Resolve the override directory from `agent_overrides.path` in `.agent-flow/config.toml` (default
 `customization/`). For each stage block in `.agent-flow/{ISSUE-ID}/state.json` `stages.<stage>`:
 
 1. Read `stages.<stage>.overlay_source`. If it is absent (legacy run) or equals `toml`, skip the

@@ -50,7 +50,7 @@ For platform-specific installation notes and cache paths, see [Installation Guid
 **Solution:**
 1. Run `/agent-flow:onboard` to generate a complete Automation Config block interactively
 2. Alternatively, run `/agent-flow:onboard` — Step 1 offers a template picker with all available pre-built config templates
-3. The Automation Config must be a `##`-level heading in your project's CLAUDE.md
+3. The Automation Config must live in your project's committed `.agent-flow/config.toml` (CLAUDE.md keeps only a 1–2 line pointer)
 
 See [Automation Config Reference](../reference/automation-config.md) for the complete specification.
 
@@ -121,7 +121,7 @@ means the overlay was not injected.
 **Cause:** Your Automation Config uses an older format (v1.x or v2.x).
 
 **Solution:**
-1. Update your `## Automation Config` to match the current format documented in `docs/reference/automation-config.md`.
+1. Update your `.agent-flow/config.toml` to match the current format documented in `docs/reference/automation-config.md`.
 2. Run `/agent-flow:check-setup` to verify the migrated config
 
 ## Pipeline Issues

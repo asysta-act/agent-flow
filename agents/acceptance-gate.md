@@ -18,7 +18,7 @@ AC-to-code mapping, test coverage assessment.
 
 ## Process
 
-1. Read the acceptance criteria from context (from analyst for bugs, spec-analyst for features).
+1. Read the acceptance criteria from context (from analyst for bugs, spec-analyst for features). If a Test report (test-engineer output) is present in context, read it too — it is used only for the no-testable-seam carve-out in the Verdict rules (step 4); its absence does not block verification of any other AC.
 2. Read all changed files from the fixer's output. Understand what changed and why.
 3. For each acceptance criterion:
    a. Identify verification method:
@@ -44,11 +44,10 @@ AC-to-code mapping, test coverage assessment.
      2. {AC text} → {FULFILLED|PARTIALLY|NOT ADDRESSED} — {file:line evidence, test name}
    - **Summary:** {1-2 sentence assessment}
 
-   Verdict rules:
-   - Any NOT ADDRESSED → REQUEST_CHANGES with explanation of what's missing
-   - All FULFILLED → APPROVE
-   - Mix of FULFILLED + PARTIALLY → APPROVE (fixer may refine in next iteration)
-   - A behavioral AC whose changed code the test-engineer documented as having no testable seam — with manual/E2E verification steps recorded — counts as **PARTIALLY** (cite that documented verification as the justification), NOT NOT ADDRESSED.
+   Verdict rules (exhaustive partition over the AC set):
+   - Any AC is NOT ADDRESSED → REQUEST_CHANGES with explanation of what's missing.
+   - No AC is NOT ADDRESSED (covers all-FULFILLED, all-PARTIALLY, and any FULFILLED/PARTIALLY mix) → APPROVE. PARTIALLY items are recorded in Details for human visibility but do not block publish — only NOT ADDRESSED triggers a fixer round-trip; APPROVE routes straight to the next pipeline step (publish or pre-publish hook), not back to the fixer.
+   - A behavioral AC whose changed code the test-engineer documented as having no testable seam — with manual/E2E verification steps recorded in the Test report — counts as **PARTIALLY** (cite that documented verification as the justification), NOT NOT ADDRESSED.
 
 ## Output Contract
 
@@ -58,6 +57,7 @@ AC-to-code mapping, test coverage assessment.
 |---------|--------|----------|
 | Acceptance criteria list | upstream agent output (analyst --phase triage in bug-fix mode; spec-analyst in feature mode) | yes |
 | Fixer's changed files | fixer output (Files changed list) | yes |
+| Test report | test-engineer output, when supplied in context | no — used only for the no-testable-seam carve-out in the Verdict rules (Process step 4); if absent, treat any behavioral AC lacking test evidence as PARTIALLY or NOT ADDRESSED per the normal verdict rules, not as the carve-out |
 
 ### Outputs
 
@@ -71,13 +71,13 @@ Before returning to the orchestrator, you SHALL verify the following 5 invariant
 
 1. `dispatched_at` — Field is present and non-empty for stage `acceptance_gate` (EXPECTED_STAGE_NAME=`acceptance_gate`). The orchestrator wrote this pre-dispatch.
 
-2. `dispatch_witness` — Field is present, exactly 64 hex characters, and matches the sha256 of `{subagent_type}|{model}|{prompt_head_128}` computed BEFORE Tier-1 variable expansion. Verify via `core/lib/stage-invariant.sh`'s `check_dispatch_witness` function.
+2. `dispatch_witness` — Under the gate-as-signer model the signed witness is NO LONGER a `state.json` field: the PreToolUse gate is the sole key holder and records the keyed HMAC tag in the gate-owned ledger `.agent-flow/{RUN-ID}/dispatch-ledger.jsonl`, keyed by `(run_id, stage, claim_nonce)`. Verify the dispatch by READING that ledger (read-only — do NOT recompute the witness via the demoted bash path, and do NOT expect a `dispatch_witness` field in `state.json`): confirm a `WITNESS_OK` ledger entry exists for this run's `(run_id, stage)` (or accept `WITNESS_MISSING` semantics for a legitimately skipped stage). On a genuine legacy v1.0 run (no per-run `dispatch.key` and no ledger file) this falls back to the legacy path / simply passes — a missing ledger on a v1.0 run is EXPECTED and is NOT a Block.
 
 3. `status` — Field equals `"in_progress"` for this stage. The orchestrator wrote this pre-dispatch (status flips to `"completed"` only AFTER you return, so observing `"in_progress"` proves the normal dispatch flow ran).
 
 4. `stage_name` — State.json `stage_name` for this stage equals `acceptance_gate` (this value is injected by the orchestrator as a Tier-1 prompt template variable: `EXPECTED_STAGE_NAME=acceptance_gate`). If the values mismatch, the orchestrator's dispatch table is inconsistent with the prompt — Block immediately.
 
-5. `agent_name` — State.json `agent_name` for this stage equals `acceptance-gate` (injected as `EXPECTED_AGENT_NAME=acceptance-gate`). Mismatch → Block.
+5. `agent_name` — State.json `agent_name` for this stage equals the value injected as `EXPECTED_AGENT_NAME` (the namespaced Task subagent_type, e.g. `agent-flow:acceptance-gate`). Mismatch → Block.
 
 If ANY invariant fails, output a Block comment using the standard Block Comment Template with `Reason: Step completion invariant violated: {invariant_name}` and exit with BLOCKED status.
 

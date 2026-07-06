@@ -1,14 +1,14 @@
 # Automation Config Reference
 
-The Automation Config is the configuration block that connects agent-flow to your project. It lives in the `## Automation Config` section of your project's CLAUDE.md file.
+The Automation Config is the configuration that connects agent-flow to your project. It lives in your project's committed `.agent-flow/config.toml` file (resolved by the pure-bash `core/config-reader.md`), with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay. CLAUDE.md keeps only a 1-2 line pointer — config is no longer stored inline in CLAUDE.md.
 
 The **canonical specification** for all sections, keys, and defaults is in [CLAUDE.md](../../CLAUDE.md) (Config Contract section). This document provides extended examples, per-tracker guidance, validation rules, and a complete configuration example.
 
 ## Overview
 
-Automation Config uses a table format (`| Key | Value |`) for all sections. There are 5 required sections and 18 optional sections (referenced by 17 core contracts and consumed by 17 skills). Required sections must be present for the pipeline to run. Optional sections enable additional capabilities with sensible defaults.
+Automation Config uses TOML `[section]` tables in `.agent-flow/config.toml`. There are 5 required sections and 18 optional sections (referenced by 17 core contracts and consumed by 17 skills). Required sections must be present for the pipeline to run. Optional sections enable additional capabilities with sensible defaults.
 
-All skills read Automation Config at the start of execution. Skills contain zero project-specific logic — everything is driven by what you configure here.
+All skills read Automation Config from `.agent-flow/config.toml` (via `core/config-reader.md`) at the start of execution. Skills contain zero project-specific logic — everything is driven by what you configure here.
 
 **Quick reference:**
 
@@ -40,7 +40,10 @@ All skills read Automation Config at the start of execution. Skills contain zero
 
 ## Required Sections
 
-### Issue Tracker
+The 5 required sections map to these TOML tables in `.agent-flow/config.toml`: `[issue_tracker]`,
+`[source_control]`, `[pr_rules]`, `[pr_description_template]`, `[build_and_test]`.
+
+### Issue Tracker — `[issue_tracker]`
 
 Configures which issue tracker to use and how to interact with it.
 
@@ -175,7 +178,13 @@ The Verify command is optional. When present, it runs after PR merge. If verific
 
 ## Optional Sections
 
-### Module Docs
+The 18 optional sections map to these TOML tables in `.agent-flow/config.toml`: `[module_docs]`,
+`[retry_limits]`, `[hooks]`, `[custom_agents]`, `[notifications]`, `[worktrees]`, `[e2e_test]`,
+`[browser_verification]`, `[error_handling]`, `[feature_workflow]`, `[decomposition]`,
+`[[pipeline_profiles]]`, `[metrics]`, `[agent_overrides]`, `[local_deployment]`, `[sprint_planning]`,
+`[autopilot]`, `[pause_limits]`.
+
+### Module Docs — `[module_docs]`
 
 Points agents to per-module documentation files. When configured, analyst and architect read the corresponding module docs before analysis or design.
 
@@ -243,6 +252,8 @@ See [Custom Agents Guide](../guides/custom-agents.md) for details on writing cus
 
 Webhook configuration for pipeline events.
 
+**Operator trust required**: The `Webhook URL` value is dispatched via `curl` without scheme or host validation beyond `--proto "=http,https"`. Operators are responsible for configuring trusted URLs pointing to internal observability endpoints. See [CLAUDE.md](../../CLAUDE.md) Webhook Payloads section and [config.md](config.md#notifications) for the full SSRF/DoS caveat.
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | Webhook URL | (none) | HTTP endpoint for event notifications |
@@ -285,7 +296,7 @@ Optional. Enables browser-based bug reproduction (before fixer) and verification
 
 **Example:**
 ```markdown
-## Browser Verification
+### Browser Verification
 
 | Key | Value |
 |-----|-------|
@@ -330,7 +341,7 @@ Optional. Configures local deployment health checks. The `deployment-verifier` a
 
 **Example:**
 ```markdown
-## Local Deployment
+### Local Deployment
 
 | Key | Value |
 |-----|-------|
@@ -438,7 +449,7 @@ Optional directory with per-agent customization files. For each agent, create a 
 
 Create `customization/reviewer.toml` to add project-specific reviewer instructions, `customization/fixer.toml` for fixer instructions, and so on. See [Custom Agents Guide](../guides/custom-agents.md) for details.
 
-**TOML overlay format (preferred):** The preferred override format is a TOML file at `{path}/{agent-name}.toml` instead of `{agent-name}.md`. The `.md` format is a deprecated alias — it still works but emits `[WARN] Deprecated override format: {file}. Migrate to .toml.` Use `/agent-flow:setup-agents` to auto-generate TOML stubs with smart defaults. See [TOML overlay syntax guide](../guides/toml-overlay-syntax.md) for the full schema, 3-tier merge rules, and worked examples.
+**TOML overlay format (required):** The override format is a TOML file at `{path}/{agent-name}.toml`. A legacy `{agent-name}.md`-only file (no `.toml` companion) is **not supported** — it is NOT applied. Its content is dropped (never parsed, never appended to the agent prompt), an `[ERROR] Legacy .md overlay format is not supported; manual conversion required — see docs/guides/toml-overlay-syntax.md for TOML overlay format examples.` is logged to stderr, and provenance is recorded as `overlay_source=md_rejected`. This never blocks the pipeline — dispatch continues immediately with the bare (un-overlaid) agent prompt. Use `/agent-flow:setup-agents` to auto-generate TOML stubs with smart defaults. See [TOML overlay syntax guide](../guides/toml-overlay-syntax.md) §8–9 for the full schema, 3-tier merge rules, migration steps, and worked examples.
 
 **TOML merge tiers (summary):** Tier 1 — scalar overrides (`model`, `style`): overlay value replaces plugin default from agent frontmatter. Tier 2 — array of tables (`[[process_additions]]`, `[[constraints]]`): overlay entries appended after plugin defaults (order preserved). Tier 3 — deep merge (`[limits]`): overlay keys override corresponding plugin-default keys; absent keys are inherited unchanged. The `[meta]` free-form table accepts arbitrary annotation keys without schema validation and is not consumed by dispatch logic.
 
@@ -477,7 +488,7 @@ Because there is no single global overlay, repeat the rule in each code-generati
 
 ## Plugin Permission Architecture
 
-agent-flow plugin agents do **NOT** support `hooks:`, `mcpServers:`, or `permissionMode:` keys in YAML frontmatter — the Claude Code platform ignores these fields for security reasons when set at agent level. **Hooks are skill-orchestrated, not agent-frontmatter** (hooks are skill-orchestrated, not agent-frontmatter) — pipeline hooks are configured at **PROJECT level** via the `### Hooks` section in your project's CLAUDE.md, NOT in any agent's YAML frontmatter.
+agent-flow plugin agents do **NOT** support `hooks:`, `mcpServers:`, or `permissionMode:` keys in YAML frontmatter — the Claude Code platform ignores these fields for security reasons when set at agent level. Instead, hooks are skill-orchestrated, not agent-frontmatter: pipeline hooks are configured at **PROJECT level** via the `[hooks]` section in your project's `.agent-flow/config.toml`, NOT in any agent's YAML frontmatter.
 
 <!-- COUNTER-EXAMPLE: Do NOT add these keys to agent frontmatter — they are silently ignored by the platform.
 ---
@@ -499,12 +510,12 @@ END COUNTER-EXAMPLE -->
 
 | Goal | Correct approach |
 |------|-----------------|
-| Run a shell command before/after pipeline stages | `### Hooks` in project CLAUDE.md (`Pre-fix`, `Post-fix`, `Pre-publish`, `Post-publish`) |
+| Run a shell command before/after pipeline stages | `[hooks]` in `.agent-flow/config.toml` (`Pre-fix`, `Post-fix`, `Pre-publish`, `Post-publish`) |
 | Add MCP servers for the project | Project-level `.claude/settings.json` `mcpServers` key |
 | Set permission mode | Project-level `.claude/settings.json` `permissionMode` key |
-| Add agent-specific instructions | `customization/{agent}.toml` via `### Agent Overrides` |
+| Add agent-specific instructions | `customization/{agent}.toml` via `[agent_overrides]` |
 
-Existing project-level `### Hooks` config sections continue to work unchanged — no migration required. See [hooks documentation](hooks.md) for available hook points.
+Configure hook commands under `[hooks]` in `.agent-flow/config.toml`; the pre-migration CLAUDE.md `### Hooks` section is no longer read (the config hard-cut removed the CLAUDE.md parse path). See [hooks documentation](hooks.md) for available hook points.
 
 ## Mode Flags
 
@@ -577,7 +588,7 @@ The `/agent-flow:check-setup` skill validates your Automation Config. Here is wh
 1. **Required sections present:** All 5 required sections (Issue Tracker, Source Control, PR Rules, PR Description Template, Build & Test) must exist
 2. **Required keys present:** Each required section must contain all its required keys
 3. **No placeholder values:** Keys must not contain `<TODO>`, `<...>`, or other placeholder patterns
-4. **Table format:** All sections must use `| Key | Value |` tables, not bullet-point lists
+4. **TOML format:** All sections must be valid TOML `[section]` tables in `.agent-flow/config.toml`; `.agent-flow/config.toml` must be tracked (not gitignored)
 5. **Tracker-specific validation:** Query syntax and state transition format are checked against the configured tracker Type
 6. **MCP server presence:** An MCP server matching the tracker Type must be available
 7. **Build/test commands:** Build and test commands execute successfully (unless `--skip-build`)
@@ -617,7 +628,7 @@ If your project uses an older Automation Config format, update it manually to ma
 
 ## Automation Config
 
-Canonical reference for the 23 Automation Config sections (5 required + 18 optional). Section ordering and key names must match between this file and the consumer project's CLAUDE.md (per `tests/scenarios/counts-invariants.sh`).
+Canonical reference for the 23 Automation Config sections (5 required + 18 optional). Section ordering and key names must match between this file and the consumer project's `.agent-flow/config.toml` (per `tests/scenarios/counts-invariants.sh`).
 
 ### Retry Limits
 
@@ -637,7 +648,7 @@ Keys: Post-fix agent, Pre-publish agent. Default (none).
 
 ### Notifications
 
-Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`). Default (none).
+Keys: Webhook URL, On events (`pr-created`, `issue-blocked`, `pipeline-started`, `step-completed`, `pipeline-completed`, `pipeline-paused`, `pipeline-resumed`). Default (none).
 
 ### Worktrees
 

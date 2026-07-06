@@ -5,29 +5,14 @@ set -euo pipefail
 # Traces: WEBHOOK-R7
 # Description: Verifies 'step-skipped' is absent from all pipeline SKILL.md files and core hook
 
-# NOTE: Negative absence test. Passes green pre-Phase 7 if no such text exists.
+# CONSOLIDATION NOTE (CONTRIBUTING.md rule 9 — "No duplicate coverage for an
+# existing AC id"): this scenario and ac-webhook-no-step-skipped.sh previously
+# asserted the identical criterion via near-duplicate grep logic (same FILES
+# array, same `grep -qF 'step-skipped'` check) — the exact kind of ungoverned
+# test regeneration rule 9 exists to prevent. The assertion logic now has a
+# single source of truth in ac-webhook-no-step-skipped.sh (the canonical
+# AC-labeled scenario for AC-33/WEBHOOK-R7); this file delegates to it instead
+# of re-implementing the same check, so both scenario names still resolve to
+# one PASS/FAIL outcome without duplicated logic to drift out of sync.
 
-cd "$(dirname "$0")/../.."
-
-FAIL=0
-
-FILES=(
-  "skills/fix-ticket/SKILL.md"
-  "skills/fix-bugs/SKILL.md"
-  "skills/implement-feature/SKILL.md"
-  "skills/scaffold/SKILL.md"
-  "core/post-publish-hook.md"
-)
-
-for f in "${FILES[@]}"; do
-  if [ ! -f "$f" ]; then
-    continue
-  fi
-  if grep -qF 'step-skipped' "$f"; then
-    echo "FAIL: '$f' contains 'step-skipped' event (must be absent per WEBHOOK-R7)" >&2
-    FAIL=1
-  fi
-done
-
-[ "$FAIL" -eq 0 ] && echo "PASS: webhook-no-step-skipped — 'step-skipped' absent from all checked files"
-exit "$FAIL"
+exec bash "$(dirname "$0")/ac-webhook-no-step-skipped.sh"

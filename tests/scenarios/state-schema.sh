@@ -40,8 +40,8 @@ else
   fi
 fi
 
-# 3. All 4 pipeline commands reference state.json
-for cmd in fix-ticket fix-bugs implement-feature scaffold; do
+# 3. All 3 pipeline entry-point commands reference state.json
+for cmd in fix-bugs implement-feature scaffold; do
   CMD_FILE="$REPO_ROOT/skills/${cmd}/SKILL.md"
   if [ -f "$CMD_FILE" ]; then
     count=$(grep -c 'state\.json\|state-manager' "$CMD_FILE" || true)
@@ -51,14 +51,18 @@ for cmd in fix-ticket fix-bugs implement-feature scaffold; do
   fi
 done
 
-# 4. resume-ticket/SKILL.md references state.json with fallback
-RESUME="$REPO_ROOT/skills/resume-ticket/SKILL.md"
-if [ -f "$RESUME" ]; then
+# 4. core/resume-detection.md (shared resume contract; successor to the deleted
+#    resume-ticket skill — see tests/scenarios/test-cross-skill-consistency.sh)
+#    references state.json and documents the FRESH fallback resume point.
+RESUME="$REPO_ROOT/core/resume-detection.md"
+if [ ! -f "$RESUME" ]; then
+  fail "core/resume-detection.md does not exist"
+else
   if ! grep -q 'state\.json' "$RESUME"; then
-    fail "resume-ticket.md does not reference state.json"
+    fail "core/resume-detection.md does not reference state.json"
   fi
-  if ! grep -qi 'fall.back\|fallback' "$RESUME"; then
-    fail "resume-ticket.md missing heuristic fallback language"
+  if ! grep -qi 'FRESH' "$RESUME"; then
+    fail "core/resume-detection.md missing FRESH fallback resume point"
   fi
 fi
 
