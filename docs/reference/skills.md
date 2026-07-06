@@ -311,7 +311,7 @@ The issue tracker is only written to in `full-publish` mode — the other two su
 
 **What it does:** Sets up the developer environment for agent-flow. Reads your Automation Config to determine which MCP servers and tokens are needed, guides you through token collection, generates `.mcp.json` with proper server configuration, and optionally sets up tool permissions in `.claude/settings.json`. Creates `.mcp.json.example` for team sharing (without secrets).
 
-When CLI override flags are provided (`--tracker-type`, `--tracker-instance`, `--sc-remote`), setup-mcp bypasses the Automation Config read entirely. This enables setup-mcp to run before CLAUDE.md exists — for example, during scaffold when the project has no configuration yet.
+When CLI override flags are provided (`--tracker-type`, `--tracker-instance`, `--sc-remote`), setup-mcp bypasses the Automation Config read entirely. This enables setup-mcp to run before `.agent-flow/config.toml` exists — for example, during scaffold when the project has no configuration yet.
 
 **Examples:**
 

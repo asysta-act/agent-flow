@@ -121,7 +121,7 @@ means the overlay was not injected.
 **Cause:** Your Automation Config uses an older format (v1.x or v2.x).
 
 **Solution:**
-1. Update your `## Automation Config` to match the current format documented in `docs/reference/automation-config.md`.
+1. Update your `.agent-flow/config.toml` to match the current format documented in `docs/reference/automation-config.md`.
 2. Run `/agent-flow:check-setup` to verify the migrated config
 
 ## Pipeline Issues

@@ -4,11 +4,18 @@ All notable changes to agent-flow will be documented in this file.
 
 ## [2.0.0] — 2026-07-03
 
-> **MAJOR — breaking.** The dispatch witness moves from an orchestrator-written
-> `sha256` receipt to a **gate-signed HMAC keyed witness**, and multiple agents'
-> Output Contracts gained new/changed structured fields. Five independent MAJOR
-> triggers: (1) the witness output contract changes (`sha256` 5-tuple → per-field
-> sub-hashed HMAC-SHA256 keyed tag recorded in a gate-owned ledger, never in
+> **MAJOR — breaking.** This release bundles two independent breaking changes.
+>
+> **(A) Automation Config relocation.** Project configuration moves out of the
+> consumer's `CLAUDE.md` (`## Automation Config` section) into a committed
+> `.agent-flow/config.toml` — a **hard cut** with no fallback or dual-read. CLAUDE.md
+> keeps only a 1–2 line pointer. Consumers MUST migrate (see Migration below).
+>
+> **(B) Dispatch witness rework.** The dispatch witness moves from an
+> orchestrator-written `sha256` receipt to a **gate-signed HMAC keyed witness**, and
+> multiple agents' Output Contracts gained new/changed structured fields. Five
+> independent MAJOR triggers: (1) the witness output contract changes (`sha256` 5-tuple
+> → per-field sub-hashed HMAC-SHA256 keyed tag recorded in a gate-owned ledger, never in
 > `state.json`); (2) the first **non-additive** `schema_version` bump (`1.0` → `2.0`);
 > (3) a **new blocking PreToolUse `Task` gate** (`hooks/validate-dispatch-pre.sh`)
 > that can deny a dispatch before it runs (Claude Code ≥ 2.1.90); (4) the A2
@@ -56,6 +63,16 @@ All notable changes to agent-flow will be documented in this file.
 
 ### Changed
 
+- **BREAKING: Automation Config relocated from the consumer's CLAUDE.md to
+  `.agent-flow/config.toml`.** The `## Automation Config` block (5 required + 18 optional
+  sections) is no longer read from CLAUDE.md; it now lives in a committed
+  `.agent-flow/config.toml` (TOML `[section]` tables, resolved by `core/config-reader.md`),
+  with an optional gitignored `.agent-flow/config.local.toml` per-developer overlay.
+  CLAUDE.md keeps only a 1–2 line pointer. Inline config was a dual source of truth:
+  CLAUDE.md is context that subagents auto-load un-filterably, so a config table there and
+  a `customization/*.toml` overlay could each set the same key (e.g. `Retry Limits` vs
+  `[limits]`) with no defined precedence — a single parsed config file removes that
+  conflict.
 - **`overlay_digest` redefined** as the `sha256` of the **RAW, LF-normalized `.toml`
   file bytes** at `override_path/<short>.toml` (no longer the rendered Markdown block).
   The gate reads the bytes once and signs the same held bytes; a forged
@@ -111,6 +128,12 @@ All notable changes to agent-flow will be documented in this file.
 
 ### Migration
 
+- **Move your Automation Config to `.agent-flow/config.toml` (required action).** Run
+  `/agent-flow:onboard` (update mode) to generate `.agent-flow/config.toml` from your
+  existing CLAUDE.md `## Automation Config` section and reduce that section to a pointer.
+  This is a **hard cut** with no fallback — a run against a project that still keeps its
+  config inline in CLAUDE.md will not find it. `/agent-flow:check-setup` detects a leftover
+  inline config, and warns if `.agent-flow/config.toml` is gitignored.
 - **Strict by default, env-only toggle.** Dispatch enforcement remains strict by
   default. To roll back: **Lever 1** — set `AGENT_FLOW_STRICT_DISPATCH: "0"` in the
   `env` block of `.claude/settings.json` (the persistent lever) and/or drop a top-level

@@ -6,10 +6,10 @@ Manual checklist for verifying the pipeline on different platforms.
 
 - [ ] Plugin installed (`/plugin install`)
 - [ ] `.mcp.json` configured with valid tokens
-- [ ] `## Automation Config` in the project's CLAUDE.md
+- [ ] `.agent-flow/config.toml` present and tracked (not gitignored)
 - [ ] Test issue exists in the issue tracker
 
-Issue tracker / source control backend MCP checks below apply to whichever backend your project's `## Automation Config` `### Issue Tracker` section specifies (GitHub is the canonical backend for the public release; Gitea, YouTrack, Jira, Linear, and Redmine remain supported for self-hosted projects — see [mcp-configuration.md](mcp-configuration.md)).
+Issue tracker / source control backend MCP checks below apply to whichever backend your project's `.agent-flow/config.toml` `[issue_tracker]` table specifies (GitHub is the canonical backend for the public release; Gitea, YouTrack, Jira, Linear, and Redmine remain supported for self-hosted projects — see [mcp-configuration.md](mcp-configuration.md)).
 
 ## Windows
 

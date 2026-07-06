@@ -315,7 +315,7 @@ With `--no-implement`, the scaffold pipeline falls back to v3.x behavior: scaffo
 |-------|-------|-------|-------|
 | Directory Detection | (skill) | N/A | Guards against overwriting existing projects |
 | Stack Selection | (scaffold internal step) | N/A | Picks one option per category from skill-supplied flags (`--lang`, `--framework`, `--db`, `--ci`); no separate agent dispatch |
-| Skeleton Generation | scaffolder | sonnet | Writes to temp directory; includes CLAUDE.md with Automation Config |
+| Skeleton Generation | scaffolder | sonnet | Writes to temp directory; includes `.agent-flow/config.toml` + a CLAUDE.md pointer |
 | Validation | (skill) | N/A | Build + test + lint + CLAUDE.md structure check; max 3 retries |
 | Copy to Target | (skill) | N/A | Copies validated skeleton to target directory |
 | Git Init | (skill) | N/A | `git init` + initial commit |

@@ -25,7 +25,7 @@ tests/
 │   ├── scaffold-spec-input-conflicts.sh ← Flag validation
 │   └── pipeline-consistency.sh        ← Cross-command consistency checks
 ├── harness/               ← Test infrastructure
-│   ├── fixtures/          ← Mock data (issues.json, automation-config.md)
+│   ├── fixtures/          ← Mock data (issues.json, automation-config.toml)
 │   ├── mock-mcp-server.sh ← Mock MCP server
 │   └── run-tests.sh       ← Test runner
 └── README.md              ← This file
